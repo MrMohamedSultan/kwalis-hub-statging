@@ -135,7 +135,8 @@ export async function approveAccessRequest(req: AccessRequest): Promise<string> 
       industry: req.industry,
       contact_email: req.email,
       contact_phone: req.mobile,
-      subscription_status: "Trial",
+      // canonical stored value — see src/lib/subscription-status.ts (D01)
+      subscription_status: "trial",
       onboarded_at: new Date().toISOString(),
     })
     .select("id")

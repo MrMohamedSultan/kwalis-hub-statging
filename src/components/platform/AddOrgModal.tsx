@@ -18,6 +18,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  SUBSCRIPTION_STATUSES,
+  subscriptionStatusLabel,
+  type SubscriptionStatus,
+} from "@/lib/subscription-status";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -29,16 +34,14 @@ const OrgSchema = z.object({
   name: z.string().trim().min(2, "Company name is required").max(120),
   industry: z.string().trim().max(80),
   contact_email: z.string().trim().email("Enter a valid email address").or(z.literal("")),
-  subscription_status: z.enum(["Trial", "Active", "Suspended", "Cancelled"]),
+  subscription_status: z.enum(SUBSCRIPTION_STATUSES),
 });
-
-type SubscriptionStatus = "Trial" | "Active" | "Suspended" | "Cancelled";
 
 export function AddOrgModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [industry, setIndustry] = useState("");
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<SubscriptionStatus>("Trial");
+  const [status, setStatus] = useState<SubscriptionStatus>("trial");
   const [saving, setSaving] = useState(false);
 
   async function submit() {
@@ -127,10 +130,11 @@ export function AddOrgModal({ onClose }: { onClose: () => void }) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Trial">Trial</SelectItem>
-                <SelectItem value="Active">Active</SelectItem>
-                <SelectItem value="Suspended">Suspended</SelectItem>
-                <SelectItem value="Cancelled">Cancelled</SelectItem>
+                {SUBSCRIPTION_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {subscriptionStatusLabel(s)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

@@ -264,6 +264,21 @@ export const createUserDirect = createServerFn({ method: "POST" })
       }
     }
 
+    // D08: an account created by hand starts with a password its creator
+    // knows, so the user must replace it at first sign-in. Recorded with the
+    // caller's own token (the RPC checks they administer the user). A missing
+    // function (migration not applied yet, PGRST202) is not an error.
+    const { error: pwErr } = await (supabase as any).rpc("admin_require_password_change", {
+      p_user_id: newUserId,
+      p_required: true,
+    });
+    if (pwErr && pwErr.code !== "PGRST202") {
+      return {
+        userId: newUserId,
+        warning: `User created, but the "change password at first sign-in" rule could not be set: ${pwErr.message}`,
+      };
+    }
+
     return { userId: newUserId };
   });
 
@@ -390,6 +405,13 @@ export const changeOwnPassword = createServerFn({ method: "POST" })
     const { supabase } = context;
     const { error } = await supabase.auth.updateUser({ password: data.newPassword });
     if (error) throw new Error(error.message);
+    // D08: the password really changed, so lift the "must change password"
+    // requirement if one was set. Best effort — the function only exists once
+    // db/pending/120_d23_account_controls.sql has been applied.
+    await (supabase as any).rpc("clear_my_password_change_requirement").then(
+      () => undefined,
+      () => undefined,
+    );
     return { ok: true };
   });
 

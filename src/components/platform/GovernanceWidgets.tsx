@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { listCompanies, type CompanyRow } from "@/lib/platform-companies";
+import { subscriptionStatusBadgeClass, subscriptionStatusLabel } from "@/lib/subscription-status";
 
 function statusBadgeClass(status?: string | null) {
   switch (status) {
@@ -63,7 +64,15 @@ export function GlobalAnalytics() {
           }
           return out;
         };
-        setCompanyStatus(byStatus(orgs.data ?? [], "subscription_status"));
+        // D01: group by the canonical status so "Active" and "active" are one bucket.
+        setCompanyStatus(
+          byStatus(
+            (orgs.data ?? []).map((o) => ({
+              subscription_status: subscriptionStatusLabel(o.subscription_status),
+            })),
+            "subscription_status",
+          ),
+        );
         setProjectStatus(byStatus(projects.data ?? [], "status"));
       } catch (err) {
         console.error("GlobalAnalytics failed:", err);
@@ -279,9 +288,9 @@ export function OrgTable() {
                   <td className="px-2 py-2 text-muted-foreground">{c.industry ?? "—"}</td>
                   <td className="px-2 py-2">
                     <span
-                      className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(c.subscription_status)}`}
+                      className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${subscriptionStatusBadgeClass(c.subscription_status)}`}
                     >
-                      {c.subscription_status ?? "—"}
+                      {subscriptionStatusLabel(c.subscription_status)}
                     </span>
                   </td>
                   <td className="px-2 py-2 text-end tabular-nums text-muted-foreground">

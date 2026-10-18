@@ -1905,7 +1905,8 @@
     "no_users_yet": "No users yet.",
     "open_document": "Open document",
     "this_company_no_longer_exists": "This company no longer exists.",
-    "website": "Website"
+    "website": "Website",
+    "no_role_assigned": "No role"
   },
   "projectsmanagementpanel": {
     "archive_project": "Archive project?",
@@ -2773,5 +2774,22 @@
     "qaLogPettyCashHelper": "Record a receipt or float",
     "qaNewCrewContract": "New Crew Contract",
     "qaNewCrewContractHelper": "Add a crew member deal"
+  },
+  "accountStatus": {
+    "disabled": "This account has been disabled. Contact your administrator.",
+    "signedOut": "You were signed out by an administrator. Please sign in again.",
+    "changePassword": "Choose a new password before you continue.",
+    "suspended": "Your company's subscription is suspended. Contact support."
+  },
+  "archiveProject": {
+    "title": "Archive this project?",
+    "body": "The project is hidden from the company's screens. Every budget, invoice, payroll row and payment is kept, and the project can be restored at any time. Permanent deletion only becomes possible 30 days after archiving.",
+    "typeCode": "Type the project code to confirm:",
+    "noCode": "This project has no code, so it cannot be confirmed. Give it a code first.",
+    "confirm": "Archive project",
+    "action": "Archive",
+    "restore": "Restore",
+    "archived": "“{{name}}” archived",
+    "restored": "“{{name}}” restored to {{status}}"
   }
 }

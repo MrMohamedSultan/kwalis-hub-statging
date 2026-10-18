@@ -34,6 +34,7 @@ import {
 } from "@/lib/executive-work-mode";
 import { ExecutiveLayout } from "@/components/layouts/ExecutiveLayout";
 import { OperationalLayout } from "@/components/layouts/OperationalLayout";
+import { AccountStatusGuard } from "@/components/AccountStatusGuard";
 import i18n from "@/lib/i18n";
 import { useStore } from "@/lib/store";
 
@@ -204,6 +205,8 @@ function AuthenticatedLayout() {
     // server-verified permission snapshot resolves (full-screen skeleton
     // inside the provider handles the loading race).
     <PermissionProvider>
+      {/* D23 / D08: disabled account, forced sign-out, pending password change */}
+      <AccountStatusGuard />
       <LayoutIsolation>
         <Outlet />
       </LayoutIsolation>

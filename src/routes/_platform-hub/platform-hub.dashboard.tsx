@@ -38,6 +38,24 @@ type PlatformStats = {
   activeProjects: number;
 };
 
+// Terminal statuses. "Finalized" is the only terminal value the DB constraint
+// (projects_status_check) allows today; the others are listed so the card stays
+// correct if Wrapped / Archived / Cancelled are added later.
+const INACTIVE_PROJECT_STATUSES = new Set([
+  "finalized",
+  "wrapped",
+  "archived",
+  "cancelled",
+  "canceled",
+]);
+
+/** D10 — a project counts as active unless its status is a terminal one. */
+function isActiveProjectStatus(status: string | null | undefined): boolean {
+  const s = (status ?? "").trim().toLowerCase();
+  if (!s) return false;
+  return !INACTIVE_PROJECT_STATUSES.has(s);
+}
+
 function GovernanceDashboard() {
   const { t } = useTranslation();
 
@@ -64,7 +82,10 @@ function GovernanceDashboard() {
           totalCompanies: companies.count ?? 0,
           totalUsers: users.count ?? 0,
           totalProjects: list.length,
-          activeProjects: list.filter((p) => p.status === "active").length,
+          // D10: "active" = any status that is not a terminal one, compared
+          // case-insensitively. Stored values are Title Case (Planning,
+          // Pre-Production, Production, ...), so the old === "active" was always 0.
+          activeProjects: list.filter((p) => isActiveProjectStatus(p.status)).length,
         });
       } catch (err) {
         console.error("Failed to load platform stats:", err);

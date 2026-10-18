@@ -4,6 +4,7 @@ import { Save, RotateCcw, Loader2, UserCircle, ShieldCheck } from "lucide-react"
 import { toast } from "sonner";
 import { PageTitle, Panel } from "@/components/AppShell";
 import { supabase } from "@/integrations/supabase/client";
+import { clearMyPasswordChangeRequirement } from "@/lib/account-status";
 
 import { useTranslation } from "react-i18next";
 export const Route = createFileRoute("/_platform-hub/platform-hub/settings")({
@@ -168,6 +169,7 @@ function MyProfileTab() {
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
+      await clearMyPasswordChangeRequirement(); // D08
       setPassword("");
       setConfirmPassword("");
       toast.success(t("hub_settings.password_updated"));

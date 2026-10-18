@@ -8,6 +8,7 @@ import { listCompanies, type CompanyRow } from "@/lib/platform-companies";
 import { industryLabel } from "@/lib/access-requests";
 
 import { useTranslation } from "react-i18next";
+import { subscriptionStatusBadgeClass, subscriptionStatusLabel } from "@/lib/subscription-status";
 export const Route = createFileRoute("/_platform-hub/platform-hub/companies")({
   head: () => ({
     meta: [
@@ -27,21 +28,6 @@ export const Route = createFileRoute("/_platform-hub/platform-hub/companies")({
   }),
   component: CompaniesPage,
 });
-
-function subClass(status?: string | null) {
-  switch (status) {
-    case "Active":
-      return "bg-success/15 text-success border-success/30";
-    case "Trial":
-      return "bg-brand/15 text-brand border-brand/30";
-    case "Suspended":
-      return "bg-warning/15 text-warning border-warning/30";
-    case "Cancelled":
-      return "bg-destructive/15 text-destructive border-destructive/30";
-    default:
-      return "bg-muted text-muted-foreground border-border";
-  }
-}
 
 function CompaniesPage() {
   const { t } = useTranslation();
@@ -168,9 +154,9 @@ function CompaniesPage() {
                   <td className="px-4 py-3">{c.projectCount}</td>
                   <td className="px-4 py-3">
                     <span
-                      className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${subClass(c.subscription_status)}`}
+                      className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${subscriptionStatusBadgeClass(c.subscription_status)}`}
                     >
-                      {c.subscription_status || "—"}
+                      {subscriptionStatusLabel(c.subscription_status)}
                     </span>
                   </td>
                 </tr>

@@ -16,6 +16,8 @@ import {
   CheckCircle2,
   ChevronRight,
   FolderKanban,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 
 import {
@@ -37,10 +39,15 @@ import {
 } from "@/lib/platform-companies";
 import { INDUSTRIES, industryLabel } from "@/lib/access-requests";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { deleteProjectHard } from "@/lib/projects.functions";
-import { useServerFn } from "@tanstack/react-start";
+import { ArchiveProjectDialog } from "@/components/ArchiveProjectDialog";
+import { archiveProject, isArchivedProject, restoreProject } from "@/lib/project-archive";
 
 import { useTranslation } from "react-i18next";
+import {
+  SUBSCRIPTION_STATUSES,
+  normalizeSubscriptionStatus,
+  subscriptionStatusLabel,
+} from "@/lib/subscription-status";
 export const Route = createFileRoute("/_platform-hub/platform-hub/companies_/$companyId")({
   head: () => ({
     meta: [
@@ -60,8 +67,6 @@ export const Route = createFileRoute("/_platform-hub/platform-hub/companies_/$co
   }),
   component: CompanyDetailPage,
 });
-
-const SUBSCRIPTION_STATUSES = ["Trial", "Active", "Suspended", "Cancelled"];
 
 function Input({
   label,
@@ -105,7 +110,6 @@ function CompanyDetailPage() {
   const [projects, setProjects] = useState<CompanyProject[]>([]);
   const [confirmProject, setConfirmProject] = useState<CompanyProject | null>(null);
   const [deletingProject, setDeletingProject] = useState(false);
-  const removeProject = useServerFn(deleteProjectHard);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -146,6 +150,21 @@ function CompanyDetailPage() {
 
   function patch(key: keyof Company, value: string) {
     setCompany((c) => (c ? { ...c, [key]: value } : c));
+  }
+
+  async function restoreArchivedProject(p: CompanyProject) {
+    setDeletingProject(true);
+    try {
+      const status = await restoreProject(p.id);
+      toast.success(
+        t("archiveProject.restored", "“{{name}}” restored to {{status}}", { name: p.name, status }),
+      );
+      setProjects(await listCompanyProjects(companyId));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Restore failed");
+    } finally {
+      setDeletingProject(false);
+    }
   }
 
   async function save() {
@@ -297,14 +316,22 @@ function CompanyDetailPage() {
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Subscription
               </span>
+              {/* D01: the dropdown shows the STORED status. An empty or unknown
+                  value gets its own disabled entry instead of silently
+                  pre-selecting "Trial" and saving it back. */}
               <select
-                value={company.subscription_status ?? "Trial"}
+                value={normalizeSubscriptionStatus(company.subscription_status) ?? ""}
                 onChange={(e) => patch("subscription_status", e.target.value)}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-brand"
               >
+                {normalizeSubscriptionStatus(company.subscription_status) === null && (
+                  <option value="" disabled>
+                    {subscriptionStatusLabel(company.subscription_status)}
+                  </option>
+                )}
                 {SUBSCRIPTION_STATUSES.map((s) => (
                   <option key={s} value={s}>
-                    {s}
+                    {subscriptionStatusLabel(s)}
                   </option>
                 ))}
               </select>
@@ -484,14 +511,28 @@ function CompanyDetailPage() {
                       {p.project_type || "—"} · {p.status || "—"}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    aria-label={`Delete project ${p.name}`}
-                    onClick={() => setConfirmProject(p)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/40 px-2.5 py-1.5 text-xs font-semibold text-destructive transition hover:bg-destructive/10"
-                  >
-                    <Trash2 className="size-3.5" /> Delete
-                  </button>
+                  {/* D02: projects are archived, never deleted from here. */}
+                  {isArchivedProject(p.status) ? (
+                    <button
+                      type="button"
+                      aria-label={`Restore project ${p.name}`}
+                      disabled={deletingProject}
+                      onClick={() => void restoreArchivedProject(p)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold transition hover:bg-muted disabled:opacity-60"
+                    >
+                      <ArchiveRestore className="size-3.5" />{" "}
+                      {t("archiveProject.restore", "Restore")}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-label={`Archive project ${p.name}`}
+                      onClick={() => setConfirmProject(p)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-warning/40 px-2.5 py-1.5 text-xs font-semibold text-warning transition hover:bg-warning/10"
+                    >
+                      <Archive className="size-3.5" /> {t("archiveProject.action", "Archive")}
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -525,9 +566,13 @@ function CompanyDetailPage() {
                       )}
                     </div>
                     <span className="flex items-center gap-2 shrink-0">
-                      <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-semibold capitalize">
-                        {m.role}
+                      {/* D07: the operational role (user_role_assignments) is the
+                          one shown everywhere; the tenancy level is secondary. */}
+                      <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-semibold">
+                        {m.rbac_role_name ??
+                          t("hub_companies_companyid.no_role_assigned", "No role")}
                       </span>
+                      <span className="text-[11px] capitalize text-muted-foreground">{m.role}</span>
                       <ChevronRight className="size-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-brand rtl:rotate-180 rtl:group-hover:-translate-x-0.5" />
                     </span>
                   </Link>
@@ -538,30 +583,27 @@ function CompanyDetailPage() {
         </div>
       </div>
 
-      {confirmProject && (
-        <ConfirmDialog
-          open
-          tone="danger"
-          loading={deletingProject}
-          title="Delete this project permanently?"
-          message={`“${confirmProject.name}” and all of its budgets, payroll, documents and financial records will be permanently destroyed. This cannot be undone.`}
-          confirmLabel="Delete project"
-          onCancel={() => !deletingProject && setConfirmProject(null)}
-          onConfirm={async () => {
-            setDeletingProject(true);
-            try {
-              await removeProject({ data: { projectId: confirmProject.id } });
-              toast.success(`“${confirmProject.name}” deleted`);
-              setProjects(await listCompanyProjects(companyId));
-              setConfirmProject(null);
-            } catch (e) {
-              toast.error(e instanceof Error ? e.message : "Delete failed");
-            } finally {
-              setDeletingProject(false);
-            }
-          }}
-        />
-      )}
+      <ArchiveProjectDialog
+        project={confirmProject}
+        loading={deletingProject}
+        onCancel={() => !deletingProject && setConfirmProject(null)}
+        onConfirm={async (typedCode) => {
+          if (!confirmProject) return;
+          setDeletingProject(true);
+          try {
+            await archiveProject(confirmProject.id, typedCode);
+            toast.success(
+              t("archiveProject.archived", "“{{name}}” archived", { name: confirmProject.name }),
+            );
+            setProjects(await listCompanyProjects(companyId));
+            setConfirmProject(null);
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Archive failed");
+          } finally {
+            setDeletingProject(false);
+          }
+        }}
+      />
 
       {confirmDoc && (
         <ConfirmDialog

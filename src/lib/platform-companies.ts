@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeSubscriptionStatus } from "@/lib/subscription-status";
 
 export type Company = {
   id: string;
@@ -89,7 +90,16 @@ export async function getCompany(id: string): Promise<Company | null> {
 }
 
 export async function updateCompany(id: string, patch: Partial<Company>) {
-  const { error } = await (supabase as any).from("organizations").update(patch).eq("id", id);
+  const next: Partial<Company> = { ...patch };
+  // D01: the status is always written in its canonical (stored) form. A value
+  // that is not a known status is left out of the update, so saving a profile
+  // can never overwrite the subscription with a guess.
+  if ("subscription_status" in next) {
+    const canonical = normalizeSubscriptionStatus(next.subscription_status);
+    if (canonical) next.subscription_status = canonical;
+    else delete next.subscription_status;
+  }
+  const { error } = await (supabase as any).from("organizations").update(next).eq("id", id);
   if (error) throw error;
 }
 
@@ -159,10 +169,18 @@ export async function deleteCompanyDocument(doc: CompanyDocument) {
 
 export type CompanyMember = {
   id: string;
+  /** Tenancy level in the company: owner | admin | member (organization_members). */
   role: string;
   user_id: string;
   display_name: string | null;
   job_title: string | null;
+  /**
+   * D07 — the user's operational role in THIS company, read from
+   * user_role_assignments (the single source the Users and Roles pages use).
+   * The company-wide assignment wins; null when no role is assigned.
+   */
+  rbac_role_name: string | null;
+  rbac_role_is_admin: boolean;
 };
 
 export async function listCompanyMembers(orgId: string): Promise<CompanyMember[]> {
@@ -187,12 +205,41 @@ export async function listCompanyMembers(orgId: string): Promise<CompanyMember[]
     ).map((p) => [p.id, p] as const),
   );
 
+  // D07: one source for "which role does this user hold" — the same
+  // user_role_assignments rows the Users page and the role matrix count.
+  const { data: assignments } = await (supabase as any)
+    .from("user_role_assignments")
+    .select("user_id, project_id, roles:role_id(name, is_admin)")
+    .eq("organization_id", orgId)
+    .in(
+      "user_id",
+      rows.map((r) => r.user_id),
+    );
+  type AssignmentRow = {
+    user_id: string;
+    project_id: string | null;
+    roles: { name: string; is_admin: boolean } | { name: string; is_admin: boolean }[] | null;
+  };
+  const roleByUser = new Map<string, { name: string; isAdmin: boolean; orgWide: boolean }>();
+  for (const a of (assignments ?? []) as AssignmentRow[]) {
+    const rel = Array.isArray(a.roles) ? a.roles[0] : a.roles;
+    if (!rel) continue;
+    const orgWide = a.project_id === null;
+    const current = roleByUser.get(a.user_id);
+    // company-wide assignment beats a project-scoped one
+    if (!current || (orgWide && !current.orgWide)) {
+      roleByUser.set(a.user_id, { name: rel.name, isAdmin: !!rel.is_admin, orgWide });
+    }
+  }
+
   return rows.map((r) => ({
     id: r.id,
     role: r.role,
     user_id: r.user_id,
     display_name: byId.get(r.user_id)?.display_name ?? null,
     job_title: byId.get(r.user_id)?.job_title ?? null,
+    rbac_role_name: roleByUser.get(r.user_id)?.name ?? null,
+    rbac_role_is_admin: roleByUser.get(r.user_id)?.isAdmin ?? false,
   }));
 }
 

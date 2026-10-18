@@ -84,6 +84,10 @@ export async function fetchProjectLedger(projectId: string): Promise<CanonicalLe
       "source_type, source_id, entry_kind, entry_date, reference, description, counterparty, budget_code, amount, status",
     )
     .eq("project_id", projectId)
+    // D11: the view also carries entry_kind='payment' rows (cash out). Those are
+    // the third dimension (Paid) and are fetched by fetchProjectPaidLedger —
+    // letting them through here counted every payment a second time as Actual.
+    .in("entry_kind", ["actual", "commitment"])
     .order("entry_date", { ascending: false });
   if (error) throw error;
   return ((data ?? []) as any[]).map((r) => ({

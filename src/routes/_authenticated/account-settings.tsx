@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { UserCircle, KeyRound, Save, Loader2 } from "lucide-react";
 import { z } from "zod";
+import { useQueryClient } from "@tanstack/react-query";
+import { clearMyPasswordChangeRequirement } from "@/lib/account-status";
 
 export const Route = createFileRoute("/_authenticated/account-settings")({
   component: () => (
@@ -40,6 +42,7 @@ export function AccountSettingsPage() {
   const [jobTitle, setJobTitle] = useState<string>("");
   const [savingProfile, setSavingProfile] = useState(false);
 
+  const queryClient = useQueryClient();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
@@ -111,6 +114,9 @@ export function AccountSettingsPage() {
     try {
       const { error } = await supabase.auth.updateUser({ password: parsed.data });
       if (error) throw error;
+      // D08: the first-sign-in requirement is met once the password changed.
+      await clearMyPasswordChangeRequirement();
+      await queryClient.invalidateQueries({ queryKey: ["account-status"] });
       setPassword("");
       setConfirmPassword("");
       toast.success("Password updated");

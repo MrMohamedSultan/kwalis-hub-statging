@@ -31,6 +31,8 @@ import { ProjectStatusBadge, ProjectTypeBadge } from "@/components/ProjectBadges
 import { ProjectMembersPanel } from "@/components/ProjectMembersPanel";
 
 import { useTranslation } from "react-i18next";
+import { ArchiveProjectDialog } from "@/components/ArchiveProjectDialog";
+import { archiveProject, restoreProject } from "@/lib/project-archive";
 type Org = { id: string; name: string; max_projects: number };
 type Project = {
   id: string;
@@ -111,7 +113,6 @@ export function ProjectsManagementPanel() {
     codeCaretRef.current = null;
     codeInputRef.current.setSelectionRange(pos, pos);
   });
-
 
   // Confirmation state for archive / restore (destructive-ish actions)
   const [confirmArchive, setConfirmArchive] = useState<Project | null>(null);
@@ -219,7 +220,6 @@ export function ProjectsManagementPanel() {
     setModalTab("details");
   }, []);
 
-
   const submit = async () => {
     const parsed = projectSchema.safeParse(form);
     if (!parsed.success) {
@@ -276,7 +276,7 @@ export function ProjectsManagementPanel() {
 
   // Archive/restore are destructive-ish and gated to Super Admin only.
   // The confirmation flows are wired through ConfirmDialog (not window.confirm).
-  const doArchive = async (p: Project) => {
+  const doArchive = async (p: Project, typedCode: string) => {
     if (!isSuperAdmin) {
       toast.error(t("projectsmanagementpanel.only_the_super_admin_may_archive_projects"));
       return;
@@ -286,11 +286,9 @@ export function ProjectsManagementPanel() {
       return;
     }
     try {
-      const { error } = await supabase
-        .from("projects")
-        .update({ status: "Archived" as never } as never)
-        .eq("id", p.id);
-      if (error) throw error;
+      // D02: the database function checks the typed code, remembers the
+      // previous status and writes the audit log.
+      await archiveProject(p.id, typedCode);
       toast.success(`Project "${p.name}" archived.`);
       await load();
     } catch (e) {
@@ -306,12 +304,8 @@ export function ProjectsManagementPanel() {
       return;
     }
     try {
-      const { error } = await supabase
-        .from("projects")
-        .update({ status: DEFAULT_PROJECT_STATUS as never } as never)
-        .eq("id", p.id);
-      if (error) throw error;
-      toast.success(`Project "${p.name}" restored to "${DEFAULT_PROJECT_STATUS}".`);
+      const restoredTo = await restoreProject(p.id);
+      toast.success(`Project "${p.name}" restored to "${restoredTo}".`);
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to restore project.");
@@ -671,18 +665,10 @@ export function ProjectsManagementPanel() {
           )}
         </Modal>
       )}
-      <ConfirmDialog
-        open={!!confirmArchive}
-        title={t("projectsmanagementpanel.archive_project")}
-        tone="danger"
-        confirmLabel="Archive project"
-        message={
-          confirmArchive
-            ? `Archive project "${confirmArchive.name}"?\n\nThe project — and all its budgets, invoices, and payroll records — will be hidden from tenant views but preserved in the database. You can restore it any time from the "Show archived" filter.`
-            : ""
-        }
+      <ArchiveProjectDialog
+        project={confirmArchive}
         onCancel={() => setConfirmArchive(null)}
-        onConfirm={() => confirmArchive && doArchive(confirmArchive)}
+        onConfirm={(typedCode) => confirmArchive && doArchive(confirmArchive, typedCode)}
       />
       <ConfirmDialog
         open={!!confirmRestore}
@@ -691,7 +677,7 @@ export function ProjectsManagementPanel() {
         confirmLabel="Restore project"
         message={
           confirmRestore
-            ? `Restore project "${confirmRestore.name}" back to "${DEFAULT_PROJECT_STATUS}"? It will re-appear in tenant views immediately.`
+            ? `Restore project "${confirmRestore.name}" to the status it had before it was archived? It will re-appear in tenant views immediately.`
             : ""
         }
         onCancel={() => setConfirmRestore(null)}

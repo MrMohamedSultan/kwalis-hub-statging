@@ -102,19 +102,37 @@ export function BudgetGovernancePanel({
       return;
     }
 
-    const { data: allProfs } = await supabase
-      .from("profiles")
-      .select("id,display_name")
-      .in("id", memberIds);
-    setAllOrgUsers(
-      (allProfs ?? []).map((p: any) => ({ user_id: p.id, display_name: p.display_name })),
+    // Who may be GIVEN an executive title on this project: its own members
+    // only. Listing the whole organization (as before) let an admin hand a
+    // title — and with it access to this project's figures and the right to
+    // approve its budget — to someone who was never put on the project.
+    const { data: pms } = await supabase
+      .from("project_members")
+      .select("user_id")
+      .eq("project_id", projectId)
+      .in("user_id", memberIds);
+    const projectMemberIds = Array.from(
+      new Set((pms ?? []).map((r: any) => r.user_id as string)),
     );
+    if (projectMemberIds.length) {
+      const { data: allProfs } = await supabase
+        .from("profiles")
+        .select("id,display_name")
+        .in("id", projectMemberIds);
+      setAllOrgUsers(
+        (allProfs ?? []).map((p: any) => ({ user_id: p.id, display_name: p.display_name })),
+      );
+    } else {
+      setAllOrgUsers([]);
+    }
 
     // 2) Restrict to users who are actual executives / board members.
     //    An executive is either:
     //      (a) profiles.executive_title ∈ EXECUTIVE_TITLES, OR
-    //      (b) project_members.executive_title set on any project in this org
-    //          (covers per-project board assignments)
+    //      (b) project_members.executive_title set on THIS project
+    //          (a per-project board assignment is valid for that project only;
+    //          a title held on another project of the company does not make
+    //          someone an approver of this one)
     //    Board membership is NOT a platform role: user_roles.role is app_role
     //    (super_admin/admin/manager/member) — querying it for 'board_member'
     //    is an enum violation (400) and must never be reintroduced.
@@ -127,6 +145,7 @@ export function BudgetGovernancePanel({
       supabase
         .from("project_members")
         .select("user_id,executive_title" as any)
+        .eq("project_id", projectId)
         .in("user_id", memberIds)
         .not("executive_title", "is", null),
     ]);
@@ -145,7 +164,7 @@ export function BudgetGovernancePanel({
       .select("id,display_name")
       .in("id", Array.from(execIds));
     setOrgUsers((profs ?? []).map((p: any) => ({ user_id: p.id, display_name: p.display_name })));
-  }, [organizationId]);
+  }, [organizationId, projectId]);
 
   useEffect(() => {
     void loadExecutives();
@@ -171,13 +190,10 @@ export function BudgetGovernancePanel({
           .eq("id", existing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("project_members").insert({
-          project_id: projectId,
-          user_id: assignUser,
-          role: "member",
-          executive_title: assignTitle,
-        } as any);
-        if (error) throw error;
+        // Never add someone to the project as a side effect of giving a title.
+        throw new Error(
+          "This user is not a member of the project. Add them to the project first, then assign the title.",
+        );
       }
       toast.success(`Assigned as ${assignTitle}.`);
       setAssignUser("");
