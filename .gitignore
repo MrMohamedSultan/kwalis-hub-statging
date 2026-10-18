@@ -1,0 +1,43 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+.output
+.vinxi
+.tanstack/**
+.nitro
+*.local
+
+# Wrangler / Cloudflare
+.wrangler/
+.dev.vars
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Environment files — never commit real values (.env.example is the template)
+.env
+.env.*
+!.env.example
+
+# Exception: .env.production holds ONLY publishable VITE_SUPABASE_* values
+# (project URL + anon/publishable key). These ship to every browser bundle by
+# design and are not secrets; committing them guarantees publish builds always
+# inline the backend config. Server-only secrets must NEVER go in this file.
+!.env.production

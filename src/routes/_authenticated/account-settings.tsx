@@ -1,0 +1,267 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { AppShell, PageTitle, Panel } from "@/components/AppShell";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
+import { UserCircle, KeyRound, Save, Loader2 } from "lucide-react";
+import { z } from "zod";
+
+export const Route = createFileRoute("/_authenticated/account-settings")({
+  component: () => (
+    <AppShell>
+      <AccountSettingsPage />
+    </AppShell>
+  ),
+});
+
+const nameSchema = z
+  .string()
+  .trim()
+  .min(1, "Name is required")
+  .max(120, "Name must be under 120 characters");
+
+const passwordSchema = z
+  .string()
+  .min(8, "Password must be at least 8 characters")
+  .max(128, "Password must be under 128 characters");
+
+const inputCls =
+  "w-full bg-surface-2 border border-border rounded-xl px-3 py-2 outline-none focus:ring-2 ring-brand text-sm";
+const readOnlyCls =
+  "w-full bg-surface-1 border border-border rounded-xl px-3 py-2 text-sm text-muted-foreground";
+
+export function AccountSettingsPage() {
+  const { t } = useTranslation();
+  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [email, setEmail] = useState<string>("");
+  const [displayName, setDisplayName] = useState<string>("");
+  const [jobTitle, setJobTitle] = useState<string>("");
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: userRes, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !userRes.user) {
+        if (!cancelled) setLoading(false);
+        return;
+      }
+      const user = userRes.user;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name, job_title")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      setUserId(user.id);
+      setEmail(user.email ?? "");
+      setDisplayName(profile?.display_name ?? "");
+      setJobTitle(profile?.job_title ?? "");
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleProfileSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!userId) return;
+    const parsed = nameSchema.safeParse(displayName);
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Invalid name");
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          display_name: parsed.data,
+          job_title: jobTitle.trim() || null,
+        })
+        .eq("id", userId);
+      if (error) throw error;
+      toast.success("Profile updated");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to update profile");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function handlePasswordSave(e: React.FormEvent) {
+    e.preventDefault();
+    const parsed = passwordSchema.safeParse(password);
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Invalid password");
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: parsed.data });
+      if (error) throw error;
+      setPassword("");
+      setConfirmPassword("");
+      toast.success("Password updated");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to update password");
+    } finally {
+      setSavingPassword(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24 text-muted-foreground">
+        <Loader2 className="me-2 h-4 w-4 animate-spin" /> Loading…
+      </div>
+    );
+  }
+
+  if (!userId) {
+    return (
+      <div className="py-24 text-center text-muted-foreground">
+        {t("account_settings.you_must_be_signed_in_to_view_account")}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageTitle title={t("nav.accountSettings", "Account Settings")} />
+      <p className="text-sm text-muted-foreground -mt-2">
+        {t(
+          "accountSettings.subtitle",
+          "Manage your personal profile and password. These changes affect only your account.",
+        )}
+      </p>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel>
+          <div className="flex items-center gap-2 mb-4">
+            <UserCircle className="h-5 w-5 text-brand" />
+            <h2 className="text-base font-semibold">{t("accountSettings.profile", "Profile")}</h2>
+          </div>
+          <form onSubmit={handleProfileSave} className="space-y-4">
+            <label className="block text-sm">
+              <div className="text-muted-foreground mb-1">
+                {t("accountSettings.email", "Email")}{" "}
+                <span className="text-[10px]">({t("accountSettings.readOnly", "read-only")})</span>
+              </div>
+              <input type="email" value={email} readOnly disabled className={readOnlyCls} />
+            </label>
+            <label className="block text-sm">
+              <div className="text-muted-foreground mb-1">
+                {t("accountSettings.fullName", "Full Name")}
+              </div>
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                required
+                maxLength={120}
+                className={inputCls}
+                placeholder={t("account_settings.eg_jane_doe")}
+              />
+            </label>
+            <label className="block text-sm">
+              <div className="text-muted-foreground mb-1">
+                {t("accountSettings.jobTitle", "Job Title")}{" "}
+                <span className="text-[10px] text-muted-foreground/70">(optional)</span>
+              </div>
+              <input
+                type="text"
+                value={jobTitle}
+                onChange={(e) => setJobTitle(e.target.value)}
+                maxLength={120}
+                className={inputCls}
+                placeholder="e.g. Line Producer"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={savingProfile}
+              className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-60"
+            >
+              {savingProfile ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              {t("accountSettings.saveProfile", "Save Profile")}
+            </button>
+          </form>
+        </Panel>
+
+        <Panel>
+          <div className="flex items-center gap-2 mb-4">
+            <KeyRound className="h-5 w-5 text-brand" />
+            <h2 className="text-base font-semibold">
+              {t("accountSettings.password", "Change Password")}
+            </h2>
+          </div>
+          <form onSubmit={handlePasswordSave} className="space-y-4">
+            <label className="block text-sm">
+              <div className="text-muted-foreground mb-1">
+                {t("accountSettings.newPassword", "New Password")}
+              </div>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                autoComplete="new-password"
+                className={inputCls}
+                placeholder="At least 8 characters"
+              />
+            </label>
+            <label className="block text-sm">
+              <div className="text-muted-foreground mb-1">
+                {t("accountSettings.confirmPassword", "Confirm New Password")}
+              </div>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                minLength={8}
+                autoComplete="new-password"
+                className={inputCls}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={savingPassword}
+              className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-60"
+            >
+              {savingPassword ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <KeyRound className="h-4 w-4" />
+              )}
+              {t("accountSettings.updatePassword", "Update Password")}
+            </button>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "accountSettings.passwordHint",
+                "You will remain signed in after changing your password.",
+              )}
+            </p>
+          </form>
+        </Panel>
+      </div>
+    </div>
+  );
+}

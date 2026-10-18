@@ -1,0 +1,1231 @@
+/* ═══════════════════════════════════════════════════════════════════
+   TrackRoll — Design System Stylesheet
+   ═══════════════════════════════════════════════════════════════════
+   ARCHITECTURE:
+      :root, .dark  → canonical dark palette, declared on BOTH selectors so a
+                      nested .dark container restores dark inside an ancestor .light
+      .dark         → color-scheme: dark + a full re-declaration of the --color-*
+                      bridge (see MAINTENANCE TRAP above that block)
+      .light        → light color-scheme + complete variable overrides
+   
+   RULE: Components must use semantic tokens (bg-card, text-foreground,
+   text-muted-foreground, bg-surface, border-border) — NEVER raw
+   Tailwind colors like bg-slate-950 or text-white directly.
+   The override blocks below are a TEMPORARY safety net for legacy
+   components that still use raw colors.
+   ═══════════════════════════════════════════════════════════════════ */
+
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ─── Tailwind ↔ CSS-Variable Bridge ─────────────────────────────
+   Maps every semantic token to a Tailwind color so classes like
+   `bg-card`, `text-muted-foreground`, `border-border` resolve
+   correctly in both themes.
+   ─────────────────────────────────────────────────────────────── */
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+
+  /* Core surfaces & text */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+
+  /* Interactive */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  /* Neutral */
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Sidebar (dark in both themes) */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-active: var(--sidebar-active);
+
+  /* Brand & semantic status */
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
+
+  /* ── Dashboard monochrome system ── */
+  --font-sans:
+    "Inter", "IBM Plex Sans Arabic", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-page: var(--page);
+  --color-ink-primary: var(--ink-primary);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+  --color-grid: var(--grid);
+  --color-axis: var(--axis);
+  --color-data-1: var(--data-1);
+  --color-data-2: var(--data-2);
+  --color-data-3: var(--data-3);
+  --color-data-4: var(--data-4);
+  --color-status-good: var(--status-good);
+  --color-status-warning: var(--status-warning);
+  --color-status-critical: var(--status-critical);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DARK THEME (default) — :root defines the canonical dark palette.
+   `.dark` re-declares the same block so a nested container (e.g. the
+   auth page, pinned dark in BOTH themes) locally restores the dark
+   tokens even when an ancestor carries `.light`.
+   ⚠ Every token declared here MUST also be mirrored in the `.dark`
+   bridge block below — see the MAINTENANCE TRAP warning above it.
+   ═══════════════════════════════════════════════════════════════════ */
+:root,
+.dark {
+  --radius: 0.875rem;
+
+  /* ── Surfaces ── */
+  --background: oklch(0.17 0.025 260); /* deep navy canvas */
+  --foreground: oklch(0.97 0 0); /* near-white, not pure #fff to reduce glare */
+  --surface: oklch(0.23 0.03 260); /* elevated surface */
+  --surface-2: oklch(0.28 0.035 260); /* inputs, inset panels */
+  --card: oklch(0.24 0.03 260); /* card background */
+  --card-foreground: oklch(0.97 0 0);
+  --popover: oklch(0.24 0.035 260); /* dropdowns, tooltips */
+  --popover-foreground: oklch(0.97 0 0);
+
+  /* ── Interactive ── */
+  --primary: oklch(0.55 0.11 245); /* Kwalis Navy #2E5C8A */
+  --primary-foreground: oklch(0.97 0 0);
+  --secondary: oklch(0.32 0.04 245);
+  --secondary-foreground: oklch(0.97 0 0);
+  --accent: oklch(0.78 0.17 60); /* Kwalis Orange #FF9900 */
+  --accent-foreground: oklch(0.2 0.02 60);
+  --destructive: #f87171; /* = --status-critical (dark) */
+  --destructive-foreground: oklch(0.97 0 0);
+
+  /* ── Neutral ── */
+  --muted: oklch(0.3 0.03 245);
+  --muted-foreground: oklch(0.75 0.015 250); /* readable secondary text */
+  --border: oklch(0.38 0.03 250); /* visible but subtle borders */
+  --input: oklch(0.3 0.035 250);
+  --ring: oklch(0.65 0.13 245);
+
+  /* ── Sidebar (dark navy) ── */
+  --sidebar: oklch(0.22 0.04 250);
+  --sidebar-foreground: oklch(0.92 0.005 250);
+  --sidebar-active: oklch(0.3 0.06 245);
+
+  /* ── Brand ── */
+  --brand: oklch(0.55 0.11 245);
+  --brand-foreground: oklch(0.97 0 0);
+
+  /* ── Semantic Status — the ONLY saturated colors in the app ── */
+  --success: #10b981;
+  --success-foreground: oklch(0.18 0.04 150);
+  --warning: #f59e0b;
+  --warning-foreground: oklch(0.22 0.06 75);
+  --info: oklch(0.65 0.13 245);
+  --info-foreground: oklch(0.97 0 0);
+  --highlight: oklch(0.7 0.16 300);
+  --highlight-foreground: oklch(0.2 0.04 300);
+
+  /* ── Dashboard monochrome system (dark) — contrast-validated ── */
+  --page: #08090b;
+  --ink-primary: #ffffff;
+  --ink-secondary: #b6bcc7;
+  --ink-muted: #7e8695;
+  --grid: #24262b;
+  --axis: #32353c;
+  --data-1: #e2e6ec;
+  --data-2: #aeb6c2;
+  --data-3: #7c8798;
+  --data-4: #55606f;
+  --status-good: #10b981;
+  --status-warning: #f59e0b;
+  --status-critical: #f87171;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ⚠ MAINTENANCE TRAP — DO NOT "CLEAN UP" THIS DUPLICATION
+   This `.dark` block intentionally re-declares EVERY `--color-*` bridge
+   token from the `@theme inline` block above. It is not dead weight:
+   it is what makes a nested dark scope (the pinned-dark auth page
+   sitting inside `html.light`) render dark instead of light-on-dark.
+
+   Why the duplication is required: with Tailwind v4 `@theme inline`,
+   bridge tokens are emitted as `--color-x: var(--x)` on `:root`. A
+   var() inside a custom property resolves ONCE — at the element where
+   that property is declared — and the already-resolved VALUE is what
+   inherits down the tree. So a descendant `.dark` that only re-declares
+   the raw palette (`--foreground`, etc.) would still inherit the
+   LIGHT-resolved `--color-foreground` from `:root`. Re-declaring the
+   bridge here forces re-resolution against the dark palette.
+
+   RULE: every token added to the `:root, .dark` palette above MUST be
+   mirrored here (and vice versa). Forgetting one silently produces the
+   LIGHT value in dark mode — and it looks almost right, which is the
+   worst kind of bug. If you are tempted to dedupe this block: don't.
+   ═══════════════════════════════════════════════════════════════════ */
+.dark {
+  color-scheme: dark;
+
+  /* Mirror of the @theme inline bridge — re-resolves every --color-*
+     against the dark palette for nested .dark scopes. Keep in sync with
+     both the @theme inline block and the `:root, .dark` palette. */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
+  --color-page: var(--page);
+  --color-ink-primary: var(--ink-primary);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+  --color-grid: var(--grid);
+  --color-axis: var(--axis);
+  --color-data-1: var(--data-1);
+  --color-data-2: var(--data-2);
+  --color-data-3: var(--data-3);
+  --color-data-4: var(--data-4);
+  --color-status-good: var(--status-good);
+  --color-status-warning: var(--status-warning);
+  --color-status-critical: var(--status-critical);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LIGHT THEME — complete variable set, no gaps
+   ═══════════════════════════════════════════════════════════════════
+   Design principles:
+     • Background: warm off-white (not clinical pure white)
+     • Foreground: deep slate (not pure black — reduces eye strain)
+     • Muted-foreground: medium slate — clearly "secondary" but 
+       passing WCAG AA (4.5:1) against --background
+     • Accent stays Kwalis Orange in both themes (brand consistency)
+     • Sidebar stays dark in both themes (anchors navigation)
+     • All status colors use darker shades for light backgrounds
+   ═══════════════════════════════════════════════════════════════════ */
+.light {
+  color-scheme: light;
+
+  /* ── Surfaces ── */
+  --background: oklch(0.975 0.004 260); /* warm off-white */
+  --foreground: oklch(0.2 0.02 260); /* deep slate — crisp text */
+  --surface: oklch(1 0 0); /* pure white cards */
+  --surface-2: oklch(0.96 0.006 255); /* subtle grey insets */
+  --card: oklch(1 0 0); /* white card surface */
+  --card-foreground: oklch(0.2 0.02 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.02 260);
+
+  /* ── Interactive ── */
+  --primary: oklch(0.48 0.14 255); /* deeper blue for light bg contrast */
+  --primary-foreground: oklch(0.98 0 0); /* white on blue */
+  --secondary: oklch(0.94 0.008 255); /* very light blue-grey */
+  --secondary-foreground: oklch(0.25 0.03 260);
+  --accent: oklch(0.7 0.16 60); /* Kwalis Orange — SAME HUE as dark */
+  --accent-foreground: oklch(0.2 0.04 60); /* dark text on orange */
+  --destructive: #dc2626; /* = --status-critical (light) */
+  --destructive-foreground: oklch(0.98 0 0);
+
+  /* ── Neutral ──
+     CRITICAL: muted-foreground must be dark enough to read on white
+     but light enough to look "secondary" vs foreground.
+     oklch(0.45) gives ~5.2:1 contrast ratio against white → WCAG AA ✓ */
+  --muted: oklch(0.95 0.006 255);
+  --muted-foreground: oklch(0.45 0.02 260); /* medium slate — AA compliant */
+  --border: oklch(0.87 0.01 255); /* soft grey border */
+  --input: oklch(0.95 0.006 255); /* light input background */
+  --ring: oklch(0.48 0.14 255); /* matches primary */
+
+  /* ── Sidebar (stays dark — anchors navigation in both themes) ── */
+  --sidebar: oklch(0.22 0.04 250);
+  --sidebar-foreground: oklch(0.92 0.005 250);
+  --sidebar-active: oklch(0.3 0.06 245);
+
+  /* ── Brand ── */
+  --brand: oklch(0.48 0.14 255);
+  --brand-foreground: oklch(0.98 0 0);
+
+  /* ── Semantic Status (darker for light backgrounds) ── */
+  --success: #059669;
+  --success-foreground: oklch(0.98 0 0);
+  --warning: #d97706;
+  --warning-foreground: oklch(0.2 0.06 70);
+  --info: oklch(0.48 0.14 255); /* matches primary */
+  --info-foreground: oklch(0.98 0 0);
+  --highlight: oklch(0.48 0.17 300);
+  --highlight-foreground: oklch(0.98 0 0);
+
+  /* ── Dashboard monochrome system (light) — contrast-validated ── */
+  --page: #f6f6f7;
+  --ink-primary: #0b0d11;
+  --ink-secondary: #4a5260;
+  --ink-muted: #838b98;
+  --grid: #eaecef;
+  --axis: #d8dbe0;
+  --data-1: #1e2530;
+  --data-2: #3d4757;
+  --data-3: #66717f;
+  --data-4: #9ba3ae;
+  --status-good: #059669;
+  --status-warning: #d97706;
+  --status-critical: #dc2626;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BASE LAYER
+   ═══════════════════════════════════════════════════════════════════ */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DARK THEME — contrast enforcement for legacy components
+   ═══════════════════════════════════════════════════════════════════
+   These overrides exist because some components use raw Tailwind
+   colors (text-slate-400, bg-white/10) instead of semantic tokens.
+   
+   ⚠️  TEMPORARY: As components migrate to semantic tokens, these
+   blocks should shrink. New components must NOT use raw colors.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════
+   ON-DARK SCOPE
+   For panels that paint their own fixed dark background (e.g. the auth
+   hero). Re-declares the canonical dark palette locally so semantic
+   tokens inside stay readable in BOTH themes — no raw colour classes.
+   ═══════════════════════════════════════════════════════════════════ */
+.on-dark {
+  --foreground: oklch(0.97 0 0);
+  --card-foreground: oklch(0.97 0 0);
+  --muted: oklch(0.3 0.03 245);
+  --muted-foreground: oklch(0.82 0.015 250);
+  --border: oklch(0.72 0.03 250 / 0.28);
+  --surface: oklch(0.23 0.03 260 / 0.5);
+  --surface-2: oklch(0.98 0 0 / 0.12);
+  color: var(--color-foreground);
+}
+
+/* Headings always crisp white */
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark h5,
+.dark h6 {
+  color: var(--color-foreground);
+}
+
+/* …but never let the theme heading rule out-specify an on-dark panel. */
+.on-dark h1,
+.on-dark h2,
+.on-dark h3,
+.on-dark h4,
+.on-dark h5,
+.on-dark h6,
+.dark .on-dark h1,
+.dark .on-dark h2,
+.dark .on-dark h3,
+.dark .on-dark h4,
+.dark .on-dark h5,
+.dark .on-dark h6 {
+  color: var(--color-foreground);
+}
+
+/* Secondary text — raw slate/gray/neutral utilities → muted-foreground */
+.dark [class~="text-slate-300"],
+.dark [class~="text-slate-400"],
+.dark [class~="text-slate-500"],
+.dark [class~="text-neutral-300"],
+.dark [class~="text-neutral-400"],
+.dark [class~="text-neutral-500"],
+.dark [class~="text-gray-300"],
+.dark [class~="text-gray-400"],
+.dark [class~="text-gray-500"],
+.dark [class~="text-zinc-300"],
+.dark [class~="text-zinc-400"],
+.dark [class~="text-zinc-500"] {
+  color: var(--color-muted-foreground);
+}
+.dark [class~="text-muted-foreground"],
+.dark [class~="text-foreground/60"],
+.dark [class~="text-foreground/70"],
+.dark [class~="text-foreground/80"] {
+  color: var(--color-muted-foreground);
+}
+
+/* Very dark text on dark bg → promote to readable */
+.dark [class~="text-slate-600"],
+.dark [class~="text-slate-700"],
+.dark [class~="text-slate-800"],
+.dark [class~="text-slate-900"],
+.dark [class~="text-gray-600"],
+.dark [class~="text-gray-700"],
+.dark [class~="text-gray-800"],
+.dark [class~="text-gray-900"],
+.dark [class~="text-neutral-700"],
+.dark [class~="text-neutral-800"],
+.dark [class~="text-zinc-700"],
+.dark [class~="text-zinc-800"] {
+  color: var(--color-muted-foreground);
+}
+
+/* text-black on dark → foreground */
+.dark [class~="text-black"] {
+  color: var(--color-foreground);
+}
+
+/* Translucent white borders → solid subtle borders */
+.dark [class~="border-white/5"] {
+  border-color: oklch(0.32 0.02 250);
+}
+.dark [class~="border-white/10"] {
+  border-color: oklch(0.35 0.02 250);
+}
+.dark [class~="border-white/15"] {
+  border-color: oklch(0.38 0.02 250);
+}
+.dark [class~="border-white/20"] {
+  border-color: oklch(0.4 0.025 250);
+}
+
+/* Translucent white backgrounds → solid surfaces */
+.dark [class~="bg-white/5"] {
+  background-color: var(--color-surface);
+}
+.dark [class~="bg-white/10"] {
+  background-color: var(--color-surface-2);
+}
+
+/* Washed-out tinted translucent backgrounds → solid surface */
+.dark [class~="bg-blue-500/5"],
+.dark [class~="bg-blue-500/10"],
+.dark [class~="bg-blue-500/15"],
+.dark [class~="bg-blue-500/20"],
+.dark [class~="bg-blue-600/10"],
+.dark [class~="bg-blue-600/20"],
+.dark [class~="bg-indigo-500/5"],
+.dark [class~="bg-indigo-500/10"],
+.dark [class~="bg-indigo-500/15"],
+.dark [class~="bg-indigo-500/20"],
+.dark [class~="bg-sky-500/5"],
+.dark [class~="bg-sky-500/10"],
+.dark [class~="bg-sky-500/15"],
+.dark [class~="bg-sky-500/20"],
+.dark [class~="bg-cyan-500/5"],
+.dark [class~="bg-cyan-500/10"],
+.dark [class~="bg-cyan-500/15"],
+.dark [class~="bg-cyan-500/20"],
+.dark [class~="bg-violet-500/5"],
+.dark [class~="bg-violet-500/10"],
+.dark [class~="bg-purple-500/5"],
+.dark [class~="bg-purple-500/10"] {
+  background-color: var(--color-surface-2);
+}
+
+/* Tinted translucent borders → uniform subtle border */
+.dark [class~="border-blue-500/20"],
+.dark [class~="border-blue-500/30"],
+.dark [class~="border-indigo-500/20"],
+.dark [class~="border-indigo-500/30"],
+.dark [class~="border-sky-500/20"],
+.dark [class~="border-sky-500/30"],
+.dark [class~="border-cyan-500/20"],
+.dark [class~="border-cyan-500/30"] {
+  border-color: var(--color-border);
+}
+
+/* Light grey backgrounds on dark → surface */
+.dark [class~="bg-gray-50"],
+.dark [class~="bg-gray-100"],
+.dark [class~="bg-slate-50"],
+.dark [class~="bg-slate-100"],
+.dark [class~="bg-zinc-50"],
+.dark [class~="bg-zinc-100"],
+.dark [class~="bg-neutral-50"],
+.dark [class~="bg-neutral-100"] {
+  background-color: var(--color-surface-2);
+  color: var(--color-foreground);
+}
+
+/* Raw bg-white → card surface */
+.dark [class~="bg-white"]:not([class*="/"]) {
+  background-color: var(--color-card);
+  color: var(--color-card-foreground);
+}
+
+/* Very dark backgrounds: standardise to surface-2 */
+.dark [class~="bg-slate-950"],
+.dark [class~="bg-neutral-950"],
+.dark [class~="bg-zinc-950"] {
+  background-color: var(--color-surface-2);
+}
+
+/* Inputs — solid enterprise look */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([class*="bg-transparent"]),
+.dark textarea:not([class*="bg-transparent"]),
+.dark select:not([class*="bg-transparent"]) {
+  background-color: var(--color-surface-2);
+  color: var(--color-foreground);
+  border-color: var(--color-border);
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: oklch(0.55 0.01 250);
+}
+
+/* Chrome autofill on dark scopes: override the near-white UA fill so
+   autofilled fields stay dark with light text (no white flash). */
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover,
+.dark input:-webkit-autofill:focus,
+.dark textarea:-webkit-autofill,
+.dark select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px var(--color-surface-2) inset;
+  -webkit-text-fill-color: var(--color-foreground);
+  caret-color: var(--color-foreground);
+  transition: background-color 999999s ease-in-out 0s;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LIGHT THEME — contrast enforcement for legacy components
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Secondary text — raw slate/gray utilities → muted-foreground */
+.light [class~="text-slate-300"],
+.light [class~="text-slate-400"],
+.light [class~="text-slate-500"],
+.light [class~="text-neutral-400"],
+.light [class~="text-neutral-500"],
+.light [class~="text-gray-400"],
+.light [class~="text-gray-500"] {
+  color: var(--color-muted-foreground);
+}
+
+/* Status badge text — darker values for light backgrounds */
+/* Emerald / Green */
+.light [class~="text-emerald-100"],
+.light [class~="text-emerald-200"],
+.light [class~="text-emerald-300"],
+.light [class~="text-emerald-400"] {
+  color: oklch(0.4 0.12 155);
+}
+.light [class~="bg-emerald-500/10"],
+.light [class~="bg-emerald-500/15"],
+.light [class~="bg-emerald-500/20"] {
+  background-color: oklch(0.95 0.03 155);
+}
+.light [class~="border-emerald-500/30"],
+.light [class~="border-emerald-500/40"] {
+  border-color: oklch(0.72 0.1 155);
+}
+
+/* Rose / Red */
+.light [class~="text-rose-100"],
+.light [class~="text-rose-200"],
+.light [class~="text-rose-300"],
+.light [class~="text-red-400"] {
+  color: oklch(0.45 0.18 25);
+}
+.light [class~="bg-rose-500/10"],
+.light [class~="bg-rose-500/20"] {
+  background-color: oklch(0.95 0.03 25);
+}
+.light [class~="border-rose-500/30"],
+.light [class~="border-rose-500/40"] {
+  border-color: oklch(0.72 0.1 25);
+}
+
+/* Violet / Purple */
+.light [class~="text-violet-100"],
+.light [class~="text-violet-200"],
+.light [class~="text-violet-300"] {
+  color: oklch(0.42 0.14 290);
+}
+.light [class~="bg-violet-500/10"],
+.light [class~="bg-violet-500/15"],
+.light [class~="bg-violet-500/20"] {
+  background-color: oklch(0.95 0.03 290);
+}
+.light [class~="border-violet-500/30"],
+.light [class~="border-violet-500/40"] {
+  border-color: oklch(0.72 0.08 290);
+}
+
+/* Amber / Warning */
+.light [class~="text-amber-100"],
+.light [class~="text-amber-200"],
+.light [class~="text-amber-300"],
+.light [class~="text-amber-400"] {
+  color: oklch(0.42 0.12 70);
+}
+.light [class~="bg-amber-500/10"],
+.light [class~="bg-amber-500/15"] {
+  background-color: oklch(0.96 0.03 70);
+}
+.light [class~="border-amber-500/30"],
+.light [class~="border-amber-500/40"] {
+  border-color: oklch(0.78 0.08 70);
+}
+
+/* Sky / Info */
+.light [class~="text-sky-100"],
+.light [class~="text-sky-200"] {
+  color: oklch(0.4 0.1 230);
+}
+.light [class~="bg-sky-500/10"],
+.light [class~="bg-sky-500/15"] {
+  background-color: oklch(0.95 0.03 230);
+}
+.light [class~="border-sky-500/30"],
+.light [class~="border-sky-500/40"] {
+  border-color: oklch(0.72 0.08 230);
+}
+
+/* Zinc / Neutral */
+.light [class~="text-zinc-100"],
+.light [class~="text-zinc-200"] {
+  color: oklch(0.35 0.01 260);
+}
+.light [class~="bg-zinc-500/10"],
+.light [class~="bg-zinc-500/15"] {
+  background-color: oklch(0.94 0.006 260);
+}
+.light [class~="border-zinc-500/30"] {
+  border-color: oklch(0.78 0.01 260);
+}
+
+/* White text on light backgrounds → foreground
+   EXCEPTION: elements on dark surfaces (sidebar, primary, brand, etc.) keep white */
+.light
+  [class~="text-white"]:not(
+    [class~="bg-primary"],
+    [class~="bg-brand"],
+    [class~="bg-destructive"],
+    [class~="bg-accent"],
+    [class~="bg-sidebar"],
+    [class~="bg-sidebar-active"],
+    [class~="bg-black"],
+    [class~="bg-slate-900"],
+    [class~="bg-slate-800"],
+    [class~="bg-neutral-900"],
+    [class~="bg-zinc-900"]
+  ) {
+  color: var(--color-foreground);
+}
+
+/* Translucent white text → muted-foreground */
+.light [class~="text-white/60"] {
+  color: var(--color-muted-foreground);
+}
+.light [class~="text-white/70"],
+.light [class~="text-white/80"],
+.light [class~="text-white/90"] {
+  color: var(--color-foreground);
+}
+
+/* INSIDE DARK SIDEBAR: translucent white text stays light */
+.light [class~="bg-sidebar"] [class~="text-white/60"],
+.light [class~="bg-sidebar"] [class~="text-white/70"],
+.light [class~="bg-sidebar"] [class~="text-white/80"],
+.light [class~="bg-sidebar"] [class~="text-white/90"],
+.light [class~="bg-sidebar"] [class~="text-muted-foreground"] {
+  color: oklch(0.75 0.01 250) !important;
+}
+
+/* Translucent white borders → solid semantic border */
+.light [class~="border-white/5"],
+.light [class~="border-white/10"],
+.light [class~="border-white/15"],
+.light [class~="border-white/20"],
+.light [class~="border-white/25"],
+.light [class~="border-white/30"] {
+  border-color: var(--color-border);
+}
+
+/* Translucent white backgrounds → surface */
+.light [class~="bg-white/5"],
+.light [class~="bg-white/10"],
+.light [class~="bg-white/15"],
+.light [class~="bg-white/20"] {
+  background-color: var(--color-surface-2);
+}
+.light [class~="hover:bg-white/5"]:hover,
+.light [class~="hover:bg-white/10"]:hover {
+  background-color: var(--color-muted);
+}
+
+/* INSIDE DARK SIDEBAR: hover stays translucent-dark */
+.light [class~="bg-sidebar"] [class~="hover:bg-white/5"]:hover,
+.light [class~="bg-sidebar"] [class~="hover:bg-white/10"]:hover,
+.light [class~="bg-sidebar"] [class~="hover:bg-white/15"]:hover {
+  background-color: rgba(255, 255, 255, 0.14) !important;
+  color: var(--color-sidebar-foreground) !important;
+}
+
+/* Hardcoded dark backgrounds → card/popover surfaces */
+.light [class~="bg-slate-950"],
+.light [class~="bg-slate-900"],
+.light [class~="bg-neutral-950"],
+.light [class~="bg-neutral-900"],
+.light [class~="bg-zinc-950"],
+.light [class~="bg-zinc-900"] {
+  background-color: var(--color-card);
+  color: var(--color-card-foreground);
+}
+
+/* bg-black → deep foreground (keeps contrast for overlays/modals) */
+.light [class~="bg-black"]:not([class*="/"]) {
+  background-color: oklch(0.2 0.02 260);
+  color: #ffffff;
+}
+.light [class~="bg-black/40"],
+.light [class~="bg-black/50"],
+.light [class~="bg-black/60"] {
+  background-color: oklch(0.2 0.02 260 / 0.55);
+}
+
+/* Dark gradients → card surface */
+.light [class~="from-slate-900/60"],
+.light [class~="from-slate-950/60"],
+.light [class~="to-slate-900/60"],
+.light [class~="to-slate-950/60"],
+.light [class~="from-slate-900"],
+.light [class~="to-slate-950"] {
+  --tw-gradient-from: var(--color-card) !important;
+  --tw-gradient-to: var(--color-card) !important;
+}
+.light [class~="bg-slate-900/60"],
+.light [class~="bg-slate-950/60"],
+.light [class~="bg-slate-900/40"],
+.light [class~="bg-slate-950/40"] {
+  background-color: var(--color-card);
+}
+
+/* sidebar-active as input bg → popover surface */
+.light [class~="bg-sidebar-active"]:where(input, textarea, select) {
+  background-color: var(--color-popover) !important;
+  color: var(--color-popover-foreground) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* sidebar-active surface on light page background */
+.light [class~="bg-sidebar-active"] {
+  color: #ffffff;
+}
+.light [class~="bg-sidebar-active"][class~="hover:bg-white/5"]:hover,
+.light [class~="bg-sidebar-active"][class~="hover:bg-white/10"]:hover,
+.light [class~="bg-sidebar-active"][class~="hover:bg-white/15"]:hover {
+  background-color: color-mix(in oklab, var(--color-sidebar-active) 82%, white 18%) !important;
+  color: #ffffff !important;
+}
+
+/* Select elements — clean native dropdown */
+.light select,
+.light select option,
+.light select optgroup {
+  background-color: var(--color-popover);
+  color: var(--color-popover-foreground);
+}
+
+/* Input text always foreground-colored */
+.light input[type="text"],
+.light input[type="number"],
+.light input[type="email"],
+.light input[type="date"],
+.light input[type="search"],
+.light textarea {
+  color: var(--color-foreground);
+}
+.light input::placeholder,
+.light textarea::placeholder {
+  color: oklch(0.55 0.01 255);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FOCUS RING — accessible in both themes
+   ═══════════════════════════════════════════════════════════════════ */
+:where(button, a, [role="button"], input, select, textarea):focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   NUMBER INPUT SPINNERS — hidden globally for data-sheet cells
+   ═══════════════════════════════════════════════════════════════════ */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CONTRAST SELECT — dark dropdown for importer flows
+   ═══════════════════════════════════════════════════════════════════ */
+.contrast-select {
+  color-scheme: dark;
+  background-color: color-mix(in oklab, var(--color-foreground) 8%, black);
+  color: var(--color-foreground);
+  border-color: color-mix(in oklab, var(--color-foreground) 20%, transparent);
+}
+.contrast-select option,
+.contrast-select optgroup {
+  background-color: #111827;
+  color: #f9fafb;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   UNIFIED TABLE DESIGN SYSTEM
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+  --table-font-size: 0.875rem;
+  --table-cell-px: 0.875rem;
+  --table-cell-py: 0.75rem;
+  --table-head-py: 0.625rem;
+  --table-radius: var(--radius-lg);
+  --table-border: color-mix(in oklab, var(--color-foreground) 10%, transparent);
+  --table-row-border: color-mix(in oklab, var(--color-foreground) 6%, transparent);
+  --table-head-bg: color-mix(in oklab, var(--color-foreground) 5%, transparent);
+  --table-row-hover: color-mix(in oklab, var(--color-foreground) 4%, transparent);
+}
+
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: var(--table-radius);
+  border: 1px solid var(--table-border);
+  background: var(--color-card);
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-table {
+  width: 100%;
+  font-size: var(--table-font-size);
+  line-height: 1.25rem;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--color-foreground);
+}
+.app-table :where(thead) {
+  background: var(--table-head-bg);
+}
+.app-table :where(thead th) {
+  padding: var(--table-head-py) var(--table-cell-px);
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-foreground);
+  border-bottom: 1px solid var(--table-border);
+  white-space: nowrap;
+}
+.app-table :where(tbody td) {
+  padding: var(--table-cell-py) var(--table-cell-px);
+  border-bottom: 1px solid var(--table-row-border);
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sticky column headers while the table body scrolls (desktop / tablet). */
+@media (min-width: 641px) {
+  .table-scroll {
+    max-height: calc(100vh - 15rem);
+    overflow-y: auto;
+  }
+  .app-table :where(thead th) {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--color-card);
+    box-shadow: inset 0 -1px 0 var(--table-border);
+  }
+}
+
+.app-table :where(tbody tr:last-child td) {
+  border-bottom: 0;
+}
+.app-table :where(tbody tr):hover {
+  background: var(--table-row-hover);
+}
+.app-table :where(tbody tr[data-state="selected"]) {
+  background: var(--table-row-hover);
+}
+
+/* ── Mobile card layout ── */
+@media (max-width: 640px) {
+  .table-scroll:has(> .app-table) {
+    overflow-x: visible;
+    border: 0;
+    background: transparent;
+    border-radius: 0;
+  }
+  .app-table {
+    display: block;
+  }
+  .app-table :where(thead) {
+    display: none;
+  }
+  .app-table :where(tbody) {
+    display: block;
+  }
+  .app-table :where(tbody tr) {
+    display: block;
+    background: var(--color-card);
+    color: var(--color-card-foreground);
+    border: 1px solid var(--table-border);
+    border-radius: var(--table-radius);
+    margin-bottom: 0.625rem;
+    padding: 0.25rem 0.875rem;
+  }
+  .app-table :where(tbody tr:last-child) {
+    margin-bottom: 0;
+  }
+  .app-table :where(tbody tr):hover {
+    background: var(--color-card);
+  }
+  .app-table :where(tbody td) {
+    display: grid;
+    grid-template-columns: minmax(0, 40%) minmax(0, 1fr);
+    align-items: start;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px dashed var(--table-row-border);
+    white-space: normal;
+    word-break: break-word;
+    text-align: start;
+  }
+  .app-table :where(tbody tr td:last-child) {
+    border-bottom: 0;
+  }
+  .app-table :where(tbody td)::before {
+    content: attr(data-label);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-foreground);
+    opacity: 0.85;
+    align-self: center;
+  }
+  .app-table :where(tbody td:not([data-label]))::before {
+    content: none;
+  }
+  .app-table :where(tbody td:not([data-label])) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RTL / ARABIC LAYOUT
+   ═══════════════════════════════════════════════════════════════════ */
+[dir="rtl"] .app-table :where(th, td) {
+  text-align: right;
+}
+[dir="rtl"] input,
+[dir="rtl"] textarea,
+[dir="rtl"] select {
+  text-align: right;
+}
+[dir="rtl"] input[type="number"],
+[dir="rtl"] input[type="date"],
+[dir="rtl"] input[type="email"],
+[dir="rtl"] input[type="url"],
+[dir="rtl"] input[type="tel"],
+[dir="rtl"] input.font-mono,
+[dir="rtl"] .font-mono {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: plaintext;
+}
+[dir="rtl"] .rtl-flip {
+  transform: scaleX(-1);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   NUMERIC ALIGNMENT
+   ═══════════════════════════════════════════════════════════════════ */
+.num,
+[data-num],
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings:
+    "tnum" 1,
+    "lnum" 1;
+}
+[dir="rtl"] .num,
+[dir="rtl"] [data-num] {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: end;
+}
+[dir="rtl"] .app-table :where(td.num, th.num) {
+  direction: ltr;
+  text-align: end;
+  unicode-bidi: isolate;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LOGICAL PROPERTY UTILITIES
+   ═══════════════════════════════════════════════════════════════════ */
+.logical-pad-x {
+  padding-inline: 1rem;
+}
+.logical-pad-s {
+  padding-inline-start: 1rem;
+}
+.logical-pad-e {
+  padding-inline-end: 1rem;
+}
+.logical-mar-s {
+  margin-inline-start: 0.5rem;
+}
+.logical-mar-e {
+  margin-inline-end: 0.5rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   VIRTUALIZATION
+   ═══════════════════════════════════════════════════════════════════ */
+.virt-rows > tr {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 44px;
+}
+.virt-list > * {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 56px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVENESS
+   ═══════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  form .grid[class*="grid-cols-"],
+  [role="dialog"] .grid[class*="grid-cols-"],
+  .modal-body .grid[class*="grid-cols-"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  form input,
+  form select,
+  form textarea,
+  [role="dialog"] input,
+  [role="dialog"] select,
+  [role="dialog"] textarea {
+    max-width: 100%;
+    min-width: 0;
+  }
+  table:not(.app-table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .kpi-row,
+  .action-row,
+  [data-kpi-row],
+  [data-action-row] {
+    flex-wrap: wrap;
+  }
+}
+
+@supports (padding: max(0px)) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DASHBOARD SCOPE — monochrome FinTech surfaces
+   The two dashboard pages redeclare the surface scale to the validated
+   neutral-gray ramp without retheming the rest of the app.
+   ═══════════════════════════════════════════════════════════════════ */
+.dashboard-scope {
+  --background: #08090b;
+  --foreground: #ffffff;
+  --card: #141518;
+  --card-foreground: #ffffff;
+  --surface: #141518;
+  --surface-2: #1c1e23;
+  --popover: #141518;
+  --popover-foreground: #ffffff;
+  --muted: #1c1e23;
+  --muted-foreground: #b6bcc7;
+  --border: rgba(255, 255, 255, 0.08);
+  background-color: var(--background);
+  color: var(--foreground);
+}
+.light .dashboard-scope {
+  --background: #f6f6f7;
+  --foreground: #0b0d11;
+  --card: #ffffff;
+  --card-foreground: #0b0d11;
+  --surface: #ffffff;
+  --surface-2: #f1f2f4;
+  --popover: #ffffff;
+  --popover-foreground: #0b0d11;
+  --muted: #f1f2f4;
+  --muted-foreground: #4a5260;
+  --border: rgba(9, 11, 15, 0.08);
+}
+
+/* ── Dashboard motion — subtle, ease-out, first-mount only ── */
+@keyframes dash-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes dash-tooltip {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@utility dash-enter {
+  animation: dash-enter 200ms ease-out both;
+}
+@utility dash-tooltip {
+  animation: dash-tooltip 120ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-scope *,
+  .dashboard-scope *::before,
+  .dashboard-scope *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Production Timeline — print / PDF export
+   Toggled by `printTimelineReport()` (src/lib/timeline-export.ts), which adds
+   `.timeline-print-mode` to <body> just before window.print(). The app chrome
+   is removed while the Gantt lanes, colored bars and macro phase band are
+   preserved at full width on landscape paper.
+   ───────────────────────────────────────────────────────────────────────── */
+@media print {
+  body.timeline-print-mode {
+    background: #fff;
+  }
+
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
+  /* App chrome: sidebar, top header, banners and any opt-out control. */
+  body.timeline-print-mode aside,
+  body.timeline-print-mode header,
+  body.timeline-print-mode .no-print,
+  body.timeline-print-mode [data-sonner-toaster] {
+    display: none !important;
+  }
+
+  /* Let the horizontally scrolled Gantt render in full instead of clipping. */
+  body.timeline-print-mode .timeline-print-area,
+  body.timeline-print-mode .timeline-print-area * {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  body.timeline-print-mode main,
+  body.timeline-print-mode .timeline-print-area {
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Keep bar fills and phase colors — browsers strip backgrounds by default. */
+  body.timeline-print-mode .timeline-print-area * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Don't split a lane across two sheets. */
+  body.timeline-print-mode .timeline-print-area .timeline-lane {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
