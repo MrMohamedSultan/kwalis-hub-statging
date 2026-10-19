@@ -1,5 +1,6 @@
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
-import { Search, Menu, FolderOpen, Sun, Moon, ArrowLeft, X } from "lucide-react";
+import { Search, Menu, FolderOpen, Sun, Moon, ArrowLeft, X, LogOut } from "lucide-react";
+import { signOut } from "@/lib/auth";
 import { PlatformSwitcher } from "@/components/PlatformSwitcher";
 
 import {
@@ -200,6 +201,31 @@ function ContentFallback() {
     <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-5 text-sm text-foreground">
       {t("appshell.this_view_could_not_render_safely_navigate_away")}
     </div>
+  );
+}
+
+/** Sign-out button shown in the top bar next to the language toggle. */
+function HeaderLogoutButton() {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          await signOut();
+        } finally {
+          window.location.href = "/auth";
+        }
+      }}
+      title={t("nav.logout")}
+      aria-label={t("nav.logout")}
+      className="p-1.5 rounded-lg border border-border bg-surface-2 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 disabled:opacity-50 shrink-0"
+    >
+      <LogOut className="size-4 rtl:-scale-x-100" />
+    </button>
   );
 }
 
@@ -416,6 +442,7 @@ function AppShellChrome({
               <ThemeToggleButton />
               <CurrencyToggle />
               <LanguageToggle />
+              <HeaderLogoutButton />
             </div>
 
             <div className="md:hidden shrink-0 flex items-center gap-2">
@@ -424,6 +451,7 @@ function AppShellChrome({
               <ThemeToggleButton />
               <CurrencyToggle />
               <LanguageToggle />
+              <HeaderLogoutButton />
             </div>
           </header>
 

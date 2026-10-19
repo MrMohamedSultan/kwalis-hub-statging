@@ -74,7 +74,9 @@ export default defineConfig({
   },
   // The wrapper intentionally exposes only stable Nitro options. Nitro-specific
   // Rollup settings live in nitro.config.ts so the final server bundle reads them.
-  nitro: { preset: "vercel" },
+  // NITRO_PRESET=node-server builds a standalone Node server (used for the self-hosted
+  // test server); Lovable/Vercel builds keep the default.
+  nitro: { preset: process.env.NITRO_PRESET || "vercel" },
   vite: {
     plugins: [
       cloudflareWorkersShimPlugin(),
