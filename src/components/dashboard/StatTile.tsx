@@ -70,6 +70,26 @@ function Sparkline({ points, tone }: { points: number[]; tone: StatusTone }) {
   );
 }
 
+/** Number part of a formatted amount (Latin or Arabic-Indic digits). */
+const NUMBER_RE =
+  /^(\D*?)([-−+]?[\d\u0660-\u0669](?:[\d\u0660-\u0669.,\u066B\u066C]*[\d\u0660-\u0669])?)(\D*)$/;
+
+function KpiValue({ value }: { value: string }) {
+  const m = NUMBER_RE.exec(value.trim());
+  const base = "mt-2 font-semibold tracking-tight text-ink-primary text-lg 2xl:text-xl";
+  if (!m) return <div className={`${base} break-words`}>{value}</div>;
+  const [, prefix, number, suffix] = m;
+  return (
+    <div className={`${base} flex flex-wrap items-baseline gap-x-1`}>
+      {prefix.trim() && <span className="text-xs font-medium text-ink-muted">{prefix.trim()}</span>}
+      <span className="whitespace-nowrap" dir="ltr">
+        {number}
+      </span>
+      {suffix.trim() && <span className="text-xs font-medium text-ink-muted">{suffix.trim()}</span>}
+    </div>
+  );
+}
+
 export function StatTile({
   label,
   value,
@@ -89,17 +109,18 @@ export function StatTile({
     <div
       className={`flex h-full flex-col justify-between rounded-xl border border-border bg-surface p-6 ${className}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="text-xs font-medium text-ink-muted">{label}</div>
-          {/* KPI value: proportional figures — tabular-nums here makes the
-              number look loose and broken. Large numbers break at any point
-              to stay inside the card rather than overflowing. */}
-          <div className="mt-2 break-all text-xl font-semibold tracking-tight text-ink-primary">
-            {value}
+      <div className="min-w-0">
+        <div className="text-xs font-medium text-ink-muted">{label}</div>
+        {/* KPI value: proportional figures — tabular-nums here makes the
+            number look loose and broken. The number itself never wraps;
+            the currency code is set smaller beside it so the full amount
+            fits the narrow 6-column strip. */}
+        <KpiValue value={value} />
+        {spark && spark.length >= 2 && (
+          <div className="mt-2 flex justify-end">
+            <Sparkline points={spark} tone={sparkTone} />
           </div>
-        </div>
-        {spark && spark.length >= 2 && <Sparkline points={spark} tone={sparkTone} />}
+        )}
       </div>
       {delta && (
         <div className="mt-3 flex items-center gap-1.5">
