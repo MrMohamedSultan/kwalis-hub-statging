@@ -11,7 +11,7 @@ import { useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Sector, Tooltip } from "recharts";
 import { useI18n } from "@/lib/i18n/useI18n";
 import { useDashboardCurrency } from "@/lib/dashboard/currency";
-import { formatCurrency, formatPercentAdaptive } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import { getChartColors } from "@/lib/chart-theme";
 import { safeDivide, safeNumber } from "@/lib/safe";
 import type { TopSheetCategory } from "@/lib/dashboard/mock-data";
@@ -38,14 +38,22 @@ export function TopSheetDonut({ data, loading, fetching }: TopSheetDonutProps) {
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
 
   const fills = [colors.data1, colors.data2, colors.data3, colors.data4];
-  const total = data.reduce((s, c) => s + safeNumber(c.amount), 0);
   const chartData = data.map((c, i) => ({
     name: t(`dash.topSheet.${c.key}`),
     value: Math.round(convert(c.amount)),
     fill: fills[i % fills.length],
   }));
+  // Total in the SAME currency as the slices — percentages must divide like by
+  // like (the old total stayed in SAR while slices were converted to USD).
+  const total = chartData.reduce((s, c) => s + safeNumber(c.value), 0);
 
   const money = (v: number) => formatCurrency(v, { currency: code });
+  // One fixed precision for every row, so 29.3 / 57.3 / 12.1 / 1.3 line up.
+  const pct = (v: number) => `${(safeDivide(v, total) * 100).toFixed(1)}%`;
+  const compact = new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(total);
 
   return (
     <ChartCard
@@ -72,11 +80,10 @@ export function TopSheetDonut({ data, loading, fetching }: TopSheetDonutProps) {
             label: "%",
             align: "end",
             numeric: true,
-            format: (r) =>
-              formatPercentAdaptive(safeDivide(safeNumber(r.value), safeNumber(r.total)) * 100),
+            format: (r) => pct(safeNumber(r.value)),
           },
         ],
-        rows: chartData.map((d) => ({ ...d, total })),
+        rows: chartData,
       }}
     >
       <div className="flex h-full flex-col">
@@ -91,6 +98,7 @@ export function TopSheetDonut({ data, loading, fetching }: TopSheetDonutProps) {
                 innerRadius="62%"
                 outerRadius="88%"
                 paddingAngle={2}
+                minAngle={4}
                 stroke="var(--surface)"
                 strokeWidth={2}
                 activeShape={renderActiveShape}
@@ -112,10 +120,11 @@ export function TopSheetDonut({ data, loading, fetching }: TopSheetDonutProps) {
           </ResponsiveContainer>
           {/* Center label — HTML over the SVG center, not an SVG text hack. */}
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-            <div className="text-2xl font-semibold tracking-tight text-ink-primary">
-              {formatCurrency(convert(total), { currency: code, compact: true })}
+            <div className="text-[11px] font-medium text-ink-muted">{code}</div>
+            <div className="text-xl font-semibold leading-tight tracking-tight text-ink-primary">
+              {compact}
             </div>
-            <div className="mt-0.5 text-xs text-ink-muted">{t("dash.totalSpend")}</div>
+            <div className="mt-0.5 text-[11px] text-ink-muted">{t("dash.totalBudget")}</div>
           </div>
         </div>
 
@@ -135,8 +144,8 @@ export function TopSheetDonut({ data, loading, fetching }: TopSheetDonutProps) {
               <span className="ms-auto text-xs font-medium tabular-nums text-ink-primary">
                 {money(d.value)}
               </span>
-              <span className="w-11 text-end text-xs tabular-nums text-ink-muted">
-                {formatPercentAdaptive(safeDivide(d.value, total) * 100)}
+              <span className="w-12 text-end text-xs tabular-nums text-ink-muted">
+                {pct(d.value)}
               </span>
             </li>
           ))}
