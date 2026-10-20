@@ -2791,5 +2791,78 @@
     "restore": "Restore",
     "archived": "“{{name}}” archived",
     "restored": "“{{name}}” restored to {{status}}"
+  },
+  "platformUsers": {
+    "intro": "Every account on the platform. Add users, set their operational role, and control access: reset a password, require a new one, sign a user out of every device, or disable the account.",
+    "refresh": "Refresh",
+    "addUser": "Add user",
+    "addUserHint": "The user gets a password you set now and must change it at first sign-in.",
+    "searchPlaceholder": "Search by name, email or company…",
+    "loading": "Loading users…",
+    "empty": "No users match your filters.",
+    "loadFailed": "Failed to load users",
+    "actionFailed": "The action could not be completed",
+    "roleUpdated": "Role assignment updated",
+    "noCompanyForRole": "This user is not a member of any company — add them to a company first.",
+    "noRole": "— No role —",
+    "custom": "custom",
+    "superAdmin": "Super admin",
+    "you": "you",
+    "neverSignedIn": "Never signed in",
+    "newPassword": "New password",
+    "generate": "Generate",
+    "passwordTooShort": "At least 8 characters.",
+    "mustChangeOnNextSignIn": "Require a new password at next sign-in",
+    "reason": "Reason (optional)",
+    "reasonPlaceholder": "Why is this account being disabled?",
+    "filter": {
+      "all": "All",
+      "active": "Active",
+      "disabled": "Disabled",
+      "mustChange": "Must change password",
+      "neverSignedIn": "Never signed in"
+    },
+    "status": {
+      "active": "Active",
+      "disabled": "Disabled",
+      "mustChange": "Must change password"
+    },
+    "col": {
+      "user": "User",
+      "companies": "Companies",
+      "status": "Status",
+      "lastSignIn": "Last sign-in",
+      "operationalRole": "Operational role",
+      "actions": "Actions"
+    },
+    "orgRole": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "member": "Member"
+    },
+    "action": {
+      "details": "View / edit details",
+      "resetPassword": "Reset password",
+      "requireMustChange": "Require new password at next sign-in",
+      "clearMustChange": "Cancel the password-change requirement",
+      "forceLogout": "Sign out of all devices",
+      "disable": "Disable account",
+      "enable": "Re-enable account"
+    },
+    "confirm": {
+      "reset": "Set a new password for {{name}}. Give it to them through a safe channel.",
+      "logout": "{{name}} will be signed out of every device and must sign in again.",
+      "disable": "{{name}} will be signed out and won't be able to sign in until the account is re-enabled. Their data is kept.",
+      "enable": "{{name}} will be able to sign in again."
+    },
+    "toast": {
+      "passwordReset": "Password changed.",
+      "passwordResetCopied": "Password changed and copied to the clipboard.",
+      "mustChangeSet": "The user must choose a new password at next sign-in.",
+      "mustChangeCleared": "Password-change requirement cancelled.",
+      "loggedOut": "{{name}} was signed out of all devices.",
+      "disabled": "{{name}}'s account is disabled.",
+      "enabled": "{{name}}'s account is active again."
+    }
   }
 }

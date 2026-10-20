@@ -841,7 +841,7 @@ function InviteRow({
   );
 }
 
-function CreateUserDirectCard({
+export function CreateUserDirectCard({
   orgs,
   projects,
   roles,

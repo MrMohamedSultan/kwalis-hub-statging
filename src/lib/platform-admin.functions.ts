@@ -119,3 +119,136 @@ export const adminSuspendCompany = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true, status: status as string };
   });
+
+// ─────────────────────────────────────────────────────────────────────
+// Platform user directory (super admin only)
+// ─────────────────────────────────────────────────────────────────────
+
+export type PlatformUserMembership = {
+  organizationId: string;
+  organizationName: string;
+  orgRole: string;
+};
+
+export type PlatformUserRow = {
+  userId: string;
+  email: string;
+  displayName: string;
+  jobTitle: string | null;
+  createdAt: string | null;
+  lastSignInAt: string | null;
+  appRoles: string[];
+  memberships: PlatformUserMembership[];
+  /** Disabled in the account controls OR banned at the auth layer. */
+  disabled: boolean;
+  disabledReason: string | null;
+  mustChangePassword: boolean;
+  sessionsRevokedAt: string | null;
+};
+
+/**
+ * Every account on the platform, with company memberships and account status.
+ * The caller's own token decides access (is_super_admin); the service role is
+ * used only afterwards, to read auth users and rows across all companies.
+ */
+export const listPlatformUsers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<PlatformUserRow[]> => {
+    const { supabase, userId } = context;
+    const { data: isSuper, error: roleErr } = await supabase.rpc("is_super_admin", {
+      _uid: userId,
+    });
+    if (roleErr) throw new Error(roleErr.message);
+    if (!isSuper) throw new Error("Forbidden: platform super admins only.");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const authUsers: Array<{
+      id: string;
+      email?: string;
+      created_at?: string;
+      last_sign_in_at?: string | null;
+      banned_until?: string | null;
+    }> = [];
+    for (let page = 1; page <= 50; page++) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
+      if (error) throw new Error(error.message);
+      authUsers.push(...(data?.users ?? []));
+      if ((data?.users ?? []).length < 1000) break;
+    }
+
+    const [profilesRes, rolesRes, membersRes, controlsRes] = await Promise.all([
+      supabaseAdmin.from("profiles").select("id, display_name, job_title"),
+      supabaseAdmin.from("user_roles").select("user_id, role"),
+      supabaseAdmin
+        .from("organization_members")
+        .select("user_id, organization_id, role, organizations:organization_id(name)"),
+      (supabaseAdmin as any)
+        .from("user_account_controls")
+        .select("user_id, disabled, disabled_reason, must_change_password, sessions_revoked_at"),
+    ]);
+    if (profilesRes.error) throw new Error(profilesRes.error.message);
+    if (rolesRes.error) throw new Error(rolesRes.error.message);
+    if (membersRes.error) throw new Error(membersRes.error.message);
+    // The controls table arrives with db/pending/120; before that, treat everyone as active.
+    const controls: Array<{
+      user_id: string;
+      disabled: boolean;
+      disabled_reason: string | null;
+      must_change_password: boolean;
+      sessions_revoked_at: string | null;
+    }> = controlsRes.error ? [] : (controlsRes.data ?? []);
+
+    const profileMap = new Map<string, { display_name: string | null; job_title: string | null }>();
+    for (const p of profilesRes.data ?? []) profileMap.set(p.id as string, p as any);
+
+    const rolesMap = new Map<string, string[]>();
+    for (const r of rolesRes.data ?? []) {
+      const list = rolesMap.get(r.user_id as string) ?? [];
+      list.push(r.role as string);
+      rolesMap.set(r.user_id as string, list);
+    }
+
+    const memberMap = new Map<string, PlatformUserMembership[]>();
+    for (const m of (membersRes.data ?? []) as Array<{
+      user_id: string;
+      organization_id: string;
+      role: string;
+      organizations: { name: string } | { name: string }[] | null;
+    }>) {
+      const org = Array.isArray(m.organizations) ? m.organizations[0] : m.organizations;
+      const list = memberMap.get(m.user_id) ?? [];
+      list.push({
+        organizationId: m.organization_id,
+        organizationName: org?.name ?? "—",
+        orgRole: m.role,
+      });
+      memberMap.set(m.user_id, list);
+    }
+
+    const controlMap = new Map(controls.map((c) => [c.user_id, c]));
+    const now = Date.now();
+
+    return authUsers
+      .map((u) => {
+        const profile = profileMap.get(u.id);
+        const control = controlMap.get(u.id);
+        const banned = !!u.banned_until && new Date(u.banned_until).getTime() > now;
+        const email = u.email ?? "";
+        return {
+          userId: u.id,
+          email,
+          displayName: profile?.display_name || email.split("@")[0] || "—",
+          jobTitle: profile?.job_title ?? null,
+          createdAt: u.created_at ?? null,
+          lastSignInAt: u.last_sign_in_at ?? null,
+          appRoles: rolesMap.get(u.id) ?? [],
+          memberships: memberMap.get(u.id) ?? [],
+          disabled: !!control?.disabled || banned,
+          disabledReason: control?.disabled_reason ?? null,
+          mustChangePassword: !!control?.must_change_password,
+          sessionsRevokedAt: control?.sessions_revoked_at ?? null,
+        } satisfies PlatformUserRow;
+      })
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  });
