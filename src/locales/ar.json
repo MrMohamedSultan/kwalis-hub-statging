@@ -1206,7 +1206,8 @@
     "vendor_cr_no": "رقم السجل التجاري للمورد",
     "view_doc": "عرض المستند",
     "withholding_tax_due_actual": "ضريبة الاستقطاع المستحقة (فعلية)",
-    "work_permit": "تصريح العمل"
+    "work_permit": "تصريح العمل",
+    "qfeOnlyHint": "{{count}} معاملة مؤهلة · {{excluded}} غير مؤهلة غير معروضة"
   },
   "invitations": {
     "access_limited_to_the_selected_organization": "الوصول مقتصر على المؤسسة المحددة.",

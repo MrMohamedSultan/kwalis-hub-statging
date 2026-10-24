@@ -287,24 +287,45 @@ function ReportsPage() {
       };
     }
     if (tab === "rebate") {
-      const rows: (string | number)[][] = [];
-      budget.forEach((b) => {
-        const txt = `${b.description ?? ""} ${b.group ?? ""}`.toLowerCase();
-        const qfe = !/international|travel|import|foreign|abroad/.test(txt);
-        rows.push([
-          b.mainCode,
-          b.description ?? "",
-          b.group ?? "",
-          lineTotal(b),
-          qfe ? "QFE Eligible" : "Non-Qualifying",
-        ]);
-      });
+      // Only qualifying (QFE) transactions belong in the Film Commission report —
+      // same rules engine as the on-screen ledger and the Excel workbook.
+      const qualifying = buildQfeLedger({
+        invoices,
+        payroll,
+        receipts,
+        people,
+        payments,
+        purchaseOrders,
+        vendors,
+      }).filter((l) => l.qfe);
+      const rows: (string | number)[][] = qualifying.map((l) => [
+        l.ref,
+        l.party,
+        l.category,
+        l.invoiceDate,
+        l.supplierNationality,
+        l.amountExVat,
+        l.vatAmount,
+        l.amount,
+      ]);
+      const totalExVat = qualifying.reduce((a, l) => a + l.amountExVat, 0);
+      rows.push(["", "TOTAL QFE (excl. VAT)", "", "", "", totalExVat, "", ""]);
+      rows.push(["", "Projected 40% rebate", "", "", "", totalExVat * 0.4, "", ""]);
       return {
         filename: "trackroll-rebate-report",
-        title: "Saudi Film Commission Rebate",
-        headers: ["Code", "Description", "Group", "Planned", "QFE Status"],
+        title: "Saudi Film Commission Rebate — Qualifying Expenditure",
+        headers: [
+          "Ref",
+          "Party",
+          "Category",
+          "Date",
+          "Nationality",
+          "Amount excl. VAT",
+          "VAT",
+          "Total",
+        ],
         rows,
-        numericColumns: [3],
+        numericColumns: [5, 6, 7],
       };
     }
     if (tab === "qfe") {
@@ -412,6 +433,8 @@ function ReportsPage() {
         });
         // Build the full auditor ledger so the workbook mirrors the on-screen table
         // (dates, VAT breakdowns, supplier status, PO refs, payment status, docs).
+        // Only qualifying (QFE) transactions are reported to the Film Commission:
+        // non-qualifying crew, cast, vendors and invoices are left out of every sheet.
         const ledger = buildQfeLedger({
           invoices,
           payroll,
@@ -419,13 +442,20 @@ function ReportsPage() {
           people,
           payments,
           purchaseOrders,
-        });
+          vendors,
+        }).filter((l) => l.qfe);
+        const qualifyingInvoiceIds = new Set(
+          ledger.filter((l) => l.kind === "Invoice").map((l) => l.sourceId),
+        );
+        const qualifyingPayrollIds = new Set(
+          ledger.filter((l) => l.kind === "Payroll").map((l) => l.sourceId),
+        );
         // Official Saudi Film Commission bilingual template — three sheets.
         await exportRebateWorkbook({
           filename: `SaudiFilmCommission_Rebate_Report-${projectSlug}.xlsx`,
           projectName: projectTag,
-          invoices,
-          payroll,
+          invoices: invoices.filter((i) => qualifyingInvoiceIds.has(i.id)),
+          payroll: payroll.filter((p) => qualifyingPayrollIds.has(p.id)),
           people,
           docUrls: { invoice: invoiceDocs, payroll: payrollDocs },
           ledger,
@@ -1605,11 +1635,14 @@ function RebateReport() {
   const totalBudget = useMemo(() => budget.reduce((a, l) => a + lineTotal(l), 0), [budget]);
 
   type LedgerRow = QfeLedgerRow;
-  const ledger: LedgerRow[] = useMemo(
+  const fullLedger: LedgerRow[] = useMemo(
     () =>
       buildQfeLedger({ invoices, payroll, receipts, people, payments, purchaseOrders, vendors }),
     [invoices, payroll, receipts, people, payments, purchaseOrders, vendors],
   );
+  // The Film Commission report lists qualifying (QFE) transactions only.
+  const ledger: LedgerRow[] = useMemo(() => fullLedger.filter((l) => l.qfe), [fullLedger]);
+  const excludedCount = fullLedger.length - ledger.length;
 
   // Auditor search & filter
   const [query, setQuery] = useState("");
@@ -1715,7 +1748,7 @@ function RebateReport() {
           label="Qualifying KSA Expenditure (QFE)"
           value={formatUSD(qfeTotal)}
           tone="info"
-          hint={`${ledger.filter((l) => l.qfe).length} of ${ledger.length} transactions flagged QFE`}
+          hint={t("reports.qfeOnlyHint", { count: ledger.length, excluded: excludedCount })}
         />
         <SummaryCard
           label="Projected 40% Cash Rebate"

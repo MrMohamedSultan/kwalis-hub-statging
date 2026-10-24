@@ -1206,7 +1206,8 @@
     "vendor_cr_no": "Vendor C.R NO",
     "view_doc": "View Doc",
     "withholding_tax_due_actual": "Withholding Tax Due (actual)",
-    "work_permit": "Work Permit"
+    "work_permit": "Work Permit",
+    "qfeOnlyHint": "{{count}} qualifying transactions · {{excluded}} non-qualifying not shown"
   },
   "invitations": {
     "access_limited_to_the_selected_organization": "Access limited to the selected organization.",
