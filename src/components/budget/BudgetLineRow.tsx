@@ -167,61 +167,9 @@ function BudgetLineRowInner({
         ) : (
           <div className="flex flex-col gap-0.5">
             <span>{l.description}</span>
-            {(() => {
-              if (!linked) return null;
-              const all = [...linked.cast, ...linked.crew, ...linked.pos].filter(Boolean);
-              if (!all.length) return null;
-              return (
-                <span className="text-[11px] text-success truncate" title={all.join(", ")}>
-                  ↳ {all.slice(0, 3).join(", ")}
-                  {all.length > 3 ? ` +${all.length - 3}` : ""}
-                </span>
-              );
-            })()}
-            {a && (a.actual !== 0 || a.committed !== 0 || a.paid !== 0) && (
-              <span
-                className="text-[10px] flex flex-wrap gap-2"
-                title={
-                  a.sharedLines > 1
-                    ? t("budget.code_rollup_shared", { count: a.sharedLines })
-                    : undefined
-                }
-              >
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onBreakdown(l, "actual");
-                  }}
-                  className="text-success hover:underline focus:outline-none focus:ring-1 focus:ring-success rounded px-0.5"
-                  title={t("budget.view_incurred_actuals")}
-                >
-                  {t("budget.badge_actual")} <SarAmount amount={a.actual} />
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onBreakdown(l, "committed");
-                  }}
-                  className="text-warning hover:underline focus:outline-none focus:ring-1 focus:ring-warning rounded px-0.5"
-                  title={t("budget.view_open_commitments")}
-                >
-                  {t("budget.badge_committed")} <SarAmount amount={a.committed} />
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onBreakdown(l, "paid");
-                  }}
-                  className="text-info hover:underline focus:outline-none focus:ring-1 focus:ring-info rounded px-0.5"
-                  title={t("budget.view_recorded_payments")}
-                >
-                  {t("budget.badge_paid")} <SarAmount amount={a.paid} />
-                </button>
-              </span>
-            )}
+            {/* Linked people and actual / committed / paid are no longer shown on
+                budget lines (client request): the budget stays a clean plan.
+                They live in the "Budget vs Spend" tab, aggregated per code. */}
           </div>
         )}
       </Td>

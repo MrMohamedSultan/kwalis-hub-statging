@@ -107,6 +107,7 @@ import {
   usePayrollKindPosition,
 } from "@/lib/budget-actuals";
 import { BudgetLineActualsModal } from "@/components/BudgetLineActualsModal";
+import { BudgetVsActualPanel } from "@/components/budget/BudgetVsActualPanel";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
 import { MasterAccountSearch } from "@/components/MasterAccountSearch";
 
@@ -392,7 +393,7 @@ function LineItemTemplateSelect({
 export function BudgetPage() {
   const { t } = useTranslation();
 
-  const [tab, setTab] = useState<"create" | "view" | "upload" | "topsheet">("create");
+  const [tab, setTab] = useState<"create" | "view" | "spend" | "upload" | "topsheet">("create");
   const [fullscreen, setFullscreen] = useState(false);
   useEffect(() => {
     if (!fullscreen) return;
@@ -467,6 +468,9 @@ export function BudgetPage() {
               <TabBtn active={tab === "view"} onClick={() => setTab("view")}>
                 {t("budget.view_edit_budget")}
               </TabBtn>
+              <TabBtn active={tab === "spend"} onClick={() => setTab("spend")}>
+                {t("budgetVsActual.tab")}
+              </TabBtn>
               <TabBtn active={tab === "upload"} onClick={() => setTab("upload")}>
                 {t("budget.upload_budget")}
               </TabBtn>
@@ -509,8 +513,12 @@ export function BudgetPage() {
           >
             {tab === "upload" ? (
               <UploadBudget />
-            ) : (tab === "view" || tab === "topsheet") && budgetLoading && !hasBudgetLines ? (
+            ) : (tab === "view" || tab === "topsheet" || tab === "spend") &&
+              budgetLoading &&
+              !hasBudgetLines ? (
               <BudgetLoadingState />
+            ) : tab === "spend" ? (
+              <BudgetVsActualPanel isDraft={editingDraft} />
             ) : tab === "view" ? (
               <ViewEditBudget />
             ) : tab === "topsheet" ? (

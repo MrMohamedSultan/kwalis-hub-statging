@@ -2866,5 +2866,30 @@
       "disabled": "{{name}}'s account is disabled.",
       "enabled": "{{name}}'s account is active again."
     }
+  },
+  "budgetVsActual": {
+    "tab": "Budget vs Spend",
+    "title": "Budget vs Spend",
+    "subtitle": "One row per account code: budget against committed, actual and paid. Click an amount to see the transactions behind it.",
+    "draftNote": "A draft version is selected: the Budget column shows the draft, while committed / actual / paid always come from the approved ledger.",
+    "refresh": "Refresh",
+    "exportExcel": "Export Excel",
+    "loading": "Loading spend…",
+    "loadFailed": "Could not load spend",
+    "noBudgetLine": "Spend on a code with no budget line",
+    "unbudgeted": "Spend without a budget line",
+    "subtotal": "Subtotal",
+    "grandTotal": "Grand total",
+    "col": {
+      "code": "Code",
+      "description": "Description",
+      "lines": "Lines",
+      "budget": "Budget",
+      "committed": "Committed",
+      "actual": "Actual",
+      "paid": "Paid",
+      "remaining": "Remaining",
+      "used": "% Used"
+    }
   }
 }
