@@ -10,14 +10,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { APP_NAME } from "@/lib/i18n";
 import { useI18n } from "@/lib/i18n/useI18n";
-import { useDashboardCurrency } from "@/lib/dashboard/currency";
 import { useOperationalDashboard } from "@/lib/dashboard/useOperationalDashboard";
 import { useStore } from "@/lib/store";
 import { useCurrentUser } from "@/lib/rbac";
-import { formatCurrency, formatPercentAdaptive } from "@/lib/format";
-import { safeDivide } from "@/lib/safe";
-import { StatTile } from "@/components/dashboard/StatTile";
-import { BudgetStatusCard } from "@/components/dashboard/BudgetStatusCard";
 import { DashboardControls } from "@/components/dashboard/DashboardControls";
 import { useDashboardControls } from "@/stores/useDashboardControls";
 import { PendingApprovals } from "@/components/dashboard/operational/PendingApprovals";
@@ -26,6 +21,7 @@ import { SpendByDepartment } from "@/components/dashboard/operational/SpendByDep
 import { RecentActivity } from "@/components/dashboard/operational/RecentActivity";
 import { SpendTrajectory } from "@/components/dashboard/executive/SpendTrajectory";
 import { TopSheetDonut } from "@/components/dashboard/executive/TopSheetDonut";
+import { PerformanceOverview } from "@/components/dashboard/PerformanceOverview";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -47,16 +43,8 @@ const enter = (i: number) => ({
   style: { animationDelay: `${i * 40}ms` } as const,
 });
 
-const tileSkeleton = (
-  <div
-    className="h-full min-h-[118px] animate-pulse rounded-xl border border-border bg-surface"
-    aria-hidden="true"
-  />
-);
-
 function OperationalDashboard() {
   const { t } = useI18n();
-  const { code, convert } = useDashboardCurrency();
   const user = useCurrentUser();
   const activeProjectId = useStore((s) => s.activeProjectId);
   const rangeFrom = useDashboardControls((s) => s.rangeFrom);
@@ -75,7 +63,6 @@ function OperationalDashboard() {
 
   // Financial KPIs render at full precision (2 decimals) — the doctrine
   // layer delivers exact figures and presentation never rounds them away.
-  const money = (v: number) => formatCurrency(convert(v), { currency: code, decimals: 2 });
 
   return (
     <div className="dashboard-scope -m-4 min-h-full px-6 py-8 lg:-m-8 lg:px-10 lg:py-10">
@@ -99,76 +86,13 @@ function OperationalDashboard() {
           </div>
         </div>
 
-        {/* ── KPI strip ───────────────────────────────────────────── */}
-        <div
-          {...enter(1)}
-          className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6"
-        >
-          {!d ? (
-            <>
-              {tileSkeleton}
-              {tileSkeleton}
-              {tileSkeleton}
-              {tileSkeleton}
-              {tileSkeleton}
-              {tileSkeleton}
-            </>
-          ) : (
-            <>
-              <div className="h-full">
-                <BudgetStatusCard totalBudget={d.kpis.totalBudget} actualSpend={d.kpis.actualSpend} />
-              </div>
-              <div className="h-full">
-                <StatTile
-                  label={t("dash.totalBudget")}
-                  value={money(d.kpis.totalBudget)}
-                  sublabel={`${formatPercentAdaptive(d.kpis.pctSpent)} ${t("dash.spent")}`}
-                />
-              </div>
-              <div className="h-full">
-                <StatTile
-                  label={t("dash.actualSpend")}
-                  value={money(d.kpis.actualSpend)}
-                  delta={
-                    // No plan-to-date → no delta. A fake "0.0% vs. plan" is
-                    // worse than a blank.
-                    d.kpis.varianceVsPlanPct == null
-                      ? null
-                      : {
-                          value: d.kpis.varianceVsPlanPct,
-                          period: t("dash.vsPlan"),
-                          goodWhenUp: false,
-                        }
-                  }
-                  spark={d.kpis.sparkline}
-                  sparkTone={(d.kpis.varianceVsPlanPct ?? 0) <= 0 ? "good" : "critical"}
-                />
-              </div>
-              <div className="h-full">
-                <StatTile
-                  label={t("dash.committed")}
-                  value={money(d.kpis.committed)}
-                  sublabel={`${formatPercentAdaptive(d.kpis.committedPct)} ${t("dash.ofBudget")}`}
-                />
-              </div>
-              <div className="h-full">
-                <StatTile
-                  label={t("dash.paid")}
-                  value={money(d.kpis.paid)}
-                  sublabel={`${formatPercentAdaptive(
-                    safeDivide(d.kpis.paid, d.kpis.actualSpend) * 100,
-                  )} ${t("dash.ofActualSpend")}`}
-                />
-              </div>
-              <div className="h-full">
-                <StatTile
-                  label={t("dash.remaining")}
-                  value={money(d.kpis.remaining)}
-                  sublabel={t("dash.runway", { weeks: d.kpis.runwayWeeks })}
-                />
-              </div>
-            </>
-          )}
+        {/* ── Performance overview (board / CFO read) ─────────────── */}
+        <div {...enter(1)}>
+          <PerformanceOverview
+            projectId={activeProjectId}
+            kpis={d?.kpis ?? null}
+            loading={loading}
+          />
         </div>
 
         {/* ── Primary grid: approvals + budget alerts ─────────────── */}

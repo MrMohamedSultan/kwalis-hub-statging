@@ -2891,5 +2891,43 @@
       "remaining": "Remaining",
       "used": "% Used"
     }
+  },
+  "perf": {
+    "title": "Performance overview",
+    "overBudgetQ": "Are we over budget?",
+    "yes": "Yes",
+    "no": "No",
+    "overBy": "Forecast over budget by",
+    "headroom": "Headroom against budget:",
+    "efc": "Estimated final cost",
+    "variance": "Variance vs budget",
+    "paid": "Paid to date",
+    "paidSub": "{{pct}} of actual spend",
+    "budget": "Approved budget",
+    "budgetSub": "Locked budget version",
+    "available": "Available for new commitments",
+    "availableBarLabel": "Actual {{actual}}, committed {{committed}}",
+    "actual": "Actual",
+    "committed": "Committed",
+    "availableShort": "Available",
+    "timeline": "Production timeline",
+    "totalDays": "Total days",
+    "elapsedDays": "Elapsed",
+    "remainingDays": "Remaining",
+    "prepDays": "Prep days",
+    "shootDays": "Shoot days",
+    "noDates": "Set the project start and end dates to see the timeline.",
+    "bySection": "Budget vs spend by section",
+    "bySectionSub": "Budget, committed and actual per top-sheet section",
+    "noSections": "No cost data yet.",
+    "sectionCol": "Section",
+    "section": {
+      "ATL": "Above the line",
+      "Production": "Production",
+      "BTL": "Below the line",
+      "Post": "Post-production",
+      "Other": "Other",
+      "Adjustments": "Adjustments"
+    }
   }
 }
