@@ -12,7 +12,7 @@
 // a malformed response throws and the provider fails closed.
 // ═══════════════════════════════════════════════════════════════════
 
-import { queryOptions } from "@tanstack/react-query";
+import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useStore } from "@/lib/store";
@@ -83,26 +83,30 @@ function activeScope() {
  * (fail closed).
  */
 async function fetchMyPermissions(): Promise<MyPermissionsPayload> {
+  // Local session read (no Auth-server round-trip). The RPCs below run with
+  // the session's JWT, so the server still decides everything.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
   if (!user) return { role: null, permissions: [], isSuperAdmin: false };
 
-  // Resolve super-admin FIRST: the platform-owner layer needs no org scope.
-  // Best-effort bridge — if this call fails we simply don't elevate.
-  const superRes = await supabase.rpc("is_super_admin", { _uid: user.id });
-  const isSuperAdmin = superRes.error ? false : Boolean(superRes.data);
-
   const scope = activeScope();
-  let orgId = scope.orgId;
-  if (!orgId) {
-    const { data: mems } = await supabase
-      .from("organization_members")
-      .select("organization_id")
-      .eq("user_id", user.id)
-      .limit(1);
-    orgId = mems?.[0]?.organization_id ?? null;
-  }
+  // Super-admin check and the org fallback are independent: run them together
+  // instead of one after the other (each was a full round-trip on cold load).
+  const [superRes, memsRes] = await Promise.all([
+    supabase.rpc("is_super_admin", { _uid: user.id }),
+    scope.orgId
+      ? Promise.resolve({ data: null as { organization_id: string }[] | null })
+      : supabase
+          .from("organization_members")
+          .select("organization_id")
+          .eq("user_id", user.id)
+          .limit(1),
+  ]);
+  // Best-effort bridge — if this call fails we simply don't elevate.
+  const isSuperAdmin = superRes.error ? false : Boolean(superRes.data);
+  const orgId = scope.orgId ?? memsRes.data?.[0]?.organization_id ?? null;
 
   // Guard: no org + not platform owner → typed no-scope, RPC not executed.
   if (!orgId && !isSuperAdmin) {
@@ -139,5 +143,10 @@ export function myPermissionsQueryOptions() {
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,
     retry: 1,
+    // When the scope changes (projects finish loading, user switches project)
+    // keep the previous snapshot on screen while the new one loads, instead of
+    // replacing the whole app with the full-screen loading skeleton each time.
+    // Route guards and RLS still enforce against the server.
+    placeholderData: keepPreviousData,
   });
 }

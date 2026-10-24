@@ -169,20 +169,19 @@ export const Route = createFileRoute("/_authenticated")({
       if (error || !user) {
         throw redirect({ to: "/auth" });
       }
-      const roles = await getAuthRolesSnapshot();
-
-      // Shares its TanStack Query key with the PermissionProvider, so the
-      // snapshot fetch is deduped rather than doubled. On fetch failure we
-      // skip enforcement here — the provider renders its fail-closed error
-      // screen, so the user is never silently unlocked.
-      let perms: PermissionState | null = null;
-      try {
-        perms = buildPermissionState(
-          await context.queryClient.ensureQueryData(myPermissionsQueryOptions()),
-        );
-      } catch {
-        perms = null;
-      }
+      // Roles and the permission snapshot are independent: fetch them together
+      // (they used to run one after the other on every cold load).
+      // The permission query shares its TanStack Query key with the
+      // PermissionProvider, so the fetch is deduped rather than doubled. On
+      // fetch failure we skip enforcement here — the provider renders its
+      // fail-closed error screen, so the user is never silently unlocked.
+      const [roles, permsPayload] = await Promise.all([
+        getAuthRolesSnapshot(),
+        context.queryClient.ensureQueryData(myPermissionsQueryOptions()).catch(() => null),
+      ]);
+      const perms: PermissionState | null = permsPayload
+        ? buildPermissionState(permsPayload)
+        : null;
 
       let projectRole: ProjectRoleSnapshot | null = null;
       if (isProjectScopedRoute(location.pathname)) {
