@@ -493,7 +493,8 @@
     "version_draft": "مسودة",
     "status_and_approvals": "حالة الميزانية والموافقات",
     "expand_fullscreen": "ملء الشاشة",
-    "exit_fullscreen": "إنهاء ملء الشاشة"
+    "exit_fullscreen": "إنهاء ملء الشاشة",
+    "loadingLines": "جارٍ تحميل بنود الميزانية…"
   },
   "payables": {
     "title": "المستحقات",

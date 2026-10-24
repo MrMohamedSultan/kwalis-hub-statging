@@ -493,7 +493,8 @@
     "version_draft": "Draft",
     "status_and_approvals": "Budget Status & Approvals",
     "expand_fullscreen": "Fullscreen",
-    "exit_fullscreen": "Exit fullscreen"
+    "exit_fullscreen": "Exit fullscreen",
+    "loadingLines": "Loading budget lines…"
   },
   "payables": {
     "title": "Payables",

@@ -382,6 +382,12 @@ type State = {
   ready: boolean;
   /** Last scoped-data fetch failure, surfaced as a retryable toast in the shell. */
   loadError: string | null;
+  /**
+   * True while the budget lines of the selected version are being fetched and
+   * nothing trustworthy is on screen yet (first load, version switch). Screens
+   * show a loader instead of rendering an empty budget as zeros.
+   */
+  budgetLoading: boolean;
 
   projectName: string;
   projectType: string;
@@ -943,6 +949,7 @@ const DEFAULT_STORE_PROJECT_TYPE = CANONICAL_DEFAULT_PROJECT_TYPE;
 const DEFAULT_STORE_PROJECT_STATUS: ProjectStatus = CANONICAL_DEFAULT_PROJECT_STATUS;
 const scopedEmptyPatch = () => ({
   budget: [],
+  budgetLoading: false,
   vendors: [],
   invoices: [],
   cashAdvances: [],
@@ -1051,6 +1058,7 @@ export const useStore = create<State>()(
     (set, get) => ({
       ready: false,
       loadError: null,
+      budgetLoading: cachedBudgetFor(__initialActiveProjectId, __initialBudgetCache).length === 0,
 
       projectName: DEFAULT_PROJECT_NAME,
       projectType: DEFAULT_STORE_PROJECT_TYPE,
@@ -1074,7 +1082,7 @@ export const useStore = create<State>()(
           await get().reloadScopedData();
         } catch (err: any) {
           console.error("[store] bootstrap failed; keeping persisted budget cache", err);
-          set({ loadError: err?.message ?? "Could not load project data." });
+          set({ loadError: err?.message ?? "Could not load project data.", budgetLoading: false });
         }
         set({ ready: true });
       },
@@ -1098,6 +1106,7 @@ export const useStore = create<State>()(
         if (cached.length > 0 && get().budget.length === 0) {
           set({ budget: cached });
         }
+        if (get().budget.length === 0) set({ budgetLoading: true });
         const scoped = <T>(qb: any) => (pid ? qb.eq("project_id", pid) : qb);
         // Budget versioning: the grid only ever loads ONE version (the
         // selected draft, or the project's active/published version).
@@ -1116,6 +1125,13 @@ export const useStore = create<State>()(
         ]);
 
         if (get().activeProjectId !== pid) return;
+        // The user picked another version while this request was in flight: its
+        // rows belong to the old selection. The follow-up reload (queued by the
+        // version-change listener) applies the right ones.
+        const supersededVersion =
+          !!versionId &&
+          selectedVersionIdSync(pid) !== null &&
+          selectedVersionIdSync(pid) !== versionId;
 
         const currentBudget = versionSwitch ? [] : get().budget;
         const cachedBudget = versionSwitch ? [] : pid ? (get().budgetCache[pid] ?? []) : [];
@@ -1186,7 +1202,9 @@ export const useStore = create<State>()(
 
         const patch: Partial<State> = {
           loadError: failed.length ? `Could not load: ${failed.join(", ")}.` : null,
-          ...budgetPatchFromCache(get(), pid, nextBudget),
+          ...(supersededVersion
+            ? {}
+            : { ...budgetPatchFromCache(get(), pid, nextBudget), budgetLoading: false }),
           vendors: (v.data ?? []).map(fromVendorRow),
           invoices: (i.data ?? []).map(fromInvoiceRow),
           cashAdvances: (c.data ?? []).map(fromAdvanceRow),
@@ -2216,14 +2234,16 @@ export const useStore = create<State>()(
 // ---------------------------------------------------------------------
 if (typeof window !== "undefined") {
   let switching = false;
-  window.addEventListener(BUDGET_VERSION_CHANGE_EVENT, (e: Event) => {
-    const pid = (e as CustomEvent<{ projectId?: string }>).detail?.projectId;
-    if (!pid || pid !== useStore.getState().activeProjectId) return;
-    if (switching) return;
+  // A switch that arrives while another is loading is NOT dropped (it used to
+  // be, which left the grid showing the previous version — often an empty
+  // draft — until some later reload). The latest request is replayed.
+  let rerun = false;
+  const runSwitch = (pid: string) => {
     switching = true;
     __pendingVersionSwitch = true;
     useStore.setState((s) => ({
       budget: [],
+      budgetLoading: true,
       budgetCache: { ...s.budgetCache, [pid]: [] },
     }));
     invalidateBudgetCaches(pid, "lines");
@@ -2232,7 +2252,21 @@ if (typeof window !== "undefined") {
       .reloadScopedData()
       .finally(() => {
         switching = false;
+        if (rerun) {
+          rerun = false;
+          const current = useStore.getState().activeProjectId;
+          if (current) runSwitch(current);
+        }
       });
+  };
+  window.addEventListener(BUDGET_VERSION_CHANGE_EVENT, (e: Event) => {
+    const pid = (e as CustomEvent<{ projectId?: string }>).detail?.projectId;
+    if (!pid || pid !== useStore.getState().activeProjectId) return;
+    if (switching) {
+      rerun = true;
+      return;
+    }
+    runSwitch(pid);
   });
 }
 

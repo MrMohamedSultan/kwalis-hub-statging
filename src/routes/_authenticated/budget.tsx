@@ -87,7 +87,15 @@ import { IntegrityAuditButton } from "@/components/IntegrityAuditModal";
 // BudgetUploadHistory intentionally not imported — UI removed for safety.
 import { createBudgetBatch, stampBudgetLinesWithBatch } from "@/lib/budget-batches";
 import { predictBudgetCategories, type PredictSuggestion } from "@/lib/budget-ai-predict.functions";
-import { Sparkles, Undo2, Maximize2, Minimize2, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  Sparkles,
+  Undo2,
+  Maximize2,
+  Minimize2,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+} from "lucide-react";
 import { BudgetGovernancePanel } from "@/components/BudgetGovernancePanel";
 import { useExecutiveTitle } from "@/lib/budget-governance";
 import { useServerFn } from "@tanstack/react-start";
@@ -395,6 +403,8 @@ export function BudgetPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [fullscreen]);
   const scopeRef = useRef<HTMLDivElement>(null);
+  const budgetLoading = useStore((s) => s.budgetLoading);
+  const hasBudgetLines = useStore((s) => s.budget.length > 0);
   const activeProjectId = useStore((s) => s.activeProjectId);
   const activeProject = useStore((s) => s.projects.find((p) => p.id === activeProjectId) ?? null);
   const { title: executiveTitle } = useExecutiveTitle();
@@ -499,6 +509,8 @@ export function BudgetPage() {
           >
             {tab === "upload" ? (
               <UploadBudget />
+            ) : (tab === "view" || tab === "topsheet") && budgetLoading && !hasBudgetLines ? (
+              <BudgetLoadingState />
             ) : tab === "view" ? (
               <ViewEditBudget />
             ) : tab === "topsheet" ? (
@@ -510,6 +522,26 @@ export function BudgetPage() {
         </LockGuard>
       </div>
     </BudgetFullscreenContext.Provider>
+  );
+}
+
+/** Shown instead of an empty grid while the selected version's lines load — never zeros. */
+function BudgetLoadingState() {
+  const { t } = useTranslation();
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="rounded-lg border border-border bg-surface p-4 space-y-2"
+    >
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Loader2 className="size-3.5 animate-spin" />
+        {t("budget.loadingLines")}
+      </div>
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="h-7 animate-pulse rounded bg-muted/60" />
+      ))}
+    </div>
   );
 }
 
