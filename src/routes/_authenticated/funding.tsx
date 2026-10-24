@@ -147,6 +147,24 @@ function useTotals() {
     let payrollCommitted = 0;
     for (const p of payroll) {
       payrollCommitted += Number(p.totalAmount || 0);
+      const schedule = Array.isArray(p.paymentSchedule) ? p.paymentSchedule : [];
+      if (schedule.length > 0) {
+        // Contract milestones (Crew & Cast payables) are the source of truth when
+        // a schedule exists — the legacy ledger JSON is only used for old rows.
+        const base = Number(p.netPayable ?? p.totalAmount) || 0;
+        for (const m of schedule) {
+          const amt =
+            m.amount !== null && m.amount !== undefined
+              ? Number(m.amount)
+              : (base * Number(m.percent ?? 0)) / 100;
+          if (m.status === "Paid") payrollPaid += amt;
+          else if (m.status === "Approved") payrollApproved += amt;
+          else if (m.status === "Hold") payrollPending += amt;
+          // "Committed (contracts)" shows what is still owed, not the full contract.
+          if (m.status === "Paid" || m.status === "Approved") payrollCommitted -= amt;
+        }
+        continue;
+      }
       for (const e of p.ledger ?? []) {
         const amt = Number(e.amount || 0);
         if (e.status === "Paid") payrollPaid += amt;
