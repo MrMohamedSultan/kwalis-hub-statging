@@ -102,7 +102,7 @@ export function CrewPayrollTab({
   const [payFor, setPayFor] = useState<PayrollRow | null>(null);
   const [entriesFor, setEntriesFor] = useState<PayrollRow | null>(null);
   const can = useCan();
-  const { locked, toggle: toggleLock, projectId } = useProjectLock();
+  const { locked, projectLocked, toggle: toggleLock, projectId } = useProjectLock();
   const canEdit = can("payroll.execute") && !locked;
   const canApprove = can("payroll.approve") && !locked;
   const setLedgerFn = useStore((s) => s.setPayrollLedger);
@@ -561,19 +561,18 @@ export function CrewPayrollTab({
             }
             if (
               !window.confirm(
-                locked
+                projectLocked
                   ? "Unlock this project version? Payroll and budget edits will be re-enabled."
                   : "Lock this project version? Payroll, structure changes, approvals, and budget adjustments will be disabled until unlocked.",
               )
             )
               return;
             toggleLock();
-            toast.success(locked ? "Project unlocked." : "Project locked.");
           }}
           disabled={!projectId}
           className={`ml-auto inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border font-semibold transition disabled:opacity-40 ${locked ? "border-warning/60 bg-warning/20 text-warning hover:bg-warning/30" : "border-border hover:bg-muted text-foreground"}`}
         >
-          {locked ? (
+          {projectLocked ? (
             <>
               <Unlock className="size-3.5" /> Unlock
             </>

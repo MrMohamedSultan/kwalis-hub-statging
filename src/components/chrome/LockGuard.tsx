@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Lock, Unlock } from "lucide-react";
 import { useProjectLock } from "@/lib/project-lock";
 import { useCan } from "@/lib/rbac";
+import { useTranslation } from "react-i18next";
 import { PageBanner } from "./PageBanner";
 
 /**
@@ -23,7 +24,8 @@ export function LockGuard({
   /** Editing an unpublished draft is always allowed — it cannot move actuals. */
   bypass?: boolean;
 }) {
-  const { locked: rawLocked, dbLocked, toggle } = useProjectLock();
+  const { t } = useTranslation();
+  const { locked: rawLocked, dbLocked, archived, lockReason, toggle } = useProjectLock();
   const locked = bypass ? false : rawLocked;
   const can = useCan();
   const canToggle = can("system.settings");
@@ -34,22 +36,30 @@ export function LockGuard({
         <PageBanner
           tone="warning"
           icon={<Lock className="size-4" />}
-          title={`${scopeLabel} version is locked${dbLocked ? " (approved budget)" : ""}`}
+          title={
+            archived
+              ? t("refs.lock_banner_archived")
+              : dbLocked
+                ? `${scopeLabel} version is locked (approved budget)`
+                : t("refs.lock_banner_title")
+          }
           action={
             canToggle &&
-            !dbLocked && (
+            !dbLocked &&
+            !archived && (
               <button
                 type="button"
                 onClick={toggle}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-warning/50 bg-warning/20 px-2.5 py-1.5 text-xs font-semibold text-warning hover:bg-warning/30 transition"
               >
                 <Unlock className="size-3.5" />
-                Unlock
+                {t("refs.unlock")}
               </button>
             )
           }
         >
-          All edit actions (payroll, budget, accounting, contracts) are disabled until unlocked.
+          {t("refs.lock_banner_body")}
+          {lockReason ? ` — ${lockReason}` : ""}
         </PageBanner>
       )}
       <fieldset disabled={locked} className={locked ? "opacity-95" : ""}>
