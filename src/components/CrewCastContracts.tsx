@@ -3,6 +3,32 @@ import {
   WhtTreatmentSelector,
   type WhtTreatment,
 } from "@/components/contracts/WhtTreatmentSelector";
+import {
+  CONTRACT_CURRENCIES,
+  CREW_POSITIONS,
+  DEFAULT_BASE_CURRENCY,
+  ID_TYPES,
+  POSITION_OTHER,
+  SAUDI_ARABIA,
+  computeWht,
+  displayDaysAndRate,
+  guessIdType,
+  normalizeIban,
+  positionSelectValue,
+  rateToBase,
+  resolveWhtRate,
+  suggestTaxResidency,
+  validateIban,
+  validateIdNumber,
+  validateSwift,
+  whtInBase,
+  ibanCountryCode,
+  ibanLength,
+  type IdType,
+  type TaxResidency,
+  type WhtRateRule,
+} from "@/lib/contract-terms";
+import { useCurrencyStore } from "@/stores/useCurrencyStore";
 import { storageAudited } from "@/lib/storage-audit";
 import { BankPicker, validateBankPicker } from "@/components/BankPicker";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
@@ -20,7 +46,14 @@ import {
   OVERTIME_UNITS,
   OVERTIME_UNIT_LABEL,
 } from "@/lib/store";
-import type { Person, Invoice, ContractStatus, DealType, OvertimeUnit } from "@/lib/store";
+import type {
+  Person,
+  Invoice,
+  ContractStatus,
+  DealType,
+  OvertimeUnit,
+  PaymentScheduleItem,
+} from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -89,21 +122,45 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/;
 const PHONE_RE = /^\+?[0-9][0-9\s()-]{6,19}$/;
 
 /**
- * How many units of `ccy` make one USD. SAR uses the project-level FX rate so
- * finance can adjust it per production; AED is pegged. Unknown currencies fall
- * back to 1:1 rather than silently distorting the budget.
+ * Project base currency — every stored figure (budget lines, payroll totals,
+ * payments) is in it. Contract rates stay in the contract's own currency.
  */
-function unitsPerUsd(ccy: string | null | undefined, fxRate: number): number {
-  switch ((ccy ?? "USD").toUpperCase()) {
-    case "USD":
-      return 1;
-    case "SAR":
-      return fxRate;
-    case "AED":
-      return 3.6725;
-    default:
-      return 1;
-  }
+function useBaseCurrency(): string {
+  return useCurrencyStore((s) => s.projectFxRate?.baseCurrency || DEFAULT_BASE_CURRENCY);
+}
+
+/** Position slug for the contracts.positions.* labels. */
+const positionKey = (p: string) => p.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+/** WHT rate table (db/pending/090): the organization's rows, then platform rows. */
+function useWhtRateRules(organizationId: string | null | undefined): WhtRateRule[] {
+  const [rules, setRules] = useState<WhtRateRule[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await (supabase as any)
+          .from("wht_rate_rules")
+          .select("organization_id, service_type, rate_pct");
+        if (cancelled || error) return;
+        setRules(
+          ((data ?? []) as any[])
+            .filter((r) => !r.organization_id || r.organization_id === organizationId)
+            .map((r) => ({
+              serviceType: String(r.service_type),
+              ratePct: Number(r.rate_pct),
+              orgSpecific: !!r.organization_id,
+            })),
+        );
+      } catch {
+        /* table not reachable — resolveWhtRate falls back to 5% */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [organizationId]);
+  return rules;
 }
 
 function validateContact(phone?: string | null, email?: string | null): Record<string, string> {
@@ -296,17 +353,33 @@ type PaymentScheduleRow = {
   percent: number;
   dueDate: string;
   amount: number;
-};
+} & Partial<
+  Pick<
+    PaymentScheduleItem,
+    | "status"
+    | "proofPath"
+    | "paidDate"
+    | "paidRef"
+    | "paymentMethod"
+    | "sourceAccount"
+    | "receiptUrl"
+    | "paidNotes"
+  >
+>;
 type ContractExtras = {
   paymentLedger: PaymentLedgerRow[];
   attachmentPath: string | null;
   weeklyRate?: number;
   weeks?: number;
   paymentSchedule: PaymentScheduleRow[];
+  /** Contract value (gross) in the project base currency. */
   contractAmount: number;
   whtPercent: number;
+  /** Base currency. */
   whtAmount: number;
+  /** Base currency — instalments are built on it. */
   netPayable: number;
+  whtTreatment: WhtTreatment;
 };
 
 export function PeoplePage({ kind, title }: { kind: "crew" | "cast"; title: string }) {
@@ -325,6 +398,7 @@ export function PeoplePage({ kind, title }: { kind: "crew" | "cast"; title: stri
   const activeProjectId = useStore((s) => s.activeProjectId);
   const storeReady = useStore((s) => s.ready);
   const activeProject = useStore((s) => s.projects.find((p) => p.id === s.activeProjectId) ?? null);
+  const baseCurrency = useBaseCurrency();
   const list = useMemo(() => people.filter((p) => p.kind === kind), [people, kind]);
   // Only one page of contracts is mounted at a time — selection and filtering
   // still operate on the full `list`.
@@ -357,6 +431,21 @@ export function PeoplePage({ kind, title }: { kind: "crew" | "cast"; title: stri
     });
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(list.map((p) => p.id)));
   const clearSelection = () => setSelected(new Set());
+
+  /**
+   * Figures shown for one contract. Rates stay in the contract currency; the
+   * contract value is the GROSS (an exclusive / gross-up deal carries its WHT
+   * on top); payments are compared with the stored base-currency total.
+   */
+  const contractFigures = (p: Person) => {
+    const pr = payroll.find((r) => r.refId === p.id);
+    const { days, daily, total } = displayDaysAndRate(p);
+    const ratePct = p.whtRate ?? pr?.whtPercent ?? 0;
+    const gross = computeWht(total, ratePct, p.whtTreatment ?? "inclusive").gross;
+    const paid = (pr?.ledger ?? []).reduce((a, e) => a + (Number(e.amount) || 0), 0);
+    const grossBase = pr ? pr.totalAmount : gross;
+    return { pr, days, daily, gross, grossBase, paid, remaining: Math.max(0, grossBase - paid) };
+  };
 
   const openNew = () => {
     setEditing(null);
@@ -438,8 +527,9 @@ export function PeoplePage({ kind, title }: { kind: "crew" | "cast"; title: stri
     if (rows.length === 0) return;
     const headers = [
       "Full Name",
-      "Position",
+      kind === "cast" ? "Character" : "Position",
       "Nationality",
+      "ID Type",
       "ID",
       "Phone Number",
       "Email",
@@ -447,10 +537,13 @@ export function PeoplePage({ kind, title }: { kind: "crew" | "cast"; title: stri
       "Bank",
       "Start",
       "End",
+      "Currency",
       "Days",
       "Daily",
       "Per Diem",
-      "Total",
+      "Contract Value (Gross)",
+      "WHT Treatment",
+      "Tax Residency",
       "Status",
     ];
     const esc = (v: unknown) => {
@@ -459,13 +552,14 @@ export function PeoplePage({ kind, title }: { kind: "crew" | "cast"; title: stri
     };
     const lines = [headers.join(",")];
     for (const p of rows) {
-      // Total Deal = Base Rate only (wages). Per diem/housing are itemized separately.
-      const total = p.shootingDays * p.dailyRate;
+      // Contract value = base rate only (wages), gross of WHT. Per diem/housing are itemized separately.
+      const fig = contractFigures(p);
       lines.push(
         [
           p.fullName,
-          p.position,
+          kind === "cast" ? p.character || p.position : p.position,
           p.nationality,
+          p.idType ?? "",
           p.idNumber,
           p.phoneNumber ?? "",
           p.email ?? "",
@@ -473,10 +567,13 @@ export function PeoplePage({ kind, title }: { kind: "crew" | "cast"; title: stri
           p.bank,
           p.startDate,
           p.endDate,
-          p.shootingDays,
-          p.dailyRate,
+          p.ccy ?? "",
+          fig.days,
+          fig.daily,
           p.perDiem,
-          total,
+          fig.gross,
+          p.whtTreatment ?? "inclusive",
+          p.taxResidency ?? "",
           p.contractStatus ?? "Pending Contract",
         ]
           .map(esc)
@@ -636,7 +733,9 @@ export function PeoplePage({ kind, title }: { kind: "crew" | "cast"; title: stri
                           })()}
                         </button>
                       </td>
-                      <td className="px-3 py-3">{p.position}</td>
+                      <td className="px-3 py-3">
+                        {kind === "cast" ? p.character || p.position : p.position}
+                      </td>
                       <td className="px-3 py-3">{p.nationality}</td>
                       <td className="px-3 py-3 font-mono text-xs">{p.idNumber}</td>
                       <td className="px-3 py-3 min-w-[180px]" data-card-label="Contact">
@@ -646,37 +745,43 @@ export function PeoplePage({ kind, title }: { kind: "crew" | "cast"; title: stri
                       <td className="px-3 py-3">{p.bank}</td>
                       <td className="px-3 py-3">{p.startDate}</td>
                       <td className="px-3 py-3">{p.endDate}</td>
-                      <td className="px-3 py-3 text-center">{p.shootingDays}</td>
-                      <td className="px-3 py-3">{formatUSD(p.dailyRate)}</td>
-                      <td className="px-3 py-3">{formatUSD(p.perDiem)}</td>
-                      <td className="px-3 py-3 font-semibold">
-                        {(() => {
-                          // Base Rate only — per diem/housing are separate ledger lines.
-                          const total = p.shootingDays * p.dailyRate;
-                          const pr = payroll.find((r) => r.refId === p.id);
-                          const paid = (pr?.ledger ?? []).reduce(
-                            (a, e) => a + (Number(e.amount) || 0),
-                            0,
-                          );
-                          const remaining = Math.max(0, total - paid);
-                          return (
-                            <div>
-                              <div>{formatUSD(total)}</div>
-                              {paid > 0 && (
+                      {(() => {
+                        // Base rate only — per diem/housing are separate ledger lines.
+                        const fig = contractFigures(p);
+                        const money2 = (n: number) => formatUSD(n);
+                        return (
+                          <>
+                            <td className="px-3 py-3 text-center">{fig.days}</td>
+                            <td className="px-3 py-3 whitespace-nowrap" dir="ltr">
+                              {formatCcy(fig.daily, p.ccy)}
+                            </td>
+                            <td className="px-3 py-3 whitespace-nowrap" dir="ltr">
+                              {formatCcy(p.perDiem, p.ccy)}
+                            </td>
+                            <td className="px-3 py-3 font-semibold">
+                              <div dir="ltr" className="whitespace-nowrap">
+                                {formatCcy(fig.gross, p.ccy)}
+                              </div>
+                              {fig.pr && (p.ccy || DEFAULT_BASE_CURRENCY) !== baseCurrency && (
+                                <div className="text-[10px] font-normal text-muted-foreground">
+                                  ≈ {money2(fig.grossBase)}
+                                </div>
+                              )}
+                              {fig.paid > 0 && (
                                 <div className="text-[10px] font-normal text-muted-foreground mt-0.5">
                                   <span className="text-success">
-                                    {t("crewcast.paidToDate")}: {formatUSD(paid)}
+                                    {t("crewcast.paidToDate")}: {money2(fig.paid)}
                                   </span>
                                   {" · "}
                                   <span className="text-warning">
-                                    {t("crewcast.remainingBalance")}: {formatUSD(remaining)}
+                                    {t("crewcast.remainingBalance")}: {money2(fig.remaining)}
                                   </span>
                                 </div>
                               )}
-                            </div>
-                          );
-                        })()}
-                      </td>
+                            </td>
+                          </>
+                        );
+                      })()}
                       <td className="px-3 py-3">
                         <select
                           value={status}
@@ -902,6 +1007,7 @@ export function PeoplePage({ kind, title }: { kind: "crew" | "cast"; title: stri
                       whtPercent: extras.whtPercent,
                       whtAmount: extras.whtAmount,
                       netPayable: extras.netPayable,
+                      whtTreatment: extras.whtTreatment,
                     });
                     await setPayrollLedger(editing.id, ledgerEntries);
                     if (budgetCode) {
@@ -940,6 +1046,7 @@ export function PeoplePage({ kind, title }: { kind: "crew" | "cast"; title: stri
                       whtPercent: extras.whtPercent,
                       whtAmount: extras.whtAmount,
                       netPayable: extras.netPayable,
+                      whtTreatment: extras.whtTreatment,
                     });
                     if (ledgerEntries.length > 0) {
                       await setPayrollLedger(p.id, ledgerEntries);
@@ -1151,7 +1258,28 @@ type HydratedSchedule = {
   percent: number;
   dueDate: string;
   amount: number | null;
+  /** Workflow/execution fields (status, proof, paid date…) carried through a re-save. */
+  extra?: ScheduleExtra;
 };
+
+const SCHEDULE_EXTRA_KEYS = [
+  "status",
+  "proofPath",
+  "paidDate",
+  "paidRef",
+  "paymentMethod",
+  "sourceAccount",
+  "receiptUrl",
+  "paidNotes",
+] as const;
+
+type ScheduleExtra = Partial<Pick<PaymentScheduleItem, (typeof SCHEDULE_EXTRA_KEYS)[number]>>;
+
+function scheduleExtra(r: any): ScheduleExtra {
+  const out: Record<string, unknown> = {};
+  for (const k of SCHEDULE_EXTRA_KEYS) if (r?.[k] != null) out[k] = r[k];
+  return out as ScheduleExtra;
+}
 
 /**
  * Hydration gate for the edit form.
@@ -1285,6 +1413,7 @@ function parseHydratedSchedule(raw: unknown): HydratedSchedule[] | null {
     dueDate: r?.dueDate ?? r?.due_date ?? "",
     amount:
       r?.amount === null || r?.amount === undefined || r?.amount === "" ? null : Number(r.amount),
+    extra: scheduleExtra(r),
   }));
 }
 
@@ -1328,41 +1457,56 @@ function ContractForm({
   const invoicesForAttachmentChecks = useStore((s) => s.invoices);
 
   const isEdit = !!initial && !isDuplicate;
-  const [f, setF] = useState<Person>(
-    initial ?? {
-      id: generateId(),
-      kind,
-      fullName: "",
-      position: "",
-      nationality: "",
-      idNumber: "",
-      iban: "",
-      bank: "",
-      bankCountry: "",
-      swiftCode: "",
-      startDate: "",
-      endDate: "",
-      shootingDays: 0,
-      dailyRate: 0,
-      perDiem: 0,
-      onSetPerDiem: 0,
-      offSetPerDiem: 0,
-      housingAllowance: 0,
-      ccy: "USD",
-      paymentTerm: 100,
-      character: "",
-      requiresTransport: false,
-      isDriver: false,
-      accommodationId: null,
-      isPurchaser: false,
-      isPettyCashCustodian: false,
-      linkedBudgetLineId: null,
-      dealType: "weekly",
-      overtimeRate: null,
-      overtimeUnit: null,
-      phoneNumber: "",
-      email: "",
-    },
+  const baseCurrency = useBaseCurrency();
+  const [f, setF] = useState<Person>(() =>
+    initial
+      ? {
+          ...initial,
+          idType: initial.idType ?? guessIdType(initial.idNumber, initial.nationality),
+          whtTreatment: initial.whtTreatment ?? "inclusive",
+        }
+      : {
+          id: generateId(),
+          kind,
+          fullName: "",
+          position: "",
+          nationality: "",
+          idNumber: "",
+          iban: "",
+          bank: "",
+          bankCountry: "",
+          swiftCode: "",
+          startDate: "",
+          endDate: "",
+          shootingDays: 0,
+          dailyRate: 0,
+          perDiem: 0,
+          onSetPerDiem: 0,
+          offSetPerDiem: 0,
+          housingAllowance: 0,
+          // B25: a new contract starts in the project base currency.
+          ccy: baseCurrency,
+          paymentTerm: 100,
+          character: "",
+          requiresTransport: false,
+          isDriver: false,
+          accommodationId: null,
+          isPurchaser: false,
+          isPettyCashCustodian: false,
+          linkedBudgetLineId: null,
+          dealType: "weekly",
+          overtimeRate: null,
+          overtimeUnit: null,
+          phoneNumber: "",
+          email: "",
+          whtTreatment: "inclusive",
+          taxResidency: null,
+          whtServiceType: null,
+          whtRate: null,
+          idType: null,
+          motherSaudi: null,
+          relatedParty: null,
+        },
   );
   // Deal type drives which financial inputs are shown. Legacy rows fall back to "weekly".
   const dealType = normalizeDealType(f.dealType);
@@ -1476,10 +1620,18 @@ function ContractForm({
     setHeaderCode(parentHeaderCodeForLine(selected));
     setMainCode(selected.mainCode);
   }, [headerCode, mainCode, payrollRow?.budgetCode, projectBudgetLines, selectedBudgetLineId]);
-  const [residentStatus, setResidentStatus] = useState<"Saudi" | "Non-Saudi">(
-    initial && initial.nationality && initial.nationality !== "Saudi Arabia"
-      ? "Non-Saudi"
-      : "Saudi",
+  // Tax residency: suggested from nationality + bank country until the user
+  // picks a value (or the record already carries a confirmed one).
+  const [residencyTouched, setResidencyTouched] = useState<boolean>(!!initial?.taxResidency);
+  const suggestedResidency = suggestTaxResidency({
+    nationality: f.nationality,
+    bankCountry: f.bankCountry,
+  });
+  const taxResidency: TaxResidency =
+    residencyTouched && f.taxResidency ? f.taxResidency : suggestedResidency;
+  // Crew position: fixed list, "Other" keeps free text.
+  const [positionChoice, setPositionChoice] = useState<string>(() =>
+    positionSelectValue(initial?.position),
   );
 
   // Crew-specific
@@ -1563,6 +1715,14 @@ function ContractForm({
     if (!url) return;
     setF((prev) => (prev.attachmentUrl ? prev : { ...prev, attachmentUrl: url }));
   }, [initial, isDuplicate]);
+  // Workflow fields of saved milestones, re-applied on submit (edit only).
+  const scheduleExtras = useMemo(() => {
+    const m = new Map<string, ScheduleExtra>();
+    if (!isEdit) return m;
+    for (const r of payrollRow?.paymentSchedule ?? []) m.set(r.id, scheduleExtra(r));
+    for (const r of scheduleOverride ?? []) if (r.extra) m.set(r.id, r.extra);
+    return m;
+  }, [isEdit, payrollRow, scheduleOverride]);
   const [lastAddedRowId, setLastAddedRowId] = useState<string | null>(null);
   const scheduleTotalPct = schedule.reduce((a, r) => a + (Number(r.percent) || 0), 0);
 
@@ -1685,7 +1845,19 @@ function ContractForm({
   const selectedLine = selectedBudgetLineId
     ? projectBudgetLines.find((b) => b.id === selectedBudgetLineId)
     : subAccounts.find((b) => b.mainCode === mainCode);
-  const planned = selectedLine ? projectBudgetLineTotal(selectedLine) : 0;
+  // Budget lines carry their own currency; compare in the base currency.
+  const planned = selectedLine
+    ? projectBudgetLineTotal(selectedLine) *
+      (rateToBase(selectedLine.currency, baseCurrency, fxRate) ?? 1)
+    : 0;
+  const organizationId = useStore(
+    (s) => s.projects.find((p) => p.id === s.activeProjectId)?.organizationId ?? null,
+  );
+  const whtRules = useWhtRateRules(organizationId);
+  const whtServiceTypes = useMemo(
+    () => Array.from(new Set(["default", ...whtRules.map((r) => r.serviceType)])),
+    [whtRules],
+  );
 
   // Many-to-one: everything already committed against this exact budget row by
   // OTHER contracts / POs (multiple drivers on the same code is normal).
@@ -1699,7 +1871,10 @@ function ContractForm({
       return;
     }
     let cancelled = false;
-    fetchLineCommitments(activeProjectId, lineId, initial?.id ?? null)
+    fetchLineCommitments(activeProjectId, lineId, initial?.id ?? null, (amount, ccy) => {
+      const r = rateToBase(ccy || baseCurrency, baseCurrency, fxRate);
+      return r == null ? null : amount * r;
+    })
       .then((rows) => {
         if (cancelled) return;
         setOtherCommitted(sumLineCommitments(rows));
@@ -1714,7 +1889,7 @@ function ContractForm({
     return () => {
       cancelled = true;
     };
-  }, [activeProjectId, selectedLine?.id, initial?.id]);
+  }, [activeProjectId, selectedLine?.id, initial?.id, baseCurrency, fxRate]);
 
   // ---- Budget Code mapping validation (warn before saving) ----
   const effectiveCode = selectedLine?.mainCode || mainCode || "";
@@ -1766,33 +1941,53 @@ function ContractForm({
   const crewQty = dealType === "weekly" ? weeks : dealType === "daily" ? Math.max(dailyDays, 0) : 1;
   const crewRate =
     dealType === "weekly" ? weeklyRate : dealType === "daily" ? dailyRateInput : packageAmount;
+  // Agreed amount in the CONTRACT currency (before withholding).
   const contractAmount = kind === "crew" ? crewQty * crewRate : f.shootingDays * f.dailyRate;
-  // Budget lines are held in the master base currency (USD). A contract priced
-  // in another currency must be converted before it is compared to the budget,
-  // otherwise 15,000 SAR would wrongly consume 15,000 USD of the line.
-  const contractAmountBase = contractAmount / (unitsPerUsd(f.ccy, fxRate) || 1);
-  // Audit-friendly breakdown of the exact conversion math shown on hover.
-  const fxBreakdown = (() => {
-    const rate = unitsPerUsd(f.ccy, fxRate) || 1;
-    const money = (n: number) => formatAmount(Number.isFinite(n) ? n : 0, 2);
-    if (rate === 1)
-      return `${money(contractAmount)} ${f.ccy || "USD"} (no conversion — budget base currency)`;
-    return `${money(contractAmount)} ${f.ccy} \u00f7 ${rate} = $${money(contractAmountBase)} USD`;
-  })();
+  const contractCcy = (f.ccy || baseCurrency).toUpperCase();
+  // Contract currency → project base currency (B01/B02): USD × project rate,
+  // the base currency itself is never converted. null = no configured rate.
+  const fxToBase = rateToBase(contractCcy, baseCurrency, fxRate);
+
+  // Withholding tax (B04/E03): only for a confirmed non-resident; the rate
+  // comes from the rate table for the service type (default 5%).
+  const whtApplies = taxResidency === "non_resident";
+  const whtTreatment: WhtTreatment = f.whtTreatment === "exclusive" ? "exclusive" : "inclusive";
+  const ruleRate = resolveWhtRate(whtRules, f.whtServiceType);
+  // A saved contract keeps its rate snapshot until its service type changes.
+  const keepSavedRate =
+    isEdit &&
+    initial?.whtRate != null &&
+    (initial.whtServiceType ?? null) === (f.whtServiceType ?? null);
+  const whtPercent = whtApplies ? (keepSavedRate ? Number(initial!.whtRate) : ruleRate) : 0;
+  const wht = computeWht(contractAmount, whtPercent, whtTreatment);
+  const whtBase = whtInBase(wht, fxToBase ?? 1);
+  // Stored figures (payroll) are in the base currency: gross = contract value
+  // and budget commitment, net = what the payee receives (instalments).
+  const contractAmountBase = whtBase.gross;
+  const whtAmount = whtBase.wht;
+  const netPayable = whtBase.net;
   const remaining = planned - otherCommitted - contractAmountBase;
+  const fxBreakdown =
+    fxToBase === 1
+      ? `${formatAmount(wht.gross, 2)} ${contractCcy}`
+      : fxToBase == null
+        ? t("contracts.fx.no_rate", { ccy: contractCcy, base: baseCurrency })
+        : `${formatAmount(wht.gross, 2)} ${contractCcy} × ${Number(fxToBase.toFixed(4))} = ${formatAmount(contractAmountBase, 2)} ${baseCurrency}`;
+  // A contract saved before the base-currency fix carries its payroll figures
+  // in the contract currency (e.g. 2,000 "SAR" for a 2,000 USD deal). Its
+  // flat milestone amounts are in that currency too, so let unpaid milestones
+  // re-derive from their percent on the converted net instead.
+  const legacyUnconverted = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (legacyUnconverted.current !== null || !isEdit || !payrollRow) return;
+    legacyUnconverted.current =
+      fxToBase != null && fxToBase !== 1 && Math.abs(payrollRow.totalAmount - wht.gross) < 0.01;
+    if (!legacyUnconverted.current) return;
+    setSchedule((rows) =>
+      rows.map((r) => (scheduleExtras.get(r.id)?.status === "Paid" ? r : { ...r, amount: null })),
+    );
+  }, [isEdit, payrollRow, fxToBase, wht.gross, scheduleExtras]);
 
-  // Display/form-level WHT treatment choice (does not alter existing rollups).
-  const [whtTreatment, setWhtTreatment] = useState<WhtTreatment>("inclusive");
-
-  // 5% Withholding Tax when the payee's bank is not registered in Saudi Arabia.
-  const isNonSaudiBank = !!(
-    f.bankCountry &&
-    f.bankCountry.trim() &&
-    f.bankCountry !== "Saudi Arabia"
-  );
-  const whtPercent = isNonSaudiBank ? 5 : 0;
-  const whtAmount = +(contractAmount * (whtPercent / 100)).toFixed(2);
-  const netPayable = +(contractAmount - whtAmount).toFixed(2);
   // Honours explicit flat-amount overrides on individual milestones.
   const scheduleAllocated = schedule.reduce(
     (a, r) => a + resolveSplitAmount(r.percent, netPayable, r.amount),
@@ -1833,7 +2028,8 @@ function ContractForm({
       headerCode,
       mainCode,
       selectedBudgetLineId,
-      residentStatus,
+      residencyTouched,
+      positionChoice,
       dailyDays,
       packageAmount,
       dailyRateInput,
@@ -1845,7 +2041,8 @@ function ContractForm({
       headerCode,
       mainCode,
       selectedBudgetLineId,
-      residentStatus,
+      residencyTouched,
+      positionChoice,
       dailyDays,
       packageAmount,
       dailyRateInput,
@@ -1862,7 +2059,8 @@ function ContractForm({
       if (saved.headerCode) setHeaderCode(saved.headerCode);
       if (saved.mainCode) setMainCode(saved.mainCode);
       if (saved.selectedBudgetLineId) setSelectedBudgetLineId(saved.selectedBudgetLineId);
-      if (saved.residentStatus) setResidentStatus(saved.residentStatus);
+      if (typeof saved.residencyTouched === "boolean") setResidencyTouched(saved.residencyTouched);
+      if (typeof saved.positionChoice === "string") setPositionChoice(saved.positionChoice);
       if (typeof saved.dailyDays === "number") setDailyDays(saved.dailyDays);
       if (typeof saved.packageAmount === "number") setPackageAmount(saved.packageAmount);
       if (typeof saved.dailyRateInput === "number") setDailyRateInput(saved.dailyRateInput);
@@ -1950,9 +2148,24 @@ function ContractForm({
     // Aggregate every required-field error so all invalid fields highlight at once.
     const nextErrors: Record<string, string> = {};
     if (!f.fullName?.trim()) nextErrors.fullName = "Full Name is required.";
-    if (kind === "crew" && !f.position?.trim()) nextErrors.position = "Position is required.";
+    if (kind === "crew" && !f.position?.trim())
+      nextErrors.position =
+        positionChoice === POSITION_OTHER
+          ? t("contracts.errors.position_other_required")
+          : "Position is required.";
     if (kind === "cast" && !f.character?.trim()) nextErrors.character = "Character is required.";
-    if (!f.iban?.trim()) nextErrors.iban = "IBAN / Account Number is required.";
+    // E02/B26: nationality and a valid ID are required for everyone, Saudi included.
+    if (!f.nationality?.trim()) nextErrors.nationality = t("contracts.errors.nationality_required");
+    const idErr = validateIdNumber(f.idType ?? null, f.idNumber);
+    if (idErr) nextErrors.idNumber = t(`contracts.errors.${idErr}`);
+    const ibanErr = validateIban(f.bankCountry, f.iban);
+    if (ibanErr)
+      nextErrors.iban = t(`contracts.errors.${ibanErr}`, {
+        code: ibanCountryCode(f.bankCountry) ?? "",
+        length: ibanLength(f.bankCountry) ?? "",
+      });
+    const swiftErr = validateSwift(f.bankCountry, f.swiftCode);
+    if (swiftErr) nextErrors.swiftCode = t(`contracts.errors.${swiftErr}`);
     if (!f.startDate) nextErrors.startDate = "Contract Start Date is required.";
     if (!f.endDate) nextErrors.endDate = "Contract End Date is required.";
     const bankErrs = validateBankPicker({
@@ -1967,6 +2180,11 @@ function ContractForm({
       nextErrors.endDate = "End Date must be on or after Start Date.";
     }
     Object.assign(nextErrors, validateContact(f.phoneNumber, f.email));
+    // B25: every instalment needs a due date.
+    if (schedule.some((r) => !r.dueDate))
+      nextErrors.schedule = t("contracts.errors.due_date_required");
+    if (fxToBase == null)
+      nextErrors.ccy = t("contracts.fx.no_rate", { ccy: contractCcy, base: baseCurrency });
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
       toast.error("Please fix the highlighted fields before saving.");
@@ -2046,7 +2264,19 @@ function ContractForm({
     const payload: Person = {
       ...f,
       linkedBudgetLineId: selectedLine?.id ?? null,
-      nationality: residentStatus === "Saudi" ? "Saudi Arabia" : f.nationality || "",
+      nationality: f.nationality?.trim() ?? "",
+      iban: ibanCountryCode(f.bankCountry) ? normalizeIban(f.iban) : (f.iban ?? "").trim(),
+      swiftCode: (f.swiftCode ?? "").replace(/\s/g, "").toUpperCase(),
+      idNumber: (f.idNumber ?? "").trim(),
+      ccy: contractCcy,
+      position: kind === "cast" ? f.position || "" : (f.position ?? "").trim(),
+      // Only a non-Saudi can have a Saudi mother; the flag is meaningless otherwise.
+      motherSaudi: f.nationality === SAUDI_ARABIA ? null : (f.motherSaudi ?? false),
+      relatedParty: f.relatedParty ?? false,
+      taxResidency,
+      whtTreatment,
+      whtServiceType: whtApplies ? (f.whtServiceType ?? "default") : null,
+      whtRate: whtApplies ? whtPercent : null,
       attachmentUrl: normalizeAttachmentUrl(f.attachmentUrl),
       idAttachmentPath: idAttachmentPath ?? initial?.idAttachmentPath ?? null,
       ibanAttachmentPath: ibanAttachmentPath ?? initial?.ibanAttachmentPath ?? null,
@@ -2063,6 +2293,9 @@ function ContractForm({
       dueDate: r.dueDate,
       // Cent-exact: the server rejects >2-decimal schedule amounts.
       amount: Math.max(0, toCents(resolveSplitAmount(r.percent, netPayable, r.amount))),
+      // Keep the milestone's workflow state (Approved/Paid, proof…) through a re-save,
+      // otherwise editing the contract would reopen paid instalments.
+      ...(scheduleExtras.get(r.id) ?? {}),
     }));
 
     // Last line of defence: the derived payload must satisfy the same trigger.
@@ -2080,10 +2313,11 @@ function ContractForm({
       weeklyRate: kind === "crew" ? crewRate : undefined,
       weeks: kind === "crew" ? crewQty : undefined,
       paymentSchedule: scheduleForSubmit,
-      contractAmount,
+      contractAmount: contractAmountBase,
       whtPercent,
       whtAmount,
       netPayable,
+      whtTreatment,
     });
   };
 
@@ -2175,9 +2409,41 @@ function ContractForm({
             return (
               <Fragment key="id-contact-group">
                 <label className="text-sm">
-                  <div className="text-muted-foreground mb-1">{label}</div>
+                  <div className="text-muted-foreground mb-1">
+                    {t("contracts.id_type")}
+                    <span className="text-destructive ms-1" aria-hidden>
+                      *
+                    </span>
+                  </div>
+                  <select
+                    value={f.idType ?? ""}
+                    onChange={(e) => {
+                      setF({ ...f, idType: (e.target.value || null) as IdType | null });
+                      clearErr("idNumber");
+                    }}
+                    className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 outline-none focus:ring-2 ring-brand"
+                  >
+                    <option value="">{t("contracts.select")}</option>
+                    {ID_TYPES.map((it) => (
+                      <option key={it} value={it}>
+                        {t(`contracts.id_types.${it}`)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm">
+                  <div className="text-muted-foreground mb-1">
+                    {label}
+                    <span className="text-destructive ms-1" aria-hidden>
+                      *
+                    </span>
+                  </div>
                   <input
                     type="text"
+                    dir="ltr"
+                    inputMode={f.idType === "passport" ? "text" : "numeric"}
+                    maxLength={30}
+                    placeholder={f.idType ? t(`contracts.id_placeholders.${f.idType}`) : undefined}
                     value={(f.idNumber as string) ?? ""}
                     onChange={(e) => {
                       set("idNumber")(e);
@@ -2259,22 +2525,75 @@ function ContractForm({
                       ...(patch.bankName !== undefined ? { bank: patch.bankName } : {}),
                       ...(patch.swiftCode !== undefined ? { swiftCode: patch.swiftCode } : {}),
                     }));
-                    if (patch.bankCountry !== undefined) clearErr("bankCountry");
+                    if (patch.bankCountry !== undefined) {
+                      clearErr("bankCountry");
+                      clearErr("iban");
+                      clearErr("swiftCode");
+                    }
                     if (patch.bankName !== undefined) clearErr("bank");
+                    if (patch.swiftCode !== undefined) clearErr("swiftCode");
                   }}
                   countryLabel="Bank Country"
                   bankLabel="Bank Name"
-                  errors={{ bankCountry: errors.bankCountry, bankName: errors.bank }}
+                  swiftLabel={
+                    f.bankCountry && f.bankCountry !== SAUDI_ARABIA
+                      ? `${t("contracts.swift")} *`
+                      : t("contracts.swift")
+                  }
+                  errors={{
+                    bankCountry: errors.bankCountry,
+                    bankName: errors.bank,
+                    swiftCode: errors.swiftCode,
+                  }}
                 />
-                {isNonSaudiBank && (
-                  <WhtTreatmentSelector
-                    packageAmount={contractAmount || 0}
-                    currency={f.ccy || "USD"}
-                    value={whtTreatment}
-                    onChange={setWhtTreatment}
+              </Fragment>
+            );
+          }
+
+          if (k === "position" && kind === "crew") {
+            const posErr = errors.position;
+            return (
+              <label key="position-picker" className="text-sm">
+                <div className="text-muted-foreground mb-1">
+                  {label}
+                  <span className="text-destructive ms-1" aria-hidden>
+                    *
+                  </span>
+                </div>
+                <select
+                  value={positionChoice}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setPositionChoice(v);
+                    setF({ ...f, position: v === POSITION_OTHER ? "" : v });
+                    clearErr("position");
+                  }}
+                  aria-invalid={!!posErr}
+                  className={`w-full bg-surface-2 border rounded-xl px-3 py-2 outline-none focus:ring-2 ring-brand ${posErr ? "border-destructive/70" : "border-border"}`}
+                >
+                  <option value="">{t("contracts.select")}</option>
+                  {CREW_POSITIONS.map((pos) => (
+                    <option key={pos} value={pos}>
+                      {t(`contracts.positions.${positionKey(pos)}`, { defaultValue: pos })}
+                    </option>
+                  ))}
+                  <option value={POSITION_OTHER}>{t("contracts.position_other")}</option>
+                </select>
+                {positionChoice === POSITION_OTHER && (
+                  <input
+                    type="text"
+                    value={f.position ?? ""}
+                    maxLength={100}
+                    onChange={(e) => {
+                      setF({ ...f, position: e.target.value });
+                      clearErr("position");
+                    }}
+                    placeholder={t("contracts.position_other_placeholder")}
+                    className="mt-2 w-full bg-surface-2 border border-border rounded-xl px-3 py-2 outline-none focus:ring-2 ring-brand"
                   />
                 )}
-              </Fragment>
+                {posErr && <div className="text-[11px] text-destructive mt-1">{posErr}</div>}
+              </label>
             );
           }
 
@@ -2496,6 +2815,24 @@ function ContractForm({
                   }}
                   className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 outline-none focus:ring-2 ring-brand"
                 />
+                {(() => {
+                  // B03: a package spans its contract dates; daily = total ÷ days.
+                  const d = displayDaysAndRate({
+                    dealType: "package",
+                    shootingDays: 1,
+                    dailyRate: packageAmount,
+                    startDate: f.startDate,
+                    endDate: f.endDate,
+                  });
+                  return d.days > 0 && packageAmount > 0 ? (
+                    <div className="text-[11px] text-muted-foreground mt-1">
+                      {t("contracts.package_days", {
+                        days: d.days,
+                        daily: formatCcy(d.daily, contractCcy),
+                      })}
+                    </div>
+                  ) : null;
+                })()}
               </label>
             )}
 
@@ -2555,79 +2892,135 @@ function ContractForm({
           </>
         )}
 
-        {/* Withholding Tax breakdown — 5% for non-Saudi bank */}
-        {isNonSaudiBank && contractAmount > 0 && (
-          <div className="col-span-2 rounded-xl border border-warning/30 bg-warning/5 px-3 py-2.5 text-sm space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">{t("crewcastcontracts.total_deal")}</span>
-              <span className="tabular-nums" dir="ltr">
-                {formatCcy(contractAmount, f.ccy)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-warning">
-              <span>Withholding Tax (5%) · ضريبة الاستقطاع</span>
-              <span className="tabular-nums" dir="ltr">
-                − {formatCcy(whtAmount, f.ccy)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between pt-1.5 border-t border-warning/20 font-semibold">
-              <span>Net Payable · صافي المستحق</span>
-              <span className="tabular-nums" dir="ltr">
-                {formatCcy(netPayable, f.ccy)}
-              </span>
-            </div>
-            <div className="text-[11px] text-muted-foreground pt-1">
-              Non-Saudi bank detected — WHT posts to Withholding Tax Liability (GL). Milestones
-              calculated on Net Payable.
-            </div>
-          </div>
-        )}
-
-        {/* Residency */}
+        {/* Nationality — required for everyone, Saudi included (B26/E02) */}
         <label className="text-sm">
-          <div className="text-muted-foreground mb-1">{t("crewcastcontracts.resident_status")}</div>
-          <select
-            value={residentStatus}
-            onChange={(e) => setResidentStatus(e.target.value as "Saudi" | "Non-Saudi")}
-            className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 outline-none focus:ring-2 ring-brand"
-          >
-            <option value="Saudi">Saudi</option>
-            <option value="Non-Saudi">Non-Saudi</option>
-          </select>
-        </label>
-        {residentStatus === "Non-Saudi" && (
-          <label className="text-sm">
-            <div className="text-muted-foreground mb-1">
-              {t("crewcastcontracts.nationality_details")}
-            </div>
-            <select
+          <div className="text-muted-foreground mb-1">
+            {t("contracts.nationality")}
+            <span className="text-destructive ms-1" aria-hidden>
+              *
+            </span>
+          </div>
+          <div className={errors.nationality ? "[&_button]:!border-destructive/70" : ""}>
+            <SearchableCountrySelect
               value={f.nationality ?? ""}
-              onChange={(e) => setF({ ...f, nationality: e.target.value })}
-              className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 outline-none focus:ring-2 ring-brand"
-            >
-              <option value="">{t("crewcastcontracts.select_a_country")}</option>
-              {COUNTRIES.map((c) => (
+              onChange={(v) => {
+                setF({ ...f, nationality: v });
+                clearErr("nationality");
+              }}
+              placeholder={t("crewcastcontracts.select_a_country")}
+            />
+          </div>
+          {errors.nationality && (
+            <div className="text-[11px] text-destructive mt-1">{errors.nationality}</div>
+          )}
+        </label>
+
+        {/* Contract currency (B25: defaults to the project base currency) */}
+        <label className="text-sm">
+          <div className="text-muted-foreground mb-1">{t("contracts.contract_currency")}</div>
+          <select
+            value={contractCcy}
+            onChange={(e) => {
+              setF({ ...f, ccy: e.target.value });
+              clearErr("ccy");
+            }}
+            aria-invalid={!!errors.ccy}
+            className={`w-full bg-surface-2 border rounded-xl px-3 py-2 outline-none focus:ring-2 ring-brand ${errors.ccy ? "border-destructive/70" : "border-border"}`}
+          >
+            {Array.from(new Set<string>([baseCurrency, ...CONTRACT_CURRENCIES, contractCcy])).map(
+              (c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
-              ))}
-            </select>
-          </label>
-        )}
+              ),
+            )}
+          </select>
+          {errors.ccy && <div className="text-[11px] text-destructive mt-1">{errors.ccy}</div>}
+        </label>
 
-        <label className="text-sm">
-          <div className="text-muted-foreground mb-1">CCY</div>
+        <div className="col-span-2 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+          {f.nationality && f.nationality !== SAUDI_ARABIA && (
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={!!f.motherSaudi}
+                onChange={(e) => setF({ ...f, motherSaudi: e.target.checked })}
+                className="size-4 accent-[var(--brand)]"
+              />
+              <span>{t("contracts.mother_saudi")}</span>
+            </label>
+          )}
+          <label className="inline-flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={!!f.relatedParty}
+              onChange={(e) => setF({ ...f, relatedParty: e.target.checked })}
+              className="size-4 accent-[var(--brand)]"
+            />
+            <span>{t("contracts.related_party")}</span>
+          </label>
+        </div>
+
+        {/* Tax residency — suggested by the rule, confirmed by the user (E03) */}
+        <label className="text-sm col-span-2">
+          <div className="text-muted-foreground mb-1">{t("contracts.tax_residency")}</div>
           <select
-            value={f.ccy}
-            onChange={(e) => setF({ ...f, ccy: e.target.value })}
+            value={taxResidency}
+            onChange={(e) => {
+              setResidencyTouched(true);
+              setF({ ...f, taxResidency: e.target.value as TaxResidency });
+            }}
             className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 outline-none focus:ring-2 ring-brand"
           >
-            <option>USD</option>
-            <option>EUR</option>
-            <option>SAR</option>
-            <option>AED</option>
+            <option value="resident">{t("contracts.residency.resident")}</option>
+            <option value="non_resident">{t("contracts.residency.non_resident")}</option>
           </select>
+          <div className="text-[11px] text-muted-foreground mt-1">
+            {residencyTouched && f.taxResidency
+              ? f.taxResidency !== suggestedResidency
+                ? t("contracts.residency.differs_from_rule", {
+                    value: t(`contracts.residency.${suggestedResidency}`),
+                  })
+                : t("contracts.residency.confirmed")
+              : t("contracts.residency.suggested_hint")}
+          </div>
         </label>
+
+        {whtApplies && (
+          <WhtTreatmentSelector
+            packageAmount={contractAmount || 0}
+            currency={contractCcy}
+            ratePct={whtPercent}
+            value={whtTreatment}
+            onChange={(v) => setF({ ...f, whtTreatment: v })}
+            base={
+              contractCcy !== baseCurrency && fxToBase != null
+                ? { currency: baseCurrency, breakdown: whtBase }
+                : null
+            }
+          >
+            <label className="block text-sm">
+              <div className="text-muted-foreground mb-1">{t("contracts.wht.service_type")}</div>
+              <select
+                value={f.whtServiceType ?? "default"}
+                onChange={(e) =>
+                  setF({
+                    ...f,
+                    whtServiceType: e.target.value === "default" ? null : e.target.value,
+                  })
+                }
+                className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 outline-none focus:ring-2 ring-brand"
+              >
+                {whtServiceTypes.map((st) => (
+                  <option key={st} value={st}>
+                    {st === "default" ? t("contracts.wht.service_default") : st} —{" "}
+                    {resolveWhtRate(whtRules, st)}%
+                  </option>
+                ))}
+              </select>
+            </label>
+          </WhtTreatmentSelector>
+        )}
 
         {/* Universal cascading Header Account → Sub-Account mapping */}
         <BudgetMappingSelect
@@ -2668,15 +3061,9 @@ function ContractForm({
               <div className="font-semibold" title={fxBreakdown}>
                 {formatUSD(contractAmountBase)}
               </div>
-              {f.ccy !== "USD" && (
-                <div className="text-[10px] text-muted-foreground">
-                  {contractAmount.toLocaleString("en-US", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}{" "}
-                  {f.ccy}
-                  {" @ "}
-                  {unitsPerUsd(f.ccy, fxRate)} / USD
+              {contractCcy !== baseCurrency && (
+                <div className="text-[10px] text-muted-foreground" dir="ltr">
+                  {fxBreakdown}
                 </div>
               )}
             </div>
@@ -2695,11 +3082,20 @@ function ContractForm({
 
         {/* Payment Schedule / Terms */}
         <div className="col-span-2">
-          <div className="flex justify-end mb-1.5">
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <span className="text-[11px] text-muted-foreground">
+              {t("contracts.schedule_basis", {
+                amount: formatAmount(netPayable, 2),
+                ccy: baseCurrency,
+              })}
+            </span>
             <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Payment Schedule
             </span>
           </div>
+          {errors.schedule && (
+            <div className="mb-1.5 text-[11px] text-destructive">{errors.schedule}</div>
+          )}
           <div
             dir="ltr"
             className="rounded-2xl bg-info/60 dark:bg-card/[0.03] border border-info/80 dark:border-border p-4"
@@ -2723,8 +3119,11 @@ function ContractForm({
                       {/* DATE */}
                       <DatePickerPill
                         value={row.dueDate}
-                        onChange={(iso) => updateScheduleRow(row.id, { dueDate: iso })}
-                        className="bg-card dark:bg-surface-2 border border-info/80 dark:border-border px-4 py-2 text-sm"
+                        onChange={(iso) => {
+                          updateScheduleRow(row.id, { dueDate: iso });
+                          clearErr("schedule");
+                        }}
+                        className={`bg-card dark:bg-surface-2 border px-4 py-2 text-sm ${errors.schedule && !row.dueDate ? "border-destructive/70" : "border-info/80 dark:border-border"}`}
                         textAlign="start"
                         align="start"
                       />
@@ -2738,7 +3137,7 @@ function ContractForm({
                         onAmountChange={(amount) => updateScheduleRow(row.id, { amount })}
                         onQuickAdd={addScheduleRow}
                         autoFocusPercent={row.id === lastAddedRowId}
-                        currencyLabel={f.ccy}
+                        currencyLabel={baseCurrency}
                         percentInvalid={Boolean(rowErr.percent)}
                         amountInvalid={Boolean(rowErr.amount)}
                         percentErrorId={rowErr.percent ? `sched-${row.id}-percent-err` : undefined}
@@ -2789,7 +3188,7 @@ function ContractForm({
                 totalPct={scheduleTotalPct}
                 total={netPayable}
                 allocatedAmount={scheduleAllocated}
-                currency={f.ccy}
+                currency={baseCurrency}
               />
               <button
                 type="button"

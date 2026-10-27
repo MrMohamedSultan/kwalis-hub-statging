@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { computeWht } from "@/lib/contract-terms";
 
 export type ProjectBudgetLine = {
   id: string;
@@ -291,9 +292,14 @@ export async function fetchLineCommitments(
   projectId: string,
   lineId: string,
   excludeId?: string | null,
+  /**
+   * Converts a contract amount in its own currency into the project base
+   * currency. Without it, people amounts are taken as already in base.
+   */
+  toBaseAmount?: (amount: number, ccy: string) => number | null,
 ): Promise<LineCommitment[]> {
   if (!projectId || !lineId) return [];
-  const [crew, people, pos] = await Promise.all([
+  const [crew, people, pos, payrollWht] = await Promise.all([
     supabase
       .from("crew_members")
       .select("id, full_name, total_deal")
@@ -301,7 +307,7 @@ export async function fetchLineCommitments(
       .eq("linked_budget_line_id", lineId),
     supabase
       .from("people")
-      .select("id, full_name, kind, daily_rate, shooting_days")
+      .select("id, full_name, kind, daily_rate, shooting_days, ccy, wht_treatment")
       .eq("project_id", projectId)
       .eq("linked_budget_line_id", lineId),
     supabase
@@ -309,7 +315,15 @@ export async function fetchLineCommitments(
       .select("id, vendor_name, amount")
       .eq("project_id", projectId)
       .eq("linked_budget_line_id", lineId),
+    supabase
+      .from("payroll")
+      .select("ref_id, wht_percent")
+      .eq("project_id", projectId)
+      .gt("wht_percent", 0),
   ]);
+  const whtPctByRef = new Map<string, number>(
+    ((payrollWht.data ?? []) as any[]).map((r) => [String(r.ref_id), Number(r.wht_percent) || 0]),
+  );
 
   const out: LineCommitment[] = [];
   for (const r of (crew.data ?? []) as any[]) {
@@ -323,11 +337,17 @@ export async function fetchLineCommitments(
   }
   for (const r of (people.data ?? []) as any[]) {
     if (excludeId && r.id === excludeId) continue;
+    // Contract value (gross): an exclusive (gross-up) deal carries its WHT on top.
+    const agreed = Number(r.daily_rate ?? 0) * Number(r.shooting_days ?? 0);
+    const treatment = r.wht_treatment === "exclusive" ? "exclusive" : "inclusive";
+    const gross = computeWht(agreed, whtPctByRef.get(String(r.id)) ?? 0, treatment).gross;
+    const amount = toBaseAmount ? toBaseAmount(gross, String(r.ccy ?? "")) : gross;
     out.push({
       source: r.kind === "cast" ? "cast" : "crew",
       id: r.id,
       name: r.full_name ?? "Cast",
-      amount: Number(r.daily_rate ?? 0) * Number(r.shooting_days ?? 0),
+      // no configured rate for that currency: keep the native figure rather than drop it
+      amount: amount ?? gross,
     });
   }
   for (const r of (pos.data ?? []) as any[]) {

@@ -249,6 +249,17 @@ export type Person = {
   /** Optional contact details. */
   phoneNumber?: string | null;
   email?: string | null;
+  /** WHT handling: inclusive = deducted from the agreed amount, exclusive = gross-up. */
+  whtTreatment?: "inclusive" | "exclusive";
+  /** Confirmed by the user; null = not confirmed (form suggests the rule). */
+  taxResidency?: "resident" | "non_resident" | null;
+  /** wht_rate_rules service type; null = default. */
+  whtServiceType?: string | null;
+  /** WHT % applied on this contract (snapshot). */
+  whtRate?: number | null;
+  idType?: "national_id" | "iqama" | "passport" | null;
+  motherSaudi?: boolean | null;
+  relatedParty?: boolean | null;
 };
 
 export type DealType = "weekly" | "daily" | "package";
@@ -357,6 +368,7 @@ export type PayrollRow = {
   netPayable?: number;
   /** GL account code where WHT is posted (e.g. "2140" — Withholding Tax Liability). */
   whtGlCode?: string;
+  whtTreatment?: "inclusive" | "exclusive";
 };
 
 export type ProjectStatus = ProjectStatusOption;
@@ -448,6 +460,7 @@ type State = {
       whtPercent?: number;
       whtAmount?: number;
       netPayable?: number | null;
+      whtTreatment?: "inclusive" | "exclusive";
     },
   ) => Promise<void>;
   addReceipt: (r: CashAdvanceReceipt) => Promise<void>;
@@ -536,7 +549,7 @@ const toBudgetRow = (l: BudgetLine) => ({
   unit: l.unit,
   x: totalPeriods(l),
   group: l.group,
-  currency: l.currency ?? "USD",
+  currency: l.currency ?? "SAR",
   prep: Number(l.prep ?? 0),
   shooting: Number(l.shooting ?? 0),
   wrap: Number(l.wrap ?? 0),
@@ -742,7 +755,19 @@ const fromPersonRow = (r: any): Person => ({
   overtimeUnit: (r.overtime_unit ?? null) as Person["overtimeUnit"],
   phoneNumber: r.phone_number ?? null,
   email: r.email ?? null,
+  whtTreatment: r.wht_treatment === "exclusive" ? "exclusive" : "inclusive",
+  // Columns from db/pending/172 — `undefined` while that file is not applied,
+  // so toPersonRow leaves them out of the write.
+  taxResidency: r.tax_residency,
+  whtServiceType: r.wht_service_type,
+  whtRate: r.wht_rate === undefined ? undefined : r.wht_rate === null ? null : Number(r.wht_rate),
+  idType: r.id_type,
+  motherSaudi: r.mother_saudi,
+  relatedParty: r.related_party,
 });
+/** Only send optional columns the record actually carries (see fromPersonRow). */
+const definedOnly = (o: Record<string, unknown>) =>
+  Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
 const toPersonRow = (p: Person) => ({
   id: p.id,
   kind: p.kind,
@@ -762,7 +787,7 @@ const toPersonRow = (p: Person) => ({
   on_set_per_diem: p.onSetPerDiem ?? p.perDiem ?? 0,
   off_set_per_diem: p.offSetPerDiem ?? (p.onSetPerDiem ?? p.perDiem ?? 0) * 2,
   housing_allowance: p.housingAllowance ?? null,
-  ccy: p.ccy ?? "USD",
+  ccy: p.ccy ?? "SAR",
   payment_term: p.paymentTerm ?? 0,
   character: p.character ?? null,
   contract_status: p.contractStatus ?? "Pending Contract",
@@ -787,6 +812,15 @@ const toPersonRow = (p: Person) => ({
   overtime_unit: p.overtimeUnit ?? null,
   phone_number: p.phoneNumber?.trim() ? p.phoneNumber.trim() : null,
   email: p.email?.trim() ? p.email.trim() : null,
+  wht_treatment: p.whtTreatment === "exclusive" ? "exclusive" : "inclusive",
+  ...definedOnly({
+    tax_residency: p.taxResidency,
+    wht_service_type: p.whtServiceType,
+    wht_rate: p.whtRate,
+    id_type: p.idType,
+    mother_saudi: p.motherSaudi,
+    related_party: p.relatedParty,
+  }),
   project_id: p.projectId ?? activePid(),
   organization_id: p.organizationId ?? activeOrgId(),
 });
@@ -869,6 +903,7 @@ const fromPayrollRow = (r: any): PayrollRow => {
     whtAmount: Number(r.wht_amount ?? 0),
     netPayable: r.net_payable != null ? Number(r.net_payable) : undefined,
     whtGlCode: r.wht_gl_code ?? undefined,
+    whtTreatment: r.wht_treatment === "exclusive" ? "exclusive" : "inclusive",
   };
 };
 /** Strict 2-decimal rounding for money and money-derived percentages. */
@@ -934,6 +969,7 @@ const toPayrollRow = (p: PayrollRow) => ({
   wht_amount: p.whtAmount ?? 0,
   net_payable: p.netPayable ?? null,
   wht_gl_code: (p.whtAmount ?? 0) > 0 ? (p.whtGlCode ?? "2140") : null,
+  wht_treatment: p.whtTreatment === "exclusive" ? "exclusive" : "inclusive",
   project_id: activePid(),
   // Tenant key — mirrors toBudgetRow. The trg_stamp_payroll_organization
   // trigger backstops this (fills from the project, rejects mismatches).
@@ -1760,6 +1796,7 @@ export const useStore = create<State>()(
             whtPercent: patch.whtPercent ?? 0,
             whtAmount: patch.whtAmount ?? 0,
             netPayable: patch.netPayable ?? undefined,
+            whtTreatment: patch.whtTreatment ?? "inclusive",
           };
           set((s) => ({ payroll: [...s.payroll, created] }));
           const { error } = await supabase.from("payroll").insert(toPayrollRow(created));
@@ -1781,6 +1818,7 @@ export const useStore = create<State>()(
           whtAmount: patch.whtAmount !== undefined ? patch.whtAmount : row.whtAmount,
           netPayable:
             patch.netPayable !== undefined ? (patch.netPayable ?? undefined) : row.netPayable,
+          whtTreatment: patch.whtTreatment ?? row.whtTreatment,
         };
         // If slot count changed, resize payments/receipts preserving status of overlapping slots
         if (patch.percents && patch.percents.length !== row.payments.length) {
