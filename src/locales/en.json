@@ -2952,6 +2952,10 @@
     "settings_logo_removed": "Company logo removed",
     "settings_logo_too_large": "This image is too large — please use a smaller logo.",
     "settings_logo_unsupported": "Please choose a PNG, JPG, WEBP or SVG image.",
-    "pick_date": "Pick a date"
+    "pick_date": "Pick a date",
+    "funding_amount": "Amount",
+    "funding_currency": "Currency",
+    "funding_preview": "Booked as:",
+    "funding_no_rate": "No exchange rate is configured for {{currency}} — set it in Settings → Currency."
   }
 }

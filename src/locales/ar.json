@@ -2952,6 +2952,10 @@
     "settings_logo_removed": "تم حذف شعار الشركة",
     "settings_logo_too_large": "الصورة كبيرة جداً — استخدم شعاراً أصغر.",
     "settings_logo_unsupported": "اختر صورة PNG أو JPG أو WEBP أو SVG.",
-    "pick_date": "اختر تاريخاً"
+    "pick_date": "اختر تاريخاً",
+    "funding_amount": "المبلغ",
+    "funding_currency": "العملة",
+    "funding_preview": "يُسجَّل بقيمة:",
+    "funding_no_rate": "لا يوجد سعر صرف مضبوط لعملة {{currency}} — اضبطه من الإعدادات ← العملات."
   }
 }
