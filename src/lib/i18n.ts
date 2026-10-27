@@ -842,6 +842,15 @@ function resolveInitialLang(): "en" | "ar" {
 
 const initialLang = resolveInitialLang();
 
+const NEEDS_ISOLATION = /[A-Za-z0-9%$#@+\-–—().:/]/;
+/** Wrap an interpolated value in First-Strong-Isolate … Pop-Directional-Isolate (Arabic UI only). */
+export function isolateForLanguage(value: string): string {
+  const lng = (i18n?.language ?? "").toLowerCase();
+  if (!lng.startsWith("ar") || !value || !NEEDS_ISOLATION.test(value)) return value;
+  if (value.startsWith("\u2068")) return value;
+  return `\u2068${value}\u2069`;
+}
+
 if (!i18n.isInitialized) {
   i18n.use(initReactI18next).init({
     resources: {
@@ -851,7 +860,11 @@ if (!i18n.isInitialized) {
     lng: initialLang,
     fallbackLng: "en",
     supportedLngs: ["en", "ar"],
-    interpolation: { escapeValue: false },
+    // G14: values interpolated into an Arabic sentence (numbers, %, English
+    // names, codes) are wrapped in Unicode isolates (FSI…PDI) so they can
+    // never flip the surrounding sentence ("5 — ضريبة الاستقطاع%"). No HTML
+    // escaping — React already escapes text.
+    interpolation: { escapeValue: true, escape: isolateForLanguage },
     detection: undefined,
     react: { useSuspense: false },
   });

@@ -18,6 +18,7 @@ import {
   projectLabel,
 } from "@/lib/export/file-name";
 import { formatExportNumber, roundTo } from "@/lib/export/number-format";
+import i18n, { isolateForLanguage } from "@/lib/i18n";
 
 describe("platform date format (G05 / B28 / B29)", () => {
   it("formats a stored date in the default dd/MM/yyyy, always with the year", () => {
@@ -126,5 +127,19 @@ describe("export numbers (G04 / X17)", () => {
     expect(formatExportNumber(1234.5, 0)).toBe("1,235");
     expect(roundTo(0.1 + 0.2, 2)).toBe(0.3);
     expect(roundTo(1.005, 2)).toBe(1.01);
+  });
+});
+
+describe("bidi isolation of interpolated values (G14)", () => {
+  it("isolates numbers and Latin text inside Arabic sentences only", async () => {
+    await i18n.changeLanguage("ar");
+    expect(isolateForLanguage("5%")).toBe("\u20685%\u2069");
+    expect(isolateForLanguage("محمد")).toBe("محمد");
+    expect(i18n.t("exports.page_x_of_y", { page: 1, total: 3 })).toBe(
+      "صفحة \u20681\u2069 من \u20683\u2069",
+    );
+    await i18n.changeLanguage("en");
+    expect(isolateForLanguage("5%")).toBe("5%");
+    expect(i18n.t("exports.page_x_of_y", { page: 1, total: 3 })).toBe("Page 1 of 3");
   });
 });

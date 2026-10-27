@@ -449,3 +449,55 @@ export async function exportReportPdf(
   );
   return filename;
 }
+
+// ── Branding for hand-built workbooks (official templates etc.) ───────
+
+/**
+ * Stamp the shared identity on a workbook that was laid out by hand (for
+ * example the Film Commission template, whose cell layout is fixed): print
+ * header (company — project | report title) and print footer ("Exported
+ * from Kwalis Hub" · user · Saudi time | page X of Y) on every sheet.
+ */
+export function applyWorkbookBranding(
+  wb: ExcelJSNS.Workbook,
+  branding: ExportBranding,
+  title: string,
+): void {
+  wb.creator = "Kwalis Hub";
+  wb.lastModifiedBy = branding.userName || "Kwalis Hub";
+  wb.company = branding.companyName;
+  const project = projectLabel(branding);
+  const footer = footerLine(branding);
+  const page = i18n.t("exports.page_x_of_y", {
+    page: "&P",
+    total: "&N",
+    interpolation: { escapeValue: false },
+  });
+  wb.eachSheet((ws) => {
+    ws.headerFooter = {
+      ...ws.headerFooter,
+      oddHeader: `&L${excelHeaderText([branding.companyName, project].filter(Boolean).join(" — "))}&R${excelHeaderText(title)}`,
+      oddFooter: `&L${excelHeaderText(footer)}&R${excelHeaderText(page)}`,
+    };
+  });
+}
+
+/** Brand a hand-built workbook and download it under the standard file name. */
+export async function saveBrandedWorkbook(
+  wb: ExcelJSNS.Workbook,
+  report: string,
+  title: string = report,
+): Promise<string> {
+  const { getExportBranding } = await import("./branding");
+  const b = await getExportBranding();
+  applyWorkbookBranding(wb, b, title);
+  const buffer = await wb.xlsx.writeBuffer();
+  const filename = exportFileName({ projectCode: b.projectCode, report, ext: "xlsx" });
+  downloadBlob(
+    filename,
+    new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }),
+  );
+  return filename;
+}

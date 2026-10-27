@@ -2964,6 +2964,13 @@
     "report_general_ledger": "General Ledger",
     "total_actual": "Total Actual",
     "total_paid": "Total Paid",
-    "total_commitment": "Total Commitment"
+    "total_commitment": "Total Commitment",
+    "nothing_to_export": "Nothing to export on this tab yet.",
+    "pdf_export_failed": "PDF export failed",
+    "export_excel": "Export Excel",
+    "export_pdf": "Export PDF",
+    "compiling_pdf": "Preparing the PDF…",
+    "compiling_excel": "Preparing the Excel file…",
+    "currency": "Currency"
   }
 }

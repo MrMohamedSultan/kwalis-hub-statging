@@ -90,13 +90,19 @@ export function firstStrongIsRtl(text: string): boolean {
  * string that contains Arabic is passed as LOGICAL input with its paragraph
  * direction taken from the first strong character, and brackets mirrored.
  */
-export function enableArabicBidi(doc: JsPdfDoc): void {
+const ISOLATES = /[\u2066-\u2069]/g;
+
+export function enableArabicBidi(doc: JsPdfDoc, arabicFont = true): void {
   const original = doc.text.bind(doc) as (...args: unknown[]) => JsPdfDoc;
   (doc as unknown as { text: (...args: unknown[]) => JsPdfDoc }).text = (...args: unknown[]) => {
-    const [text, x, y, opts, ...rest] = args;
+    const [rawText, x, y, opts, ...rest] = args;
+    // Bidi isolate marks (from i18n interpolation) have no glyph — drop them.
+    const strip = (v: unknown): unknown =>
+      typeof v === "string" ? v.replace(ISOLATES, "") : Array.isArray(v) ? v.map(strip) : v;
+    const text = strip(rawText);
     let options = opts as Record<string, unknown> | undefined;
     const flat = Array.isArray(text) ? text.flat().join(" ") : String(text ?? "");
-    if (ARABIC.test(flat)) {
+    if (arabicFont && ARABIC.test(flat)) {
       options = {
         isInputVisual: false,
         isOutputVisual: true,
@@ -207,7 +213,7 @@ export async function createBrandedPdf(opts: {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ orientation: opts.orientation ?? "landscape", unit: "pt", format: "a4" });
   const font = await registerPdfFonts(doc);
-  if (font === PDF_FONT) enableArabicBidi(doc);
+  enableArabicBidi(doc, font === PDF_FONT);
   const branding = opts.branding ?? (await (await import("./branding")).getExportBranding());
   const rtl = opts.rtl ?? isRtlUi();
   const pageWidth = doc.internal.pageSize.getWidth();

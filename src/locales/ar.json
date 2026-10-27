@@ -2964,6 +2964,13 @@
     "report_general_ledger": "دفتر الأستاذ العام",
     "total_actual": "إجمالي الفعلي",
     "total_paid": "إجمالي المدفوع",
-    "total_commitment": "إجمالي الالتزامات"
+    "total_commitment": "إجمالي الالتزامات",
+    "nothing_to_export": "لا يوجد ما يُصدَّر في هذا التبويب بعد.",
+    "pdf_export_failed": "تعذّر تصدير ملف PDF",
+    "export_excel": "تصدير Excel",
+    "export_pdf": "تصدير PDF",
+    "compiling_pdf": "جارٍ تجهيز ملف PDF…",
+    "compiling_excel": "جارٍ تجهيز ملف Excel…",
+    "currency": "العملة"
   }
 }
