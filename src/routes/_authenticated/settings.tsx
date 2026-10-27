@@ -25,6 +25,7 @@ import { useAdminScope } from "@/lib/admin-scope";
 import { InvitationsPage } from "@/routes/_authenticated/invitations";
 import { Globe2 } from "lucide-react";
 import { OrganizationCurrencyPanel, ProjectCurrencyPanel } from "@/components/CurrencyFxSettings";
+import { ExportBrandingPanel } from "@/components/settings/ExportBrandingPanel";
 import { Button } from "@/components/ui/button";
 import { z } from "zod";
 
@@ -178,6 +179,13 @@ function SettingsPage() {
                 <ScopeBanner />
                 <Panel className="p-5">
                   <OrganizationCurrencyPanel
+                    organizationId={
+                      selectedOrgId ?? roles.adminOrgIds[0] ?? roles.memberOrgIds[0] ?? null
+                    }
+                  />
+                </Panel>
+                <Panel className="p-5">
+                  <ExportBrandingPanel
                     organizationId={
                       selectedOrgId ?? roles.adminOrgIds[0] ?? roles.memberOrgIds[0] ?? null
                     }

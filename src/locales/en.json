@@ -2934,6 +2934,24 @@
     "footer_line": "Exported from {{product}} · {{user}} · {{datetime}} (Saudi time)",
     "page_x_of_y": "Page {{page}} of {{total}}",
     "project": "Project",
-    "no_rows": "No rows match the current filters."
+    "no_rows": "No rows match the current filters.",
+    "settings_no_company": "Select a company to configure its exports and date format.",
+    "settings_date_title": "Date format",
+    "settings_date_help": "One format for every screen, date field, filter and export in this company. The year is always shown; times are in Saudi time.",
+    "settings_date_label": "Format",
+    "settings_save_format": "Save date format",
+    "settings_format_saved": "Date format saved",
+    "settings_save_failed": "Could not save the setting",
+    "settings_logo_title": "Company logo on exports",
+    "settings_logo_help": "Shown at the top of every Excel and PDF export, next to the company and project name. PNG or JPG, resized automatically.",
+    "settings_no_logo": "No logo yet",
+    "settings_upload_logo": "Upload logo",
+    "settings_replace_logo": "Replace logo",
+    "settings_remove_logo": "Remove",
+    "settings_logo_saved": "Company logo saved",
+    "settings_logo_removed": "Company logo removed",
+    "settings_logo_too_large": "This image is too large — please use a smaller logo.",
+    "settings_logo_unsupported": "Please choose a PNG, JPG, WEBP or SVG image.",
+    "pick_date": "Pick a date"
   }
 }
