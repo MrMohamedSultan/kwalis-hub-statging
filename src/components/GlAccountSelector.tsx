@@ -10,7 +10,12 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { useGlAccounts, GL_CATEGORIES, type GlAccount } from "@/lib/gl-accounts";
+import {
+  useGlAccounts,
+  GL_CATEGORIES,
+  type GlAccount,
+  type GlAccountType,
+} from "@/lib/gl-accounts";
 
 type Props = {
   value: string | null;
@@ -20,6 +25,8 @@ type Props = {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /** Account types offered. Default: expense accounts only (cost documents). */
+  accountTypes?: GlAccountType[];
 };
 
 /**
@@ -34,11 +41,17 @@ export function GlAccountSelector({
   placeholder = "Search GL code or name…",
   disabled = false,
   className,
+  accountTypes = ["expense"],
 }: Props) {
   const [open, setOpen] = useState(false);
   const { rows, loading } = useGlAccounts();
 
-  const active = useMemo(() => rows.filter((r) => r.isActive), [rows]);
+  const typesKey = accountTypes.join(",");
+  const active = useMemo(
+    () => rows.filter((r) => r.isActive && accountTypes.includes(r.accountType)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, typesKey],
+  );
 
   const grouped = useMemo(() => {
     const map = new Map<string, GlAccount[]>();

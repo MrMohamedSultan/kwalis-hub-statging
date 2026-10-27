@@ -6,6 +6,8 @@ import { useStore } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
 import { Car, Plus, Save, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { SearchableSelect } from "@/components/SearchableSelect";
+import { rentalTotal } from "@/lib/ap-calc";
 
 import { useTranslation } from "react-i18next";
 export const Route = createFileRoute("/_authenticated/car-rentals")({
@@ -35,6 +37,9 @@ type Row = {
   invoice_id: string | null;
   reconciled_at: string | null;
   notes: string;
+  /** B20: the budget line the rental is charged to (commitment until invoiced). */
+  linked_budget_line_id: string | null;
+  budget_code: string | null;
   dirty?: boolean;
   isNew?: boolean;
 };
@@ -55,20 +60,14 @@ const emptyRow = (): Row => ({
   invoice_id: null,
   reconciled_at: null,
   notes: "",
+  linked_budget_line_id: null,
+  budget_code: null,
   dirty: true,
   isNew: true,
 });
 
-/** Rental commitment across the booked period, per the selected rate type. */
-function commitmentFor(row: Row): number {
-  const start = row.rental_start_date ? new Date(row.rental_start_date) : null;
-  const end = row.rental_end_date ? new Date(row.rental_end_date) : null;
-  if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start)
-    return 0;
-  const days = Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1;
-  if (row.rate_type === "monthly") return +((days / 30) * (row.monthly_rate || 0)).toFixed(2);
-  return +(days * (row.daily_rate || 0)).toFixed(2);
-}
+/** Rental commitment across the booked period (same formula as car_rentals.total_amount). */
+const commitmentFor = (row: Row): number => rentalTotal(row);
 
 function CarRentalsPage() {
   const { t } = useTranslation();
@@ -77,6 +76,17 @@ function CarRentalsPage() {
   const vendors = useStore((s) => s.vendors);
   const people = useStore((s) => s.people);
   const invoices = useStore((s) => s.invoices);
+  const budget = useStore((s) => s.budget);
+  const orgId = useStore(
+    (s) => s.projects.find((p) => p.id === s.activeProjectId)?.organizationId ?? null,
+  );
+  const budgetOptions = useMemo(
+    () =>
+      budget
+        .filter((l) => !l.excluded)
+        .map((l) => ({ value: l.id, code: l.mainCode, label: l.description })),
+    [budget],
+  );
 
   // Only people flagged as production drivers on their contract may be assigned to a vehicle.
   const activeDrivers = useMemo(
@@ -131,6 +141,8 @@ function CarRentalsPage() {
           invoice_id: r.invoice_id ?? null,
           reconciled_at: r.reconciled_at ?? null,
           notes: r.notes ?? "",
+          linked_budget_line_id: r.linked_budget_line_id ?? null,
+          budget_code: r.budget_code ?? null,
         })),
       );
       setLoading(false);
@@ -170,9 +182,17 @@ function CarRentalsPage() {
       toast.error(`License plate "${plate}" is already registered on this project`);
       return;
     }
+    if (!row.linked_budget_line_id && !row.budget_code) {
+      toast.error(t("ap.budget_line_required"));
+      return;
+    }
     setSavingIdx(idx);
+    const line = budget.find((l) => l.id === row.linked_budget_line_id);
     const payload = {
       project_id: activeProjectId,
+      organization_id: orgId,
+      linked_budget_line_id: row.linked_budget_line_id,
+      budget_code: line?.mainCode ?? row.budget_code,
       make_model: row.make_model.trim(),
       license_plate: plate,
       vendor_id: row.vendor_id,
@@ -190,9 +210,16 @@ function CarRentalsPage() {
     };
     let error;
     if (row.id) {
-      ({ error } = await supabase.from("car_rentals").update(payload).eq("id", row.id));
+      ({ error } = await supabase
+        .from("car_rentals")
+        .update(payload as any)
+        .eq("id", row.id));
     } else {
-      const res = await supabase.from("car_rentals").insert(payload).select("id").single();
+      const res = await supabase
+        .from("car_rentals")
+        .insert(payload as any)
+        .select("id")
+        .single();
       error = res.error;
       if (!error && res.data) {
         setRows((prev) =>
@@ -277,6 +304,7 @@ function CarRentalsPage() {
                     "License Plate",
                     "Vendor",
                     "Driver",
+                    t("ap.budget_line"),
                     "Rate Type",
                     "Rate",
                     "Start",
@@ -353,6 +381,22 @@ function CarRentalsPage() {
                           </option>
                         ))}
                       </select>
+                    </td>
+                    <td className="px-3 py-2 min-w-[200px]">
+                      <SearchableSelect
+                        value={row.linked_budget_line_id ?? ""}
+                        onChange={(v) => {
+                          const l = budget.find((x) => x.id === v);
+                          update(idx, {
+                            linked_budget_line_id: v || null,
+                            budget_code: l?.mainCode ?? null,
+                          });
+                        }}
+                        options={budgetOptions}
+                        placeholder={t("purchase_orders.select_budget_line")}
+                        searchPlaceholder={t("ap.search_budget_line")}
+                        ariaLabel={t("ap.budget_line")}
+                      />
                     </td>
                     <td className="px-3 py-2">
                       <div

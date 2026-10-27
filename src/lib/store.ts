@@ -25,6 +25,8 @@ import {
 } from "./money-display";
 
 import i18n from "@/lib/i18n";
+import { normalizeVatTreatment, type VatTreatment } from "./ap-calc";
+import { computeBudgetPosition, type LogisticsCommitment } from "./budget-position";
 /**
  * Historical union kept for back-compat with existing rows. Widened to `string`
  * so newly-added unit labels (MONTHS, WEEKS, ALLOW, ACTORS, EPISODES, TRIPS,
@@ -130,7 +132,44 @@ export type Invoice = {
   serviceInsideKsa?: boolean;
   /** True once the user has manually overridden the auto-calculated QFE value. */
   rebateManualOverride?: boolean;
+  /** VAT charged on the invoice (as on the vendor's document; may differ by rounding). */
+  vatAmount?: number;
+  /** standard | zero_rated | exempt | reverse_charge (db/pending/174). */
+  vatTreatment?: VatTreatment;
+  /** Standard rate (percent) applied when the invoice was saved. */
+  vatRate?: number | null;
+  /** FK → purchase_orders.id — the PO this invoice is raised against (converts its commitment). */
+  purchaseOrderId?: string | null;
+  /** Vendor payment terms copied at entry (e.g. "Net 30"). */
+  paymentTerms?: string | null;
+  /** Invoice date + payment terms. */
+  dueDate?: string | null;
+  /** bank_transfer | petty_cash | corporate_card | cash | cheque. */
+  paymentMethod?: InvoicePaymentMethod | null;
+  /** Invoice currency; `price` is always the record-currency (SAR) amount. */
+  currency?: string | null;
+  fxRate?: number | null;
+  /** Excl.-VAT amount in the invoice currency. */
+  amountOriginal?: number | null;
+  servicePeriodFrom?: string | null;
+  servicePeriodTo?: string | null;
+  /** Date the service / goods were received (Film Commission evidence). */
+  serviceReceivedDate?: string | null;
+  isRelatedParty?: boolean;
+  relatedPartyNote?: string | null;
 };
+
+export const INVOICE_PAYMENT_METHODS = [
+  "bank_transfer",
+  "petty_cash",
+  "corporate_card",
+  "cash",
+  "cheque",
+] as const;
+export type InvoicePaymentMethod = (typeof INVOICE_PAYMENT_METHODS)[number];
+/** Methods where money leaves a person's float/card — those need a Purchaser (B14). */
+export const methodNeedsPurchaser = (m: InvoicePaymentMethod | null | undefined) =>
+  m === "petty_cash" || m === "corporate_card" || m === "cash";
 
 export type CashAdvanceStatus = "Active" | "Reconciled";
 export type CashAdvance = {
@@ -153,16 +192,34 @@ export type CashAdvanceReceipt = {
   budgetCode?: string;
   /** Optional Chart of Accounts (GL) reference — used for reporting only. */
   glAccountId?: string | null;
+  /** pending | approved | rejected — only approved receipts are Actual. */
+  status?: string;
 };
 
-export type PurchaseOrderStatus = "Open" | "Committed" | "Received" | "Cancelled";
+export type PurchaseOrderStatus =
+  | "Draft"
+  | "Open"
+  | "Approved"
+  | "Issued"
+  | "Committed"
+  | "Received"
+  | "Closed"
+  | "Cancelled"
+  | (string & {});
 export type PurchaseOrder = {
   id: string;
   poNumber: string;
   vendorName: string;
+  /** FK → vendors.id (B11). */
+  vendorId?: string | null;
   description: string;
   budgetCode: string;
+  linkedBudgetLineId?: string | null;
+  /** Record-currency (SAR) amount. */
   amount: number;
+  currency?: string | null;
+  fxRate?: number | null;
+  amountOriginal?: number | null;
   status: PurchaseOrderStatus;
   date: string;
   notes?: string;
@@ -643,6 +700,21 @@ const fromInvoiceRow = (r: any): Invoice => ({
   beneficiaryId: r.beneficiary_id ?? null,
   serviceInsideKsa: r.service_inside_ksa == null ? true : !!r.service_inside_ksa,
   rebateManualOverride: !!r.rebate_manual_override,
+  vatAmount: r.vat_amount != null ? Number(r.vat_amount) : 0,
+  vatTreatment: normalizeVatTreatment(r.vat_treatment, !!r.vatable),
+  vatRate: r.vat_rate != null ? Number(r.vat_rate) : null,
+  purchaseOrderId: r.purchase_order_id ?? null,
+  paymentTerms: r.payment_terms ?? null,
+  dueDate: r.due_date ?? null,
+  paymentMethod: r.payment_method ?? null,
+  currency: r.currency ?? null,
+  fxRate: r.fx_rate != null ? Number(r.fx_rate) : null,
+  amountOriginal: r.amount_original != null ? Number(r.amount_original) : null,
+  servicePeriodFrom: r.service_period_from ?? null,
+  servicePeriodTo: r.service_period_to ?? null,
+  serviceReceivedDate: r.service_received_date ?? null,
+  isRelatedParty: !!r.is_related_party,
+  relatedPartyNote: r.related_party_note ?? null,
 });
 const toInvoiceRow = (i: Invoice) => ({
   id: i.id,
@@ -670,6 +742,21 @@ const toInvoiceRow = (i: Invoice) => ({
   beneficiary_id: i.beneficiaryId ?? null,
   service_inside_ksa: i.serviceInsideKsa == null ? true : !!i.serviceInsideKsa,
   rebate_manual_override: !!i.rebateManualOverride,
+  vat_amount: i.vatAmount ?? 0,
+  vat_treatment: i.vatTreatment ?? (i.vatable ? "standard" : "exempt"),
+  vat_rate: i.vatRate ?? null,
+  purchase_order_id: i.purchaseOrderId ?? null,
+  payment_terms: i.paymentTerms || null,
+  due_date: i.dueDate || null,
+  payment_method: i.paymentMethod ?? null,
+  currency: i.currency || null,
+  fx_rate: i.fxRate ?? null,
+  amount_original: i.amountOriginal ?? null,
+  service_period_from: i.servicePeriodFrom || null,
+  service_period_to: i.servicePeriodTo || null,
+  service_received_date: i.serviceReceivedDate || null,
+  is_related_party: !!i.isRelatedParty,
+  related_party_note: i.relatedPartyNote?.trim() ? i.relatedPartyNote.trim().slice(0, 1000) : null,
   project_id: i.projectId ?? activePid(),
   organization_id: i.organizationId ?? activeOrgId(),
 });
@@ -686,9 +773,14 @@ const fromPurchaseOrderRow = (r: any): PurchaseOrder => ({
   id: r.id,
   poNumber: r.po_number ?? "",
   vendorName: r.vendor_name ?? "",
+  vendorId: r.vendor_id ?? null,
   description: r.description ?? "",
   budgetCode: r.budget_code ?? "",
+  linkedBudgetLineId: r.linked_budget_line_id ?? null,
   amount: Number(r.amount ?? 0),
+  currency: r.currency ?? null,
+  fxRate: r.fx_rate != null ? Number(r.fx_rate) : null,
+  amountOriginal: r.amount_original != null ? Number(r.amount_original) : null,
   status: (r.status ?? "Open") as PurchaseOrderStatus,
   date: r.date ?? "",
   notes: r.notes ?? "",
@@ -837,6 +929,8 @@ const fromReceiptRow = (r: any): CashAdvanceReceipt => ({
   amount: Number(r.amount),
   date: r.date ?? "",
   glAccountId: r.gl_account_id ?? null,
+  status: r.status ?? undefined,
+  budgetCode: r.budget_code ?? undefined,
 });
 const toReceiptRow = (r: CashAdvanceReceipt) => ({
   id: r.id,
@@ -1602,7 +1696,7 @@ export const useStore = create<State>()(
             { ...i, projectId: payload.project_id, organizationId: payload.organization_id },
           ],
         }));
-        const { error: insertErr } = await supabase.from("invoices").insert(payload);
+        const { error: insertErr } = await supabase.from("invoices").insert(payload as any);
         if (insertErr) {
           // Roll back optimistic update so the UI reflects DB reality.
           set((s) => ({ invoices: s.invoices.filter((x) => x.id !== i.id) }));
@@ -1625,7 +1719,7 @@ export const useStore = create<State>()(
               budgetCode: i.budgetCode,
               description: i.description || `Invoice ${i.invoiceNo}`,
               amount: bookedAmount,
-              vatAmount: i.vatable ? +(bookedAmount * 0.15).toFixed(2) : 0,
+              vatAmount: +(Number(i.vatAmount) || 0).toFixed(2),
               transactionType: "invoice",
               referenceNo: i.invoiceNo,
               department: i.department,
@@ -1642,7 +1736,10 @@ export const useStore = create<State>()(
         const next: Invoice = { ...prev, ...patch };
         set((s) => ({ invoices: s.invoices.map((x) => (x.id === id ? next : x)) }));
         const row = toInvoiceRow(next);
-        const { error } = await supabase.from("invoices").update(row).eq("id", id);
+        const { error } = await supabase
+          .from("invoices")
+          .update(row as any)
+          .eq("id", id);
         if (error) {
           set((s) => ({ invoices: s.invoices.map((x) => (x.id === id ? prev : x)) }));
           throw error;
@@ -2429,49 +2526,44 @@ export const sumPaymentsFor = (payments: Payment[], sourceType: PaymentSource, s
     0,
   );
 
-export const useTotals = () => {
-  const { budget, payroll, invoices, purchaseOrders, payments, cashAdvances } = useStore();
+/**
+ * Project totals for the AP screens — the glossary definitions via
+ * computeBudgetPosition (src/lib/budget-position.ts). `committed` is the
+ * Commitment (not actual + commitment); `remaining` = Budget − Actual − Commitment.
+ * Car rentals / accommodation are not in the store: pass them through
+ * `logistics` (see useLogisticsCommitments in src/lib/logistics-commitments.ts).
+ */
+export const useTotals = (logistics?: LogisticsCommitment[]) => {
+  const { budget, payroll, invoices, purchaseOrders, payments, cashAdvances, receipts } =
+    useStore();
   const totalBudget = budget.reduce((a, l) => a + lineTotal(l), 0);
-  const paidPayroll = payroll.reduce((a, r) => a + paidPayrollAmount(r), 0);
-
-  // Manual payments recorded via the "Record Payment" flow (source of truth)
-  const invoicePaymentsPaid = payments
-    .filter((p) => p.sourceType === "invoice")
-    .reduce((a, p) => a + Number(p.amount || 0), 0);
-  const poPaymentsPaid = payments
-    .filter((p) => p.sourceType === "purchase_order")
-    .reduce((a, p) => a + Number(p.amount || 0), 0);
-  const pettyPaymentsPaid = payments
-    .filter((p) => p.sourceType === "petty_cash")
-    .reduce((a, p) => a + Number(p.amount || 0), 0);
-
-  // Invoice payment schedule (paymentTerm %) dictates WHEN money is due,
-  // NOT whether it has been physically paid. "Paid" comes exclusively from
-  // recorded payments in the `payments` table.
-  const invoicesPaid = invoicePaymentsPaid;
+  const pos = computeBudgetPosition({
+    totalBudget,
+    payroll,
+    invoices,
+    purchaseOrders,
+    payments,
+    receipts,
+    logistics,
+    legacyPaidFor: paidPayrollAmount,
+  });
   const invoicesOpen = invoices.reduce((a, i) => {
-    const paid = Math.min(i.price, sumPaymentsFor(payments, "invoice", i.id));
-    return a + Math.max(0, i.price - paid);
+    const due = (Number(i.price) || 0) + (Number(i.vatAmount) || 0) - (Number(i.whtAmount) || 0);
+    return a + Math.max(0, due - sumPaymentsFor(payments, "invoice", i.id));
   }, 0);
-  const poOpen = purchaseOrders
-    .filter((p) => p.status !== "Cancelled" && p.status !== "Received")
-    .reduce(
-      (a, p) =>
-        a + Math.max(0, Number(p.amount || 0) - sumPaymentsFor(payments, "purchase_order", p.id)),
-      0,
-    );
-  const actualSpend = paidPayroll + invoicesPaid + poPaymentsPaid + pettyPaymentsPaid;
-  const committed = actualSpend + invoicesOpen + poOpen;
-  const variance = totalBudget - actualSpend;
-  const remaining = totalBudget - committed;
   return {
     totalBudget,
-    actualSpend,
-    variance,
-    committed,
-    remaining,
-    poOpen,
+    actualSpend: pos.actual,
+    paid: pos.paid,
+    payable: pos.payable,
+    variance: totalBudget - pos.actual,
+    committed: pos.commitment,
+    remaining: pos.remaining,
+    poOpen: pos.parts.poCommitment,
+    contractsCommitment: pos.parts.contractsCommitment,
+    logisticsCommitment: pos.parts.logisticsCommitment,
     invoicesOpen,
+    position: pos,
     cashAdvances,
   };
 };

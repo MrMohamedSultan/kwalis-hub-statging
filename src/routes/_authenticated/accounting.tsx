@@ -11,7 +11,11 @@ import {
   lineTotal,
   useTotals,
   sumPaymentsFor,
+  paidPayrollAmount,
   VENDOR_PAYMENT_TERMS,
+  INVOICE_PAYMENT_METHODS,
+  methodNeedsPurchaser,
+  type InvoicePaymentMethod,
 } from "@/lib/store";
 import type {
   Vendor,
@@ -95,6 +99,25 @@ import { TableSkeleton } from "@/components/ui/table-skeleton";
 import { TableEmptyRow } from "@/components/ui/empty-state";
 import { humanizeDbError } from "@/lib/db-errors";
 import { CrewPayrollTab } from "@/components/CrewPayrollTab";
+import {
+  VAT_TREATMENTS,
+  type VatTreatment,
+  deriveGlAccountId,
+  dueDateFromTerms,
+  expectedVat as calcExpectedVat,
+  invoiceAmountDue,
+  matchInvoiceToPo,
+  toBaseAmount,
+  vatWithinTolerance,
+} from "@/lib/ap-calc";
+import { useLogisticsCommitments, useVatStandardRate, fetchMappedGlAccount } from "@/lib/ap-data";
+import {
+  computeBudgetPosition,
+  invoicedOnPo,
+  poIsCommitment,
+  poOpenCommitment,
+} from "@/lib/budget-position";
+import { CurrencyFxFields, useProjectFx } from "@/components/ap/CurrencyFxFields";
 
 function attachmentRecordsForProject(
   people: Array<{
@@ -185,7 +208,24 @@ export const Route = createFileRoute("/_authenticated/accounting")({
 });
 
 export function FinancialSummary() {
-  const { totalBudget, committed, actualSpend, remaining, poOpen, invoicesOpen } = useTotals();
+  const { t } = useTranslation();
+  const activeProject = useStore((s) => s.projects.find((p) => p.id === s.activeProjectId) ?? null);
+  // B17/B20: Remaining Budget = Budget − Actual − Commitment, with contracts,
+  // POs (net of their invoices) and car rentals / accommodation in Commitment.
+  const logistics = useLogisticsCommitments(
+    activeProject?.id ?? null,
+    Number(activeProject?.fxRate ?? 3.75) || 3.75,
+  );
+  const {
+    totalBudget,
+    committed,
+    actualSpend,
+    remaining,
+    poOpen,
+    contractsCommitment,
+    logisticsCommitment,
+    paid,
+  } = useTotals(logistics);
   const invoices = useStore((s) => s.invoices);
   const payroll = useStore((s) => s.payroll);
   const totalWht =
@@ -199,27 +239,33 @@ export function FinancialSummary() {
     icon: React.ReactNode;
   }[] = [
     {
-      label: "Total Budget",
+      label: t("ap.card_budget"),
       value: formatUSD(totalBudget),
       tone: "from-info/20 to-info/5 border-info/30",
       icon: <Wallet className="size-4 text-info" />,
     },
     {
-      label: "Total Committed",
+      label: t("ap.card_commitment"),
       value: formatUSD(committed),
-      sub: `POs ${formatUSD(poOpen)} · Open Inv ${formatUSD(invoicesOpen)}`,
+      sub: t("ap.card_commitment_sub", {
+        contracts: formatUSD(contractsCommitment),
+        pos: formatUSD(poOpen),
+        logistics: formatUSD(logisticsCommitment),
+      }),
       tone: "from-warning/20 to-warning/5 border-warning/30",
       icon: <ClipboardList className="size-4 text-warning" />,
     },
     {
-      label: "Actual Paid",
+      label: t("ap.card_actual"),
       value: formatUSD(actualSpend),
+      sub: t("ap.card_actual_sub", { paid: formatUSD(paid) }),
       tone: "from-success/20 to-success/5 border-success/30",
       icon: <Check className="size-4 text-success" />,
     },
     {
-      label: "Remaining Budget",
+      label: t("ap.card_remaining"),
       value: formatUSD(remaining),
+      sub: t("ap.card_remaining_sub"),
       tone:
         remaining < 0
           ? "from-destructive/20 to-destructive/5 border-destructive/40"
@@ -1637,6 +1683,42 @@ function VendorLedgerModal({ vendor, onClose }: { vendor: Vendor; onClose: () =>
 
 /* ---------------- Invoice Tab ---------------- */
 
+/** Blank invoice for the "New Invoice" form. */
+function newInvoiceDraft(vendorName: string, today: string, baseCurrency = "SAR"): Invoice {
+  return {
+    id: "",
+    description: "",
+    department: "",
+    budgetCode: "",
+    price: 0,
+    vatable: true,
+    date: today,
+    invoiceNo: "",
+    vendorName,
+    purchaserName: "",
+    purchaserId: null,
+    paymentTerm: 100,
+    glAccountId: null,
+    beneficiaryId: null,
+    serviceInsideKsa: true,
+    rebateManualOverride: false,
+    rebateEligible: true,
+    vatTreatment: "standard",
+    vatAmount: 0,
+    paymentMethod: "bank_transfer",
+    currency: baseCurrency,
+    fxRate: 1,
+    purchaseOrderId: null,
+    paymentTerms: null,
+    dueDate: today,
+    servicePeriodFrom: null,
+    servicePeriodTo: null,
+    serviceReceivedDate: null,
+    isRelatedParty: false,
+    relatedPartyNote: null,
+  };
+}
+
 export function InvoiceTab({ focus }: { focus?: string } = {}) {
   const { t } = useTranslation();
 
@@ -1664,25 +1746,17 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
   const [open, setOpen] = useState(false);
   const [editFor, setEditFor] = useState<Invoice | null>(null);
   const [payFor, setPayFor] = useState<PaymentSourceInfo | null>(null);
-  const [f, setF] = useState<Invoice>({
-    id: "",
-    description: "",
-    department: "",
-    budgetCode: "",
-    price: 0,
-    vatable: true,
-    date: new Date().toISOString().slice(0, 10),
-    invoiceNo: "",
-    vendorName: vendors[0]?.name ?? "Cash",
-    purchaserName: "",
-    purchaserId: null,
-    paymentTerm: 100,
-    glAccountId: null,
-    beneficiaryId: null,
-    serviceInsideKsa: true,
-    rebateManualOverride: false,
-    rebateEligible: true,
-  });
+  const vatRate = useVatStandardRate();
+  const fx = useProjectFx(activeProjectId);
+  const [f, setF] = useState<Invoice>(() =>
+    newInvoiceDraft(vendors[0]?.name ?? "Cash", new Date().toISOString().slice(0, 10)),
+  );
+  // B15: the due date follows invoice date + vendor terms until edited by hand.
+  const [dueDirty, setDueDirty] = useState(false);
+  // B15: the single default installment follows the due date until edited.
+  const [scheduleDateTouched, setScheduleDateTouched] = useState(false);
+  // E09: GL account follows the budget code until picked by hand.
+  const [glManual, setGlManual] = useState(false);
   const [invoicePdf, setInvoicePdf] = useState<File | null>(null);
 
   // Highlight & auto-scroll to a deep-linked invoice (e.g. from Vendor Payables).
@@ -1721,12 +1795,38 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
   // that a fixed-threshold auto-sync would leave behind).
   const [vatDirty, setVatDirty] = useState(false);
   const [totalDirty, setTotalDirty] = useState(false);
-  const expectedVat = f.vatable ? +((Number(f.price) || 0) * 0.15).toFixed(2) : 0;
+  // E07: VAT treatment + rate from the platform setting; the VAT on the
+  // vendor's document is accepted within a rounding tolerance.
+  const vatTreatment: VatTreatment = f.vatTreatment ?? "standard";
+  const expectedVat = calcExpectedVat(Number(f.price) || 0, vatTreatment, vatRate);
   const expectedTotal = +((Number(f.price) || 0) + expectedVat).toFixed(2);
   const enteredSum = +((Number(f.price) || 0) + (Number(vatAmountInput) || 0)).toFixed(2);
   const vatMathValid =
     Math.abs(enteredSum - (Number(totalInput) || 0)) < 0.01 && (Number(totalInput) || 0) > 0;
-  const vatExpectedValid = Math.abs((Number(vatAmountInput) || 0) - expectedVat) < 0.01;
+  const vatExpectedValid = vatWithinTolerance(Number(vatAmountInput) || 0, expectedVat);
+  // B09/E08: amounts are typed in the invoice currency, stored in the base currency.
+  const isBaseCcy = !f.currency || f.currency === fx.baseCurrency;
+  const fxUsed = isBaseCcy ? 1 : Number(f.fxRate) || 0;
+  const priceBase = toBaseAmount(Number(f.price) || 0, fxUsed);
+  const selectedVendor = vendors.find((v) => v.name === f.vendorName);
+  // B05/X12: purchase orders that can take this invoice.
+  const poChoices = useMemo(
+    () =>
+      purchaseOrders.filter(
+        (p) =>
+          poIsCommitment(p.status) &&
+          (!selectedVendor ||
+            p.vendorId === selectedVendor.id ||
+            p.vendorName.trim().toLowerCase() === selectedVendor.name.trim().toLowerCase()),
+      ),
+    [purchaseOrders, selectedVendor],
+  );
+  const linkedPo = f.purchaseOrderId
+    ? (purchaseOrders.find((p) => p.id === f.purchaseOrderId) ?? null)
+    : null;
+  const poMatch = linkedPo
+    ? matchInvoiceToPo(Number(linkedPo.amount) || 0, invoicedOnPo(linkedPo.id, invoices), priceBase)
+    : null;
   const totalPct = useMemo(
     () => schedule.reduce((a, r) => a + (Number(r.pct) || 0), 0),
     [schedule],
@@ -1747,7 +1847,19 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
       }),
     [activeProjectId, attachmentUrl, invoices, people],
   );
-  const { dirty: invoiceDirty, reset: resetInvoiceDirty } = useDirtyTracker([f, schedule]);
+  // Only what the user typed counts as unsaved: values the form derives by
+  // itself (terms, due date, GL account, QFE flag, installment date) are left
+  // out, so a freshly reset form is never "dirty" (B23).
+  const { dirty: invoiceDirty, reset: resetInvoiceDirty } = useDirtyTracker([
+    {
+      ...f,
+      paymentTerms: undefined,
+      dueDate: dueDirty ? f.dueDate : undefined,
+      glAccountId: glManual ? f.glAccountId : undefined,
+      rebateEligible: f.rebateManualOverride ? f.rebateEligible : undefined,
+    },
+    scheduleDateTouched ? schedule : schedule.map((r) => ({ ...r, date: "" })),
+  ]);
 
   // Draft persistence — an accidental refresh or tab close never loses typed
   // invoice data or payment splits (files can't be serialized and are skipped).
@@ -1807,25 +1919,10 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
 
   const reset = () => {
     const today = new Date().toISOString().slice(0, 10);
-    setF({
-      id: "",
-      description: "",
-      department: "",
-      budgetCode: "",
-      price: 0,
-      vatable: true,
-      date: today,
-      invoiceNo: "",
-      vendorName: vendors[0]?.name ?? "Cash",
-      purchaserName: "",
-      purchaserId: null,
-      paymentTerm: 100,
-      glAccountId: null,
-      beneficiaryId: null,
-      serviceInsideKsa: true,
-      rebateManualOverride: false,
-      rebateEligible: true,
-    });
+    setF(newInvoiceDraft(vendors[0]?.name ?? "Cash", today, fx.baseCurrency));
+    setDueDirty(false);
+    setScheduleDateTouched(false);
+    setGlManual(false);
     setInvoicePdf(null);
     setReceiptPdf(null);
     setErr(null);
@@ -1844,12 +1941,48 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
     setInvoiceLineId(null);
   };
 
-  // Keep VAT + Total in sync with Excl. VAT * 15% until the user overrides them.
+  // Keep VAT + Total in sync with Excl. VAT × rate until the user overrides them.
   useEffect(() => {
     if (!vatDirty) setVatAmountInput(expectedVat);
     if (!totalDirty) setTotalInput(expectedTotal);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [f.price, f.vatable]);
+  }, [f.price, vatTreatment, vatRate]);
+
+  // B15: vendor payment terms → due date (invoice date + terms).
+  useEffect(() => {
+    const terms = selectedVendor?.paymentTerms || null;
+    setF((prev) => (prev.paymentTerms === terms ? prev : { ...prev, paymentTerms: terms }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f.vendorName, vendors]);
+  useEffect(() => {
+    if (dueDirty) return;
+    const due = dueDateFromTerms(f.date, f.paymentTerms);
+    setF((prev) => (prev.dueDate === due ? prev : { ...prev, dueDate: due }));
+  }, [f.date, f.paymentTerms, dueDirty]);
+  useEffect(() => {
+    if (scheduleDateTouched) return;
+    const target = f.dueDate || f.date;
+    if (!target) return;
+    setSchedule((s) => (s.length === 1 && s[0].date !== target ? [{ ...s[0], date: target }] : s));
+  }, [f.dueDate, f.date, scheduleDateTouched]);
+
+  // E09: GL account from the budget code (organization mapping, then code range).
+  useEffect(() => {
+    if (glManual) return;
+    const code = f.budgetCode;
+    if (!code) return;
+    let cancelled = false;
+    void fetchMappedGlAccount(activeProject?.organizationId, code).then((mapped) => {
+      if (cancelled) return;
+      const id = deriveGlAccountId(code, glAccounts, mapped);
+      setF((prev) =>
+        prev.budgetCode !== code || prev.glAccountId === id ? prev : { ...prev, glAccountId: id },
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [f.budgetCode, glAccounts, glManual, activeProject?.organizationId]);
 
   // Smart QFE auto-calculator. Runs on every relevant input change UNLESS the
   // user has manually overridden the field — in which case we respect their choice.
@@ -1936,10 +2069,9 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
       fail("Excl. VAT amount must be greater than 0.");
       return;
     }
-    if (!f.purchaserId) {
-      fail(
-        "Select a Purchaser (Paid By) — only crew members marked as an Authorized Purchaser appear here.",
-      );
+    // B14: a Purchaser is only needed when the money came from a person's float / card.
+    if (methodNeedsPurchaser(f.paymentMethod) && !f.purchaserId) {
+      fail(t("ap.purchaser_required_for_method"));
       return;
     }
     // Budget code is optional — accountants can map to master budget later.
@@ -1947,8 +2079,24 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
       fail("VAT check failed: (Excl. VAT + VAT Amount) must equal the Total Invoice Amount.");
       return;
     }
-    if (f.vatable && !vatExpectedValid) {
-      fail("VAT Amount must equal 15% of the Excl. VAT amount for KSA VAT-eligible invoices.");
+    if (vatTreatment === "standard" && !vatExpectedValid) {
+      fail(t("ap.vat_mismatch", { rate: vatRate, expected: expectedVat.toFixed(2) }));
+      return;
+    }
+    if (vatTreatment === "standard" && selectedVendor && !selectedVendor.vatNo?.trim()) {
+      fail(t("ap.vendor_vat_required", { vendor: selectedVendor.name }));
+      return;
+    }
+    if (!isBaseCcy && !(fxUsed > 0)) {
+      fail(t("ap.fx_rate_required"));
+      return;
+    }
+    if (f.servicePeriodFrom && f.servicePeriodTo && f.servicePeriodTo < f.servicePeriodFrom) {
+      fail(t("ap.service_period_order"));
+      return;
+    }
+    if (f.budgetCode && !f.glAccountId) {
+      fail(t("ap.gl_required"));
       return;
     }
     if (!scheduleValid) {
@@ -2007,12 +2155,29 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
 
       // paymentTerm drives the Actuals split inside addInvoice + Reports useSummary
       const whtPercent = f.isNonSaudiVendor ? 5 : 0;
-      const whtAmount = +(f.price * (whtPercent / 100)).toFixed(2);
-      const netPayable = +(f.price - whtAmount).toFixed(2);
-      const totalInclVat = +(Number(totalInput) || 0).toFixed(2);
-      const invoicePayload = {
+      const whtAmount = +(priceBase * (whtPercent / 100)).toFixed(2);
+      const netPayable = +(priceBase - whtAmount).toFixed(2);
+      const totalInclVat = toBaseAmount(Number(totalInput) || 0, fxUsed);
+      if (poMatch && poMatch.status !== "match") {
+        toast.warning(
+          t(poMatch.status === "over" ? "ap.po_over_warning" : "ap.po_under_warning", {
+            po: linkedPo?.poNumber ?? "",
+            diff: formatUSD(Math.abs(poMatch.difference)),
+          }),
+        );
+      }
+      const invoicePayload: Invoice = {
         ...f,
         id,
+        price: priceBase,
+        vatAmount: toBaseAmount(Number(vatAmountInput) || 0, fxUsed),
+        vatable: vatTreatment === "standard",
+        vatTreatment,
+        vatRate: vatTreatment === "standard" ? vatRate : null,
+        currency: f.currency || fx.baseCurrency,
+        fxRate: fxUsed,
+        amountOriginal: Number(f.price) || 0,
+        purchaserId: f.purchaserId || null,
         projectId: activeProjectId,
         organizationId: activeProject?.organizationId ?? null,
         paymentTerm: paidPct,
@@ -2174,6 +2339,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
               "Price",
               "VAT",
               "Date",
+              t("ap.due_date"),
               "Invoice #",
               "Vendor",
               "Purchaser",
@@ -2188,6 +2354,12 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
               // by the payment schedule %. The schedule dictates WHEN money is
               // due, not IF it has been physically paid.
               const paidTotal = sumPaymentsFor(payments, "invoice", i.id);
+              // B06/B16: what the vendor receives — incl. VAT, less WHT.
+              const amountDue = invoiceAmountDue(i);
+              const needsPurchaser = methodNeedsPurchaser(i.paymentMethod);
+              const po = i.purchaseOrderId
+                ? purchaseOrders.find((p) => p.id === i.purchaseOrderId)
+                : null;
               return (
                 <Fragment key={i.id}>
                   <tr
@@ -2202,23 +2374,37 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                       {bl ? ` · ${bl.description}` : ""}
                     </Cell>
                     <Cell className="font-semibold">{formatUSD(i.price)}</Cell>
-                    <Cell>{i.vatable ? "Yes" : "No"}</Cell>
+                    <Cell>
+                      {(Number(i.vatAmount) || 0) > 0
+                        ? formatUSD(Number(i.vatAmount))
+                        : t(`ap.vat.${i.vatTreatment ?? (i.vatable ? "standard" : "exempt")}`, {
+                            rate: vatRate,
+                          })}
+                    </Cell>
                     <Cell>{i.date}</Cell>
-                    <Cell className="font-mono">{i.invoiceNo}</Cell>
+                    <Cell className="whitespace-nowrap">{i.dueDate ?? "—"}</Cell>
+                    <Cell className="font-mono">
+                      {i.invoiceNo}
+                      {po && <div className="text-[10px] text-muted-foreground">{po.poNumber}</div>}
+                    </Cell>
                     <Cell>{i.vendorName}</Cell>
                     <Cell>
                       {i.purchaserId ? (
                         (people.find((pp) => pp.id === i.purchaserId)?.fullName ??
                         i.purchaserName ??
                         "—")
-                      ) : (
+                      ) : needsPurchaser ? (
                         <span className="text-warning text-xs font-semibold">
                           {i.purchaserName || "— (unassigned)"}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">
+                          {t(`ap.method.${i.paymentMethod ?? "bank_transfer"}`)}
                         </span>
                       )}
                     </Cell>
                     <Cell>
-                      <PaymentStatusPill paid={paidTotal} total={i.price} />
+                      <PaymentStatusPill paid={paidTotal} total={amountDue} />
                     </Cell>
                     <Cell>
                       <div className="flex items-center gap-1">
@@ -2253,7 +2439,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                         />
                         <button
                           onClick={() => {
-                            if (!i.purchaserId) {
+                            if (needsPurchaser && !i.purchaserId) {
                               toast.error(
                                 t("accounting.set_a_purchaser_paid_by_before_recording_payment"),
                               );
@@ -2265,15 +2451,15 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                               type: "invoice",
                               id: i.id,
                               label: `Invoice #${i.invoiceNo || i.id.slice(0, 6)} — ${i.vendorName}`,
-                              totalAmount: i.price,
+                              totalAmount: amountDue,
                             });
                           }}
-                          disabled={paidTotal >= i.price - 0.005 || !can("invoices.pay")}
+                          disabled={paidTotal >= amountDue - 0.005 || !can("invoices.pay")}
                           className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-success/20 text-success text-xs font-semibold hover:bg-success/30 border border-success/30 disabled:opacity-40 disabled:cursor-not-allowed"
                           title={
                             !can("invoices.pay")
                               ? "Permission required: invoices.pay"
-                              : !i.purchaserId
+                              : needsPurchaser && !i.purchaserId
                                 ? "Assign a Purchaser first"
                                 : "Record Payment"
                           }
@@ -2331,7 +2517,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                   <PaymentHistoryToggle
                     sourceType="invoice"
                     sourceId={i.id}
-                    colSpan={12}
+                    colSpan={13}
                     initialOpen={focusedId === i.id}
                   />
                 </Fragment>
@@ -2339,7 +2525,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
             })}
             {filteredInvoices.length === 0 && (
               <TableEmptyRow
-                colSpan={12}
+                colSpan={13}
                 variant={invoices.length === 0 ? "empty" : "filtered"}
                 title={invoices.length === 0 ? "No invoices yet" : "No matching invoices"}
                 description={
@@ -2402,20 +2588,36 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 className={inputCls}
               />
             </Field>
-            <Field label="Vatable Invoice">
+            <Field label={t("ap.vat_treatment")}>
               <select
-                value={f.vatable ? "Yes" : "No"}
+                value={vatTreatment}
                 onChange={(e) => {
-                  const vatable = e.target.value === "Yes";
-                  // A vatable (KSA local supply) invoice can never be an
+                  const next = e.target.value as VatTreatment;
+                  const standard = next === "standard";
+                  // A standard-rated (KSA local supply) invoice can never be an
                   // international non-Saudi vendor subject to 5% WHT.
-                  setF({ ...f, vatable, isNonSaudiVendor: vatable ? false : f.isNonSaudiVendor });
+                  setF({
+                    ...f,
+                    vatTreatment: next,
+                    vatable: standard,
+                    isNonSaudiVendor: standard ? false : f.isNonSaudiVendor,
+                  });
+                  setVatDirty(false);
+                  setTotalDirty(false);
                 }}
                 className={inputCls}
               >
-                <option>Yes</option>
-                <option>No</option>
+                {VAT_TREATMENTS.map((v) => (
+                  <option key={v} value={v}>
+                    {t(`ap.vat.${v}`, { rate: vatRate })}
+                  </option>
+                ))}
               </select>
+              {vatTreatment === "standard" && selectedVendor && !selectedVendor.vatNo?.trim() && (
+                <p className="mt-1 text-[11px] text-warning">
+                  {t("ap.vendor_vat_required", { vendor: selectedVendor.name })}
+                </p>
+              )}
             </Field>
             <Field label="International / Non-Saudi Vendor (5% WHT)">
               <select
@@ -2491,9 +2693,24 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
               </div>
             </Field>
 
-            <Field label="Purchaser / Paid By (from Crew)">
+            <Field label={t("ap.payment_method")}>
               <select
-                required
+                value={f.paymentMethod ?? "bank_transfer"}
+                onChange={(e) =>
+                  setF({ ...f, paymentMethod: e.target.value as InvoicePaymentMethod })
+                }
+                className={inputCls}
+              >
+                {INVOICE_PAYMENT_METHODS.map((m) => (
+                  <option key={m} value={m}>
+                    {t(`ap.method.${m}`)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={t("ap.purchaser_label")} required={methodNeedsPurchaser(f.paymentMethod)}>
+              <select
+                required={methodNeedsPurchaser(f.paymentMethod)}
                 value={f.purchaserId ?? ""}
                 onChange={(e) => {
                   const id = e.target.value || null;
@@ -2502,7 +2719,11 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 }}
                 className={inputCls}
               >
-                <option value="">— Select Purchaser —</option>
+                <option value="">
+                  {methodNeedsPurchaser(f.paymentMethod)
+                    ? "— Select Purchaser —"
+                    : t("ap.purchaser_optional")}
+                </option>
                 {purchasers.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.fullName}
@@ -2510,19 +2731,35 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                   </option>
                 ))}
               </select>
-              {purchasers.length === 0 && (
+              {purchasers.length === 0 && methodNeedsPurchaser(f.paymentMethod) && (
                 <div className="text-[11px] text-warning mt-1">
                   No purchasers yet — tick "Authorized Purchaser" on a Crew/Cast profile first.
                 </div>
               )}
             </Field>
-            <Field label="GL Account (optional)">
+            <Field label={t("ap.gl_account")} required={!!f.budgetCode}>
               <GlAccountSelector
                 value={f.glAccountId ?? null}
-                onChange={(id) => setF({ ...f, glAccountId: id })}
+                onChange={(id) => {
+                  setGlManual(true);
+                  setF({ ...f, glAccountId: id });
+                }}
                 emptyLabel="— None —"
                 placeholder={t("accounting.search_gl_code_or_name")}
               />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {glManual ? (
+                  <button
+                    type="button"
+                    className="text-brand hover:underline"
+                    onClick={() => setGlManual(false)}
+                  >
+                    {t("ap.gl_reset_auto")}
+                  </button>
+                ) : (
+                  t("ap.gl_auto_hint")
+                )}
+              </p>
             </Field>
 
             <div className="col-span-2 grid grid-cols-2 gap-3">
@@ -2536,7 +2773,11 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 }}
               />
               <div className="col-span-2">
-                <BudgetReadout budgetCode={f.budgetCode} pendingAmount={Number(f.price) || 0} />
+                <BudgetReadout
+                  budgetCode={f.budgetCode}
+                  pendingAmount={priceBase}
+                  purchaseOrderId={f.purchaseOrderId}
+                />
               </div>
             </div>
 
@@ -2555,6 +2796,144 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 onChange={(e) => setF({ ...f, invoiceNo: e.target.value })}
                 className={inputCls}
               />
+            </Field>
+            {/* B05 / X12: raise the invoice against a purchase order */}
+            <Field label={t("ap.purchase_order")} className="col-span-2">
+              <select
+                value={f.purchaseOrderId ?? ""}
+                onChange={(e) => {
+                  const po = purchaseOrders.find((p) => p.id === e.target.value) ?? null;
+                  if (!po) return setF({ ...f, purchaseOrderId: null });
+                  const line = po.linkedBudgetLineId
+                    ? budget.find((b) => b.id === po.linkedBudgetLineId)
+                    : budget.find((b) => b.mainCode === po.budgetCode);
+                  if (!f.budgetCode && line) setInvoiceLineId(line.id);
+                  setF({
+                    ...f,
+                    purchaseOrderId: po.id,
+                    budgetCode: f.budgetCode || po.budgetCode || "",
+                    department: f.budgetCode ? f.department : (line?.headerCode ?? f.department),
+                    description: f.description || po.description,
+                  });
+                }}
+                className={inputCls}
+              >
+                <option value="">{t("ap.no_purchase_order")}</option>
+                {poChoices.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.poNumber} · {p.vendorName} ·{" "}
+                    {t("ap.po_open_amount", {
+                      amount: formatUSD(poOpenCommitment(p, invoices)),
+                    })}
+                  </option>
+                ))}
+              </select>
+              {linkedPo && poMatch && (
+                <div
+                  className={`mt-1 rounded-lg border px-2.5 py-1.5 text-[11px] ${
+                    poMatch.status === "match"
+                      ? "border-success/30 bg-success/10 text-success"
+                      : "border-warning/40 bg-warning/10 text-warning"
+                  }`}
+                >
+                  {poMatch.status === "match"
+                    ? t("ap.po_match_ok", { po: linkedPo.poNumber })
+                    : t(poMatch.status === "over" ? "ap.po_over_warning" : "ap.po_under_warning", {
+                        po: linkedPo.poNumber,
+                        diff: formatUSD(Math.abs(poMatch.difference)),
+                      })}
+                  {selectedVendor &&
+                    linkedPo.vendorName.trim().toLowerCase() !==
+                      selectedVendor.name.trim().toLowerCase() && (
+                      <div>{t("ap.po_vendor_differs", { vendor: linkedPo.vendorName })}</div>
+                    )}
+                </div>
+              )}
+            </Field>
+            <div className="col-span-2">
+              <CurrencyFxFields
+                fx={fx}
+                currency={f.currency || fx.baseCurrency}
+                fxRate={Number(f.fxRate) || 1}
+                inputCls={inputCls}
+                onChange={(v) => setF({ ...f, currency: v.currency, fxRate: v.fxRate })}
+              />
+              {!isBaseCcy && (
+                <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+                  {t("ap.amounts_in_currency_hint", { ccy: f.currency, base: fx.baseCurrency })}{" "}
+                  {t("ap.equals_base", {
+                    amount: priceBase.toLocaleString("en-US", { minimumFractionDigits: 2 }),
+                    base: fx.baseCurrency,
+                  })}
+                </p>
+              )}
+            </div>
+            <Field label={t("ap.payment_terms")}>
+              <select
+                value={f.paymentTerms ?? ""}
+                onChange={(e) => {
+                  setDueDirty(false);
+                  setF({ ...f, paymentTerms: e.target.value || null });
+                }}
+                className={inputCls}
+              >
+                <option value="">{t("ap.terms_none")}</option>
+                {VENDOR_PAYMENT_TERMS.map((term) => (
+                  <option key={term} value={term}>
+                    {term}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={t("ap.due_date")}>
+              <DateInput
+                value={f.dueDate ?? ""}
+                onChange={(iso) => {
+                  setDueDirty(true);
+                  setF({ ...f, dueDate: iso || null });
+                }}
+                className={inputCls}
+              />
+            </Field>
+            <Field label={t("ap.service_period_from")}>
+              <DateInput
+                value={f.servicePeriodFrom ?? ""}
+                onChange={(iso) => setF({ ...f, servicePeriodFrom: iso || null })}
+                className={inputCls}
+              />
+            </Field>
+            <Field label={t("ap.service_period_to")}>
+              <DateInput
+                value={f.servicePeriodTo ?? ""}
+                onChange={(iso) => setF({ ...f, servicePeriodTo: iso || null })}
+                className={inputCls}
+              />
+            </Field>
+            <Field label={t("ap.service_received_date")}>
+              <DateInput
+                value={f.serviceReceivedDate ?? ""}
+                onChange={(iso) => setF({ ...f, serviceReceivedDate: iso || null })}
+                className={inputCls}
+              />
+            </Field>
+            <Field label={t("ap.related_party")}>
+              <label className="flex items-center gap-2 text-sm normal-case tracking-normal">
+                <input
+                  type="checkbox"
+                  checked={!!f.isRelatedParty}
+                  onChange={(e) => setF({ ...f, isRelatedParty: e.target.checked })}
+                />
+                {t("ap.related_party_check")}
+              </label>
+              {f.isRelatedParty && (
+                <input
+                  value={f.relatedPartyNote ?? ""}
+                  maxLength={1000}
+                  placeholder={t("ap.related_party_note")}
+                  onChange={(e) => setF({ ...f, relatedPartyNote: e.target.value })}
+                  className={`mt-1 ${inputCls}`}
+                />
+              )}
             </Field>
             <div className="col-span-2">
               <div className="text-muted-foreground mb-2 uppercase tracking-wider text-xs">
@@ -2578,7 +2957,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 <div>
                   <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
                     VAT Amount · مبلغ الضريبة{" "}
-                    {f.vatable && <span className="text-foreground/60">(15%)</span>}
+                    {f.vatable && <span className="text-foreground/60">({vatRate}%)</span>}
                   </label>
                   <input
                     type="number"
@@ -2687,11 +3066,12 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                     >
                       <DatePickerPill
                         value={row.date}
-                        onChange={(iso) =>
+                        onChange={(iso) => {
+                          setScheduleDateTouched(true);
                           setSchedule((s) =>
                             s.map((r, idx) => (idx === i ? { ...r, date: iso } : r)),
-                          )
-                        }
+                          );
+                        }}
                         className={`${inputCls} !rounded-xl px-3 py-2 border border-border bg-surface-2`}
                         textAlign="start"
                         align="start"
@@ -2868,6 +3248,15 @@ function EditInvoiceModal({
   const [invoiceUrl, setInvoiceUrl] = useState(invoice.invoiceUrl ?? "");
   const [receiptUrl, setReceiptUrl] = useState(invoice.receiptUrl ?? "");
   const [attachmentUrl, setAttachmentUrl] = useState(invoice.attachmentUrl ?? "");
+  const [paymentMethod, setPaymentMethod] = useState<InvoicePaymentMethod>(
+    invoice.paymentMethod ?? "bank_transfer",
+  );
+  const [dueDate, setDueDate] = useState(invoice.dueDate ?? "");
+  const [servicePeriodFrom, setServicePeriodFrom] = useState(invoice.servicePeriodFrom ?? "");
+  const [servicePeriodTo, setServicePeriodTo] = useState(invoice.servicePeriodTo ?? "");
+  const [serviceReceivedDate, setServiceReceivedDate] = useState(invoice.serviceReceivedDate ?? "");
+  const [isRelatedParty, setIsRelatedParty] = useState(!!invoice.isRelatedParty);
+  const [relatedPartyNote, setRelatedPartyNote] = useState(invoice.relatedPartyNote ?? "");
   const [saving, setSaving] = useState(false);
   const activeProjectId = useStore((s) => s.activeProjectId);
   const people = useStore((s) => s.people);
@@ -2883,8 +3272,12 @@ function EditInvoiceModal({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!purchaserId) {
-      toast.error(t("accounting.purchaser_paid_by_is_required"));
+    if (methodNeedsPurchaser(paymentMethod) && !purchaserId) {
+      toast.error(t("ap.purchaser_required_for_method"));
+      return;
+    }
+    if (servicePeriodFrom && servicePeriodTo && servicePeriodTo < servicePeriodFrom) {
+      toast.error(t("ap.service_period_order"));
       return;
     }
     if (!isValidAttachmentUrl(attachmentUrl)) {
@@ -2907,6 +3300,13 @@ function EditInvoiceModal({
         invoiceUrl: invoiceUrl.trim() || null,
         receiptUrl: receiptUrl.trim() || null,
         attachmentUrl: normalizeAttachmentUrl(attachmentUrl),
+        paymentMethod,
+        dueDate: dueDate || null,
+        servicePeriodFrom: servicePeriodFrom || null,
+        servicePeriodTo: servicePeriodTo || null,
+        serviceReceivedDate: serviceReceivedDate || null,
+        isRelatedParty,
+        relatedPartyNote: isRelatedParty ? relatedPartyNote : null,
       });
     } finally {
       setSaving(false);
@@ -2916,14 +3316,31 @@ function EditInvoiceModal({
   return (
     <Modal title={`Edit Invoice #${invoice.invoiceNo || invoice.id.slice(0, 6)}`} onClose={onClose}>
       <form onSubmit={submit} className="grid grid-cols-2 gap-3">
-        <Field label="Purchaser / Paid By (from Crew)">
+        <Field label={t("ap.payment_method")}>
           <select
-            required
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value as InvoicePaymentMethod)}
+            className={inputCls}
+          >
+            {INVOICE_PAYMENT_METHODS.map((m) => (
+              <option key={m} value={m}>
+                {t(`ap.method.${m}`)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t("ap.purchaser_label")} required={methodNeedsPurchaser(paymentMethod)}>
+          <select
+            required={methodNeedsPurchaser(paymentMethod)}
             value={purchaserId ?? ""}
             onChange={(e) => setPurchaserId(e.target.value || null)}
             className={inputCls}
           >
-            <option value="">— Select Purchaser —</option>
+            <option value="">
+              {methodNeedsPurchaser(paymentMethod)
+                ? "— Select Purchaser —"
+                : t("ap.purchaser_optional")}
+            </option>
             {purchasers.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.fullName}
@@ -2948,6 +3365,45 @@ function EditInvoiceModal({
             onChange={(e) => setDescription(e.target.value)}
             className={inputCls}
           />
+        </Field>
+        <Field label={t("ap.due_date")}>
+          <DateInput value={dueDate} onChange={setDueDate} className={inputCls} />
+        </Field>
+        <Field label={t("ap.service_received_date")}>
+          <DateInput
+            value={serviceReceivedDate}
+            onChange={setServiceReceivedDate}
+            className={inputCls}
+          />
+        </Field>
+        <Field label={t("ap.service_period_from")}>
+          <DateInput
+            value={servicePeriodFrom}
+            onChange={setServicePeriodFrom}
+            className={inputCls}
+          />
+        </Field>
+        <Field label={t("ap.service_period_to")}>
+          <DateInput value={servicePeriodTo} onChange={setServicePeriodTo} className={inputCls} />
+        </Field>
+        <Field label={t("ap.related_party")} className="col-span-2">
+          <label className="flex items-center gap-2 text-sm normal-case tracking-normal">
+            <input
+              type="checkbox"
+              checked={isRelatedParty}
+              onChange={(e) => setIsRelatedParty(e.target.checked)}
+            />
+            {t("ap.related_party_check")}
+          </label>
+          {isRelatedParty && (
+            <input
+              value={relatedPartyNote}
+              maxLength={1000}
+              placeholder={t("ap.related_party_note")}
+              onChange={(e) => setRelatedPartyNote(e.target.value)}
+              className={`mt-1 ${inputCls}`}
+            />
+          )}
         </Field>
         <Field label="Invoice URL">
           <input
@@ -4060,13 +4516,16 @@ function Cell({ children, className = "" }: { children: React.ReactNode; classNa
 function BudgetReadout({
   budgetCode,
   pendingAmount = 0,
+  purchaseOrderId = null,
 }: {
   budgetCode: string;
   pendingAmount?: number;
+  /** When the new invoice converts a PO, only the part above the PO's open amount is new. */
+  purchaseOrderId?: string | null;
 }) {
   const { t } = useTranslation();
 
-  const { budget, invoices, purchaseOrders, payroll } = useStore();
+  const { budget, invoices, purchaseOrders, payroll, payments, receipts } = useStore();
   if (!budgetCode) return null;
   const line = budget.find((b) => b.mainCode === budgetCode);
   if (!line)
@@ -4075,18 +4534,26 @@ function BudgetReadout({
         {t("accounting.no_matching_budget_line")}
       </div>
     );
-  const budgeted = lineTotal(line);
-  const invCommitted = invoices
-    .filter((i) => i.budgetCode === budgetCode)
-    .reduce((a, i) => a + Number(i.price || 0), 0);
-  const poCommitted = purchaseOrders
-    .filter((p) => p.budgetCode === budgetCode && p.status !== "Cancelled")
-    .reduce((a, p) => a + Number(p.amount || 0), 0);
-  const payCommitted = payroll
-    .filter((r) => r.budgetCode === budgetCode)
-    .reduce((a, r) => a + Number(r.totalAmount || 0), 0);
-  const alreadyCommitted = invCommitted + poCommitted + payCommitted;
-  const remaining = budgeted - alreadyCommitted - Number(pendingAmount || 0);
+  // Same definitions as every other screen (B17): actual + commitment of this code.
+  const codeInvoices = invoices.filter((i) => i.budgetCode === budgetCode);
+  const codePos = purchaseOrders.filter((p) => p.budgetCode === budgetCode);
+  const pos = computeBudgetPosition({
+    totalBudget: budget
+      .filter((b) => b.mainCode === budgetCode)
+      .reduce((a, b) => a + lineTotal(b), 0),
+    payroll: payroll.filter((r) => r.budgetCode === budgetCode),
+    invoices: codeInvoices,
+    purchaseOrders: codePos,
+    payments,
+    receipts: receipts.filter((r) => r.budgetCode === budgetCode),
+    legacyPaidFor: paidPayrollAmount,
+  });
+  const budgeted = pos.budget;
+  const alreadyCommitted = pos.actual + pos.commitment;
+  const po = purchaseOrderId ? purchaseOrders.find((p) => p.id === purchaseOrderId) : null;
+  const poOpenOnCode = po && po.budgetCode === budgetCode ? poOpenCommitment(po, invoices) : 0;
+  const newMoney = Math.max(0, Number(pendingAmount || 0) - poOpenOnCode);
+  const remaining = budgeted - alreadyCommitted - newMoney;
   const over = remaining < 0;
   return (
     <div

@@ -26,6 +26,7 @@ import { useAuthRoles } from "@/lib/auth-roles";
 import { PermissionDeniedBanner } from "@/lib/permission-guard";
 import { BudgetCodeSelector } from "@/components/BudgetCodeSelector";
 import { GlAccountSelector } from "@/components/GlAccountSelector";
+import { useGlAccounts } from "@/lib/gl-accounts";
 import { recordAudit } from "@/lib/audit-log";
 
 import { useTranslation } from "react-i18next";
@@ -129,7 +130,18 @@ function PettyCashPage() {
   const orgId = activeProject?.organizationId ?? null;
   const projectFxRate = Number(activeProject?.fxRate ?? 3.75) || 3.75;
 
+  // Legacy crew_members rows: only used to show the holder of old floats.
   const [crew, setCrew] = useState<Crew[]>([]);
+  // B08: float holders come from people flagged "Petty Cash Custodian" on their contract.
+  const people = useStore((s) => s.people);
+  const custodians = useMemo<Crew[]>(
+    () =>
+      people
+        .filter((p) => p.isPettyCashCustodian)
+        .map((p) => ({ id: p.id, full_name: p.fullName, role: p.position || null }))
+        .sort((a, b) => a.full_name.localeCompare(b.full_name)),
+    [people],
+  );
   const [advances, setAdvances] = useState<Advance[]>([]);
   const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
   const [perDiem, setPerDiem] = useState<PerDiemPaid[]>([]);
@@ -844,14 +856,14 @@ function PettyCashPage() {
 
       {showAdv && (
         <AdvanceForm
-          crew={crew}
+          crew={custodians}
           masterFloats={masterFloatOptions}
           projectFxRate={projectFxRate}
           remainingOf={remainingOf}
           onClose={() => setShowAdv(false)}
           onSave={async (v) => {
-            const holder = v.crew_member_id
-              ? crew.find((c) => c.id === v.crew_member_id)?.full_name
+            const holder = v.person_id
+              ? custodians.find((c) => c.id === v.person_id)?.full_name
               : v.holder_name;
             const parent = v.parent_advance_id
               ? (advances.find((a) => a.id === v.parent_advance_id) ?? null)
@@ -862,7 +874,8 @@ function PettyCashPage() {
             const payload = {
               project_id: projectId,
               organization_id: orgId,
-              crew_member_id: v.crew_member_id || null,
+              crew_member_id: null,
+              person_id: v.person_id || null,
               holder: holder ?? "Unknown",
               total_advance: v.amount,
               expenses: 0,
@@ -1101,7 +1114,7 @@ function AdvanceForm({
   remainingOf: (a: Advance) => number;
   onClose: () => void;
   onSave: (v: {
-    crew_member_id: string;
+    person_id: string;
     holder_name: string;
     amount: number;
     notes: string;
@@ -1123,6 +1136,19 @@ function AdvanceForm({
   const [parentId, setParentId] = useState<string>("");
   const [bankGl, setBankGl] = useState<string | null>(null);
   const [floatGl, setFloatGl] = useState<string | null>(null);
+  // B07: preselect the project bank and petty-cash float accounts (9100 / 9120).
+  const { rows: glRows } = useGlAccounts();
+  useEffect(() => {
+    if (!bankGl) {
+      const bank = glRows.find((g) => g.isActive && g.accountType === "bank");
+      if (bank) setBankGl(bank.id);
+    }
+    if (!floatGl) {
+      const fl = glRows.find((g) => g.isActive && g.accountType === "petty_cash");
+      if (fl) setFloatGl(fl.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [glRows]);
   const [floatType, setFloatType] = useState<FloatType>("cash");
 
   const parent = parentId ? (masterFloats.find((a) => a.id === parentId) ?? null) : null;
@@ -1152,7 +1178,7 @@ function AdvanceForm({
             );
           if (!floatGl) return toast.error(t("petty_cash.select_the_petty_cash_float_gl_account"));
           onSave({
-            crew_member_id: crewId,
+            person_id: crewId,
             holder_name: holder,
             amount,
             notes,
@@ -1165,13 +1191,13 @@ function AdvanceForm({
         }}
         className="space-y-3"
       >
-        <Field label="Crew Member (Purchaser)">
+        <Field label={t("ap.float_holder")}>
           <select
             value={crewId}
             onChange={(e) => setCrewId(e.target.value)}
             className="w-full rounded-lg bg-background border border-border px-3 py-2 text-sm"
           >
-            <option value="">— Select crew —</option>
+            <option value="">{t("ap.select_custodian")}</option>
             {crew.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.full_name}
@@ -1180,6 +1206,9 @@ function AdvanceForm({
             ))}
           </select>
         </Field>
+        {crew.length === 0 && (
+          <div className="-mt-2 text-[11px] text-warning">{t("ap.no_custodians_hint")}</div>
+        )}
         <Field label="Or Holder Name (if not in crew)">
           <input
             value={holder}
@@ -1242,6 +1271,7 @@ function AdvanceForm({
             <GlAccountSelector
               value={bankGl}
               onChange={setBankGl}
+              accountTypes={["bank", "cash"]}
               allowEmpty={false}
               placeholder={t("petty_cash.search_bank_or_cash_gl")}
             />
@@ -1304,6 +1334,7 @@ function AdvanceForm({
           <GlAccountSelector
             value={floatGl}
             onChange={setFloatGl}
+            accountTypes={["petty_cash"]}
             allowEmpty={false}
             placeholder={t("petty_cash.search_petty_cash_float_gl")}
           />
