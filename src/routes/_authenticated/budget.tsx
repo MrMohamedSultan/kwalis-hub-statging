@@ -615,7 +615,11 @@ const UNIT_OPTIONS: BudgetUnit[] = [
 ];
 const UNITS_NO_PERIODS_LOCAL: readonly BudgetUnit[] = ["Package", "Epi"];
 const CURRENCY_OPTIONS: BudgetCurrency[] = ["USD", "SAR"];
+/** B24: new budget lines default to the project base currency (SAR unless the base is USD). */
+const defaultLineCurrency = (): BudgetCurrency =>
+  useCurrencyStore.getState().projectFxRate.baseCurrency === "USD" ? "USD" : "SAR";
 import { getSarPerUsd } from "@/lib/store";
+import { useCurrencyStore } from "@/stores/useCurrencyStore";
 import { downloadBlob } from "@/lib/download";
 import RiyalIcon from "@/components/ui/RiyalIcon";
 const CurrencyGlyph = ({ c }: { c: BudgetCurrency }) => <CurrencySymbol code={c} />;
@@ -648,7 +652,7 @@ function buildTemplateRows(): DraftRow[] {
         amount: 1,
         rate: 0,
         unit: "Flat",
-        currency: "USD",
+        currency: defaultLineCurrency(),
         prep: 0,
         shooting: 0,
         wrap: 0,
@@ -1099,7 +1103,7 @@ export function ExcelBudgetCreator({ onCreated }: { onCreated: () => void }) {
                     amount: 1,
                     rate: 0,
                     unit: "Flat",
-                    currency: "USD",
+                    currency: defaultLineCurrency(),
                     prep: 0,
                     shooting: 0,
                     wrap: 0,
@@ -3609,7 +3613,7 @@ export function ViewEditBudget() {
     amount: 1,
     rate: 0,
     unit: "Flat",
-    currency: "USD",
+    currency: defaultLineCurrency(),
     x: 1,
     prep: 0,
     shooting: 0,
@@ -3631,7 +3635,7 @@ export function ViewEditBudget() {
     amount: 1,
     rate: 0,
     unit: "Flat",
-    currency: "USD",
+    currency: defaultLineCurrency(),
     x: 1,
     prep: 0,
     shooting: 0,
@@ -3697,7 +3701,7 @@ export function ViewEditBudget() {
       amount: Number(d.amount ?? 1),
       rate: Number(d.rate ?? 0),
       unit: (d.unit ?? "Flat") as BudgetUnit,
-      currency: (d.currency ?? "USD") as BudgetCurrency,
+      currency: (d.currency ?? defaultLineCurrency()) as BudgetCurrency,
       x: 1,
       prep: Number(d.prep ?? 0),
       shooting: Number(d.shooting ?? 0),
@@ -3871,7 +3875,7 @@ export function ViewEditBudget() {
       amount: Number(newLine.amount ?? 1),
       rate: Number(newLine.rate ?? 0),
       unit: (newLine.unit ?? "Flat") as BudgetUnit,
-      currency: (newLine.currency ?? "USD") as BudgetCurrency,
+      currency: (newLine.currency ?? defaultLineCurrency()) as BudgetCurrency,
       x: 1,
       prep: Number(newLine.prep ?? 0),
       shooting: Number(newLine.shooting ?? 0),
