@@ -4,6 +4,7 @@
 //   - Reveals a compact Payment Execution Form (date, ref, notes)
 //   - "Confirm & Pay" submits the full payload
 // ═══════════════════════════════════════════════════════════════════
+import { DateInput } from "@/components/ui/date-input";
 import { storageAudited } from "@/lib/storage-audit";
 import { useState, type ReactNode } from "react";
 import { Paperclip } from "lucide-react";
@@ -276,10 +277,9 @@ function PaymentExecutionForm({
             <label className="mb-1 block text-[11px] font-medium text-foreground">
               {t("payables.formExtra.date")} <span className="text-destructive">*</span>
             </label>
-            <input
-              type="date"
+            <DateInput
               value={formData.paid_date}
-              onChange={(e) => set("paid_date", e.target.value)}
+              onChange={(v) => set("paid_date", v)}
               className={errors.paid_date ? INPUT_ERR : INPUT_OK}
             />
             {errors.paid_date && (

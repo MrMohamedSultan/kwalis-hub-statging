@@ -6,6 +6,8 @@
 // filtered row auto-hide (declared via column defs, nothing hardcoded).
 // ═══════════════════════════════════════════════════════════════════
 
+import { inputBaseClass } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "@tanstack/react-router";
@@ -601,11 +603,15 @@ export function GlTransactionsReport() {
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-9 gap-3">
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">{t("reports.gltx_from")}</label>
-            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+            <DateInput
+              className={inputBaseClass}
+              value={dateFrom}
+              onChange={(v) => setDateFrom(v)}
+            />
           </div>
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">{t("reports.gltx_to")}</label>
-            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+            <DateInput className={inputBaseClass} value={dateTo} onChange={(v) => setDateTo(v)} />
           </div>
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">{t("reports.gltx_source")}</label>

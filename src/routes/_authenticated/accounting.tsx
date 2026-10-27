@@ -1398,19 +1398,17 @@ function VendorLedgerModal({ vendor, onClose }: { vendor: Vendor; onClose: () =>
             />
             <label className="text-[11px] text-muted-foreground flex items-center gap-1">
               From{" "}
-              <input
-                type="date"
+              <DateInput
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(v) => setStartDate(v)}
                 className="bg-transparent border border-border rounded-md px-1.5 py-1 text-xs"
               />
             </label>
             <label className="text-[11px] text-muted-foreground flex items-center gap-1">
               To{" "}
-              <input
-                type="date"
+              <DateInput
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                onChange={(v) => setEndDate(v)}
                 className="bg-transparent border border-border rounded-md px-1.5 py-1 text-xs"
               />
             </label>

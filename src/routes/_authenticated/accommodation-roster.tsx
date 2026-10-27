@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { DateInput } from "@/components/ui/date-input";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
@@ -266,18 +267,16 @@ function AccommodationRosterPage() {
                         />
                       </td>
                       <td className="px-3 py-2">
-                        <input
-                          type="date"
+                        <DateInput
                           value={row?.check_in_date ?? ""}
-                          onChange={(e) => update(p.id, { check_in_date: e.target.value })}
+                          onChange={(v) => update(p.id, { check_in_date: v })}
                           className="bg-surface-2 border border-border rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 ring-brand"
                         />
                       </td>
                       <td className="px-3 py-2">
-                        <input
-                          type="date"
+                        <DateInput
                           value={row?.check_out_date ?? ""}
-                          onChange={(e) => update(p.id, { check_out_date: e.target.value })}
+                          onChange={(v) => update(p.id, { check_out_date: v })}
                           className="bg-surface-2 border border-border rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 ring-brand"
                         />
                       </td>

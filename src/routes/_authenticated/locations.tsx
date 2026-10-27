@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { DateInput } from "@/components/ui/date-input";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -627,10 +628,9 @@ function LocationForm({
               </select>
             </Field>
             <Field label="Permit Expiry">
-              <input
-                type="date"
+              <DateInput
                 value={permitExpiry}
-                onChange={(e) => setPermitExpiry(e.target.value)}
+                onChange={(v) => setPermitExpiry(v)}
                 className="w-full rounded-lg bg-background border border-border px-3 py-2 text-sm"
               />
             </Field>

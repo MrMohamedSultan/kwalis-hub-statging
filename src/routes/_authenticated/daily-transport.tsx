@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { DateInput } from "@/components/ui/date-input";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
@@ -431,10 +432,9 @@ function DailyTransportPage() {
             <label className="text-sm text-muted-foreground">
               {t("daily_transport.shoot_day")}
             </label>
-            <input
-              type="date"
+            <DateInput
               value={transportDate}
-              onChange={(e) => setTransportDate(e.target.value)}
+              onChange={(v) => setTransportDate(v)}
               className="bg-surface-2 border border-border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 ring-brand"
             />
             <span className="text-xs text-muted-foreground">

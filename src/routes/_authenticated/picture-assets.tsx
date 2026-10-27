@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { DateInput } from "@/components/ui/date-input";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
@@ -1304,10 +1305,9 @@ function AssetModal({
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   {t("picture_assets.start_date")}
                 </label>
-                <input
-                  type="date"
+                <DateInput
                   value={row.start_date}
-                  onChange={(e) => set({ start_date: e.target.value })}
+                  onChange={(v) => set({ start_date: v })}
                   className="mt-1 w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 ring-brand"
                 />
               </div>
@@ -1315,10 +1315,9 @@ function AssetModal({
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   {t("picture_assets.end_date")}
                 </label>
-                <input
-                  type="date"
+                <DateInput
                   value={row.end_date}
-                  onChange={(e) => set({ end_date: e.target.value })}
+                  onChange={(v) => set({ end_date: v })}
                   className="mt-1 w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 ring-brand"
                 />
               </div>

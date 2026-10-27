@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { toast } from "sonner";
 import {
   Plus,
@@ -477,20 +478,10 @@ function NewTimesheetForm({
           />
         </Field>
         <Field label="Period start">
-          <input
-            type="date"
-            value={periodStart}
-            onChange={(e) => setPeriodStart(e.target.value)}
-            className={inputCls}
-          />
+          <DateInput value={periodStart} onChange={(v) => setPeriodStart(v)} className={inputCls} />
         </Field>
         <Field label="Period end">
-          <input
-            type="date"
-            value={periodEnd}
-            onChange={(e) => setPeriodEnd(e.target.value)}
-            className={inputCls}
-          />
+          <DateInput value={periodEnd} onChange={(v) => setPeriodEnd(v)} className={inputCls} />
         </Field>
         <Field label="Base rate">
           <input

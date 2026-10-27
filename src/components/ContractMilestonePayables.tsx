@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { toast } from "sonner";
 import {
   CalendarClock,
@@ -592,10 +593,9 @@ function ExecutePaymentModal({
             <span className="block mb-1 text-muted-foreground">
               {t("contractmilestonepayables.payment_date")}
             </span>
-            <input
-              type="date"
+            <DateInput
               value={paidDate}
-              onChange={(e) => setPaidDate(e.target.value)}
+              onChange={(v) => setPaidDate(v)}
               required
               className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border outline-none focus:ring-2 ring-brand"
             />

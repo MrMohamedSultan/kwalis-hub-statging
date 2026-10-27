@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import {
   Wallet,
   TrendingDown,
@@ -315,17 +316,15 @@ export function ProductionDashboard() {
           ))}
           {preset === "custom" && (
             <div className="inline-flex items-center gap-2 ml-1">
-              <input
-                type="date"
+              <DateInput
                 value={customFrom}
-                onChange={(e) => setCustomFrom(e.target.value)}
+                onChange={(v) => setCustomFrom(v)}
                 className="px-2 py-1 rounded-md text-xs bg-surface border border-border text-foreground"
               />
               <span className="text-xs text-muted-foreground">→</span>
-              <input
-                type="date"
+              <DateInput
                 value={customTo}
-                onChange={(e) => setCustomTo(e.target.value)}
+                onChange={(v) => setCustomTo(v)}
                 className="px-2 py-1 rounded-md text-xs bg-surface border border-border text-foreground"
               />
             </div>

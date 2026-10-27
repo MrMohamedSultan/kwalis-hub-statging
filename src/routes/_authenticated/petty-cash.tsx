@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { DateInput } from "@/components/ui/date-input";
 import { storageAudited } from "@/lib/storage-audit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -1427,10 +1428,9 @@ function ReceiptForm({
       >
         <div className="grid grid-cols-2 gap-3">
           <Field label="Receipt Date">
-            <input
-              type="date"
+            <DateInput
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(v) => setDate(v)}
               className="w-full rounded-lg bg-background border border-border px-3 py-2 text-sm"
             />
           </Field>

@@ -1676,10 +1676,9 @@ function EntriesApprovalModal({ row, onClose }: { row: PayrollRow; onClose: () =
                       </label>
                       <label className="text-[11px] text-muted-foreground">
                         {t("crewpayrolltab.due_date")}
-                        <input
-                          type="date"
+                        <DateInput
                           value={draft.date}
-                          onChange={(ev) => setDraft({ ...draft, date: ev.target.value })}
+                          onChange={(v) => setDraft({ ...draft, date: v })}
                           className="mt-1 w-full bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-foreground"
                         />
                       </label>

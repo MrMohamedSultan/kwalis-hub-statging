@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { DateInput } from "@/components/ui/date-input";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -354,10 +355,9 @@ function CashFlowDashboard() {
         <div className="grid gap-2 md:grid-cols-5">
           <div className="md:col-span-1">
             <label className="text-xs text-muted-foreground">{tr("funding.asOfDate")}</label>
-            <input
-              type="date"
+            <DateInput
               value={asOf}
-              onChange={(e) => setAsOf(e.target.value)}
+              onChange={(v) => setAsOf(v)}
               className="w-full mt-1 rounded-lg border border-border bg-[hsl(var(--surface-2))] px-3 py-2 text-sm text-foreground"
             />
           </div>
@@ -685,10 +685,9 @@ function FundingInflowsTab() {
           {t("funding.log_new_inflow")}
         </h3>
         <div className="grid gap-2 md:grid-cols-6">
-          <input
-            type="date"
+          <DateInput
             value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
+            onChange={(v) => setForm({ ...form, date: v })}
             className={inputCls()}
           />
           <div className="md:col-span-2">
@@ -801,10 +800,9 @@ function FundingInflowsTab() {
                   editingId === e.id ? (
                     <tr key={e.id} className="border-t border-border bg-primary/5">
                       <td className="px-2 py-2">
-                        <input
-                          type="date"
+                        <DateInput
                           value={editForm.date}
-                          onChange={(x) => setEditForm({ ...editForm, date: x.target.value })}
+                          onChange={(v) => setEditForm({ ...editForm, date: v })}
                           className={`${inputCls()} w-full`}
                         />
                       </td>
@@ -981,10 +979,9 @@ function VatPaymentsTab() {
           {t("funding.track_vat_paid_directly_to_tax_authorities_outside")}
         </p>
         <div className="grid gap-2 md:grid-cols-5">
-          <input
-            type="date"
+          <DateInput
             value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
+            onChange={(v) => setForm({ ...form, date: v })}
             className="rounded-lg border border-border bg-[hsl(var(--surface-2))] px-3 py-2 text-sm text-foreground"
           />
           <div>

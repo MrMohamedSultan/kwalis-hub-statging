@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { DateInput } from "@/components/ui/date-input";
 import { useEffect, useState, useCallback } from "react";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
@@ -285,11 +286,10 @@ function SeriesManagement({ projectId, projectName }: { projectId: string; proje
                                 />
                               </td>
                               <td className="py-2 px-2">
-                                <input
-                                  type="date"
-                                  defaultValue={ep.shooting_date ?? ""}
-                                  onBlur={(e) => {
-                                    const v = e.target.value || null;
+                                <DateInput
+                                  value={ep.shooting_date ?? ""}
+                                  onChange={(iso) => {
+                                    const v = iso || null;
                                     if (v !== ep.shooting_date)
                                       updateEpisode(ep.id, { shooting_date: v });
                                   }}
