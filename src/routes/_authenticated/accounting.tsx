@@ -11,7 +11,6 @@ import {
   lineTotal,
   useTotals,
   sumPaymentsFor,
-  paidPayrollAmount,
   VENDOR_PAYMENT_TERMS,
   INVOICE_PAYMENT_METHODS,
   methodNeedsPurchaser,
@@ -114,6 +113,7 @@ import { useLogisticsCommitments, useVatStandardRate, fetchMappedGlAccount } fro
 import {
   computeBudgetPosition,
   invoicedOnPo,
+  legacyContractPaid,
   poIsCommitment,
   poOpenCommitment,
 } from "@/lib/budget-position";
@@ -4546,7 +4546,7 @@ function BudgetReadout({
     purchaseOrders: codePos,
     payments,
     receipts: receipts.filter((r) => r.budgetCode === budgetCode),
-    legacyPaidFor: paidPayrollAmount,
+    legacyPaidFor: (r) => legacyContractPaid(r, payments),
   });
   const budgeted = pos.budget;
   const alreadyCommitted = pos.actual + pos.commitment;

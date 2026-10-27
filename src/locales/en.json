@@ -3329,5 +3329,125 @@
     "not_invoiced": "— Not invoiced —",
     "nights_count_one": "{{count}} night",
     "nights_count_other": "{{count}} nights"
+  },
+  "glossary": {
+    "term": {
+      "budget": "Budget",
+      "actual": "Actual",
+      "commitment": "Commitment",
+      "paid": "Paid",
+      "payable": "Payable",
+      "remaining": "Remaining Budget",
+      "etc": "ETC",
+      "efc": "EFC",
+      "variance": "Variance",
+      "pctSpent": "% Spent",
+      "funding": "Funding",
+      "cashBalance": "Cash Balance",
+      "contractValue": "Contract Value"
+    },
+    "status": {
+      "pending": "Pending",
+      "requested": "Requested",
+      "approved": "Approved",
+      "paid": "Paid"
+    },
+    "unapprove": {
+      "action": "Un-approve",
+      "question": "Un-approve this instalment? It goes back to Pending and a reversing entry is recorded.",
+      "reasonPlaceholder": "Reason (required)",
+      "confirm": "Un-approve",
+      "done": "Instalment un-approved — reversing entry recorded.",
+      "reasonRequired": "Please give a reason (at least 3 characters).",
+      "frozen": "Approved instalments are Actual and cannot be edited. Un-approve to change it."
+    },
+    "contract": {
+      "cancel": "Cancel contract",
+      "cancelled": "Cancelled",
+      "cancelPrompt": "Cancel the contract of {{name}}? Approved instalments stay as Actual, the rest is removed from Commitment. Reason:",
+      "cancelledToast": "Contract cancelled.",
+      "cancelledNote": "This contract is cancelled — no payment can be requested."
+    },
+    "schedule": {
+      "missingLabel": "Instalment {{n}} needs a name.",
+      "missingDueDate": "Instalment {{n}} needs a due date.",
+      "sumMismatch": "The instalments add up to {{total}} {{currency}} but the contract is {{expected}} {{currency}}. The schedule must equal the contract.",
+      "dateOrder": "Some due dates are earlier than the instalment before them. Save anyway?",
+      "invalid": "The payment schedule is not valid."
+    },
+    "dash": {
+      "headroom": "Remaining Budget:",
+      "paidSub": "{{pct}}% of Actual · Payable {{payable}}"
+    },
+    "export": {
+      "csv": "Export CSV",
+      "pdf": "Export PDF"
+    },
+    "cash": {
+      "fundingExpected": "Funding expected",
+      "vatPaid": "VAT paid",
+      "vatRecovered": "VAT recovered",
+      "whtRemitted": "WHT remitted",
+      "taxNet": "Tax (VAT paid − recovered + WHT)",
+      "upcoming": "Upcoming payments",
+      "expectedBalance": "Expected balance",
+      "upcomingInvoices": "Upcoming: unpaid invoices",
+      "upcomingInstalments": "Upcoming: approved instalments",
+      "utilisation": "Funding used (Paid ÷ Funding)",
+      "noFunding": "No funding recorded",
+      "noFundingHint": "Record the money received on the Funding Inflows tab — the cash balance is negative until then.",
+      "paymentsExceedFunding": "Payments ({{paid}}) exceed the funding received ({{funding}}).",
+      "position": "Cost position",
+      "minusPaid": "− Paid",
+      "minusVatPaid": "− VAT paid",
+      "plusVatRecovered": "+ VAT recovered",
+      "minusWht": "− WHT remitted",
+      "minusUpcoming": "− Upcoming payments",
+      "note": "Cash Balance = Funding − Paid − VAT paid + VAT recovered − WHT remitted. Approved but unpaid amounts are Upcoming payments; the Expected balance is what is left after them.",
+      "bankRequired": "Bank balance is required",
+      "bankNumber": "Bank balance must be a number",
+      "legacyFound": "{{count}} entries are saved only in this browser. Move them to the project so reports and the ledger include them.",
+      "legacyImport": "Move to project",
+      "legacyImported": "Entries moved to the project.",
+      "taxTitle": "Log a tax payment (VAT / WHT)",
+      "taxList": "Tax payments ({{count}})",
+      "kindLabel": "Type",
+      "dateCol": "Date",
+      "kind": {
+        "vat_paid": "VAT paid",
+        "vat_recovered": "VAT recovered",
+        "wht_remitted": "WHT remitted"
+      }
+    },
+    "cost": {
+      "title": "Cost Report",
+      "subtitle": "Budget, Actual, Commitment, ETC and EFC — same definitions on every screen. Amounts in SAR.",
+      "groupBy": "Group by",
+      "by": {
+        "line": "By line",
+        "account": "By account",
+        "category": "By category"
+      },
+      "hideZero": "Hide empty lines",
+      "codeCol": "Code",
+      "nameCol": "Name",
+      "categoryCol": "Category",
+      "total": "Total",
+      "unassigned": "Unassigned",
+      "empty": "No cost data yet.",
+      "category": {
+        "ATL": "Above the line",
+        "BTL": "Below the line",
+        "Post": "Post-production",
+        "Other": "Other"
+      },
+      "etcEdit": "ETC for {{code}}",
+      "etcManual": "Entered by the accountant — clear it to go back to the default",
+      "etcDefault": "Default = Remaining Budget",
+      "etcSaved": "ETC saved",
+      "etcFailed": "Could not save the ETC",
+      "etcInvalid": "ETC must be a number of 0 or more",
+      "legend": "Remaining Budget = Budget − Actual − Commitment · EFC = Actual + Commitment + ETC · Variance = Budget − EFC (positive = saving). Edit ETC in the By line view."
+    }
   }
 }

@@ -3,8 +3,9 @@
 // view. Doctrine: budget is built by LINE, money is reported by account
 // CODE. Every line carrying a code therefore displays that code's
 // rollup; `sharedLines` tells the UI how many lines share the account.
-//   actual    = incurred costs (v_ledger_transactions, entry_kind='actual')
-//   committed = issued but not consumed (entry_kind='commitment')
+//   actual    = glossary Actual: approved instalments, invoices, approved
+//               petty cash (v_ledger_transactions, entry_kind='actual')
+//   committed = glossary Commitment: contract / PO value − actual on it
 //   paid      = cash out the door (canonical payments ledger)
 // Subscribed to realtime channels on every table feeding the ledger.
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -32,6 +33,10 @@ const LEDGER_SOURCE_TABLES = [
   "per_diem_ledger",
   "payments",
   "budget_lines",
+  // 180: approving / un-approving an instalment moves Actual ↔ Commitment
+  "payment_requests",
+  "car_rentals",
+  "accommodations",
 ] as const;
 
 export function useBudgetLineActuals(): ActualsMap {
