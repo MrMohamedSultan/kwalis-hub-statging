@@ -26,11 +26,21 @@ export function useUnsavedChangesWarning(dirty: boolean) {
 export function useDirtyTracker(deps: unknown[]) {
   const mounted = useRef(false);
   const dirty = useRef(false);
+  // Set by reset(): the NEXT render's values become the clean baseline. A
+  // reset is usually called together with the setState calls that clear the
+  // form, so the snapshot of the render that called it is already stale —
+  // taking it as the baseline made the cleared form look dirty again and the
+  // browser asked "Leave site?" after a successful save (B23).
+  const rebase = useRef(false);
   const snapshot = JSON.stringify(deps);
   const first = useRef(snapshot);
 
   if (!mounted.current) {
     mounted.current = true;
+  } else if (rebase.current) {
+    rebase.current = false;
+    first.current = snapshot;
+    dirty.current = false;
   } else if (snapshot !== first.current) {
     dirty.current = true;
   }
@@ -40,6 +50,7 @@ export function useDirtyTracker(deps: unknown[]) {
     reset: () => {
       dirty.current = false;
       first.current = snapshot;
+      rebase.current = true;
     },
   };
 }
