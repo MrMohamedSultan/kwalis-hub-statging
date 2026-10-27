@@ -52,7 +52,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 import { useTranslation } from "react-i18next";
 export const Route = createFileRoute("/_authenticated/project-files")({
-  head: () => ({ meta: [{ title: "File Library · Trackroll" }] }),
+  head: () => ({ meta: [{ title: "File Library · Kwalis Hub" }] }),
   component: ProjectFilesPage,
 });
 

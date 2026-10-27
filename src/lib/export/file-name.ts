@@ -41,7 +41,7 @@ export function exportFileName(opts: {
 }
 
 /**
- * Turn any legacy export name ("trackroll-gl-report-mon26.pdf",
+ * Turn any legacy export name (old product prefix, "gl-report-mon26.pdf",
  * "funding-inflows-2026-10-27") into the standard name. Already-standard
  * names are kept (extension enforced).
  */

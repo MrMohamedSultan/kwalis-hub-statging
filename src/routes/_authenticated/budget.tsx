@@ -50,7 +50,7 @@ import { LazyMount, useAfterPaint } from "@/components/LazyMount";
 import { BudgetAuditLog } from "@/components/BudgetAuditLog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
-import { parseTrackrollWorkbook } from "@/lib/excelImport";
+import { parseKwalisWorkbook } from "@/lib/excelImport";
 import { fetchMasterCodes, normalizeBudgetCode } from "@/lib/budget-mapping-check";
 import { parseBudgetExcel, parseProjectDetails, exportBudgetExcel } from "@/lib/excelAdapter";
 import { adapterLineToStoreLine, storeLineToAdapterLine } from "@/lib/excelAdapterBridge";
@@ -1610,7 +1610,7 @@ export function UploadBudget() {
   };
 
   const applyResult = async (
-    r: Awaited<ReturnType<typeof parseTrackrollWorkbook>>,
+    r: Awaited<ReturnType<typeof parseKwalisWorkbook>>,
     via: string,
     fileName?: string,
     replacedSnapshot?: unknown[],
@@ -1783,7 +1783,7 @@ export function UploadBudget() {
             toast.message("Template not detected — falling back to legacy auto-detect.", {
               description: e.message,
             });
-            const r = await parseTrackrollWorkbook(f);
+            const r = await parseKwalisWorkbook(f);
             const legacyPreview: TemplatePreview = {
               result: r,
               mismatches: [],
@@ -1801,7 +1801,7 @@ export function UploadBudget() {
           throw e;
         }
       } else {
-        const r = await parseTrackrollWorkbook(f);
+        const r = await parseKwalisWorkbook(f);
         const legacyPreview: TemplatePreview = {
           result: r,
           mismatches: [],

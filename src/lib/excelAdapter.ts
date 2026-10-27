@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════
-// excelAdapter.ts — TrackRoll Budget Excel Parser & Exporter
+// excelAdapter.ts — Kwalis Hub Budget Excel Parser & Exporter
 // ═══════════════════════════════════════════════════════════════════
 //
 // Two pure functions:
@@ -507,7 +507,7 @@ export async function buildBudgetWorkbook(
 ): Promise<ExcelJS.Workbook> {
   const ExcelJSLib = await loadExcelJs();
   const workbook = new ExcelJSLib.Workbook();
-  workbook.creator = "TrackRoll";
+  workbook.creator = "Kwalis Hub";
   workbook.created = new Date();
 
   // ────────────────────────────────────────────────
@@ -865,7 +865,7 @@ export async function debugParse(file: File): Promise<void> {
   const lines = await parseBudgetExcel(file);
   const details = await parseProjectDetails(file);
 
-  console.group("TrackRoll Excel Parser — Debug Report");
+  console.group("Kwalis Hub Excel Parser — Debug Report");
   console.log("Project:", details.projectTitle);
   console.log("Version:", details.budgetVersion);
   console.log("Total lines parsed:", lines.length);

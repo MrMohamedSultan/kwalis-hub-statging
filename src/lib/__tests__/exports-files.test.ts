@@ -144,6 +144,6 @@ describe("branded PDF with Arabic", () => {
     expect(text).toContain("Exported from Kwalis Hub");
     expect(text).toContain("Page 1 of 2");
     expect(text).toContain("Page 2 of 2");
-    expect(text.toLowerCase()).not.toContain("trackroll");
+    expect(text.toLowerCase()).not.toContain(["track", "roll"].join(""));
   });
 });

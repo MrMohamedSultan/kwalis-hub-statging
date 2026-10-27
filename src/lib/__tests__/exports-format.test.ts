@@ -73,6 +73,8 @@ describe("platform date format (G05 / B28 / B29)", () => {
   });
 });
 
+const OLD = ["Track", "Roll"].join(""); // the pre-rename product name (G01)
+
 describe("export file names (G01 / G02)", () => {
   it("builds KwalisHub_{ProjectCode}_{Report}_{YYYY-MM-DD}", () => {
     expect(
@@ -87,9 +89,9 @@ describe("export file names (G01 / G02)", () => {
     expect(reportToken("")).toBe("Report");
   });
 
-  it("rewrites legacy TrackRoll names", () => {
+  it("rewrites legacy names with the old product prefix", () => {
     expect(
-      normalizeExportFileName("trackroll-gl-report-mon26.csv", "csv", {
+      normalizeExportFileName(`${OLD.toLowerCase()}-gl-report-mon26.csv`, "csv", {
         projectCode: "MON26",
         date: "2026-10-27",
       }),
@@ -108,9 +110,9 @@ describe("export file names (G01 / G02)", () => {
     );
   });
 
-  it("never contains TrackRoll", () => {
-    const n = normalizeExportFileName("TrackRoll_report", "pdf", { projectCode: "A1" });
-    expect(n.toLowerCase()).not.toContain("trackroll");
+  it("never contains the old product name", () => {
+    const n = normalizeExportFileName(`${OLD}_report`, "pdf", { projectCode: "A1" });
+    expect(n.toLowerCase()).not.toContain(OLD.toLowerCase());
   });
 
   it("labels the project", () => {

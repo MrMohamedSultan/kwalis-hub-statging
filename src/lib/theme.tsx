@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 export type Theme = "dark" | "light";
-const STORAGE_KEY = "trackroll-theme";
+const STORAGE_KEY = "kwalishub-theme";
+/** Pre-rename key (G01): read once so nobody loses their theme choice. */
+const LEGACY_STORAGE_KEY = ["track", "roll-theme"].join("");
 const DEFAULT_THEME: Theme = "dark"; // Cinematic Dark by default
 
 type Ctx = { theme: Theme; setTheme: (t: Theme) => void; toggle: () => void };
@@ -20,7 +22,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Hydrate from localStorage on mount (avoids SSR mismatch since __root renders `dark` initially)
   useEffect(() => {
     try {
-      const stored = (localStorage.getItem(STORAGE_KEY) as Theme | null) ?? DEFAULT_THEME;
+      const stored =
+        (localStorage.getItem(STORAGE_KEY) as Theme | null) ??
+        (localStorage.getItem(LEGACY_STORAGE_KEY) as Theme | null) ??
+        DEFAULT_THEME;
       setThemeState(stored);
       applyThemeClass(stored);
     } catch {

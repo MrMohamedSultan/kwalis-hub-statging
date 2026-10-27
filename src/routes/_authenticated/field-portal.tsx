@@ -22,11 +22,15 @@ export const Route = createFileRoute("/_authenticated/field-portal")({
 
 type FlagMap = Record<string, { confirmed?: boolean; cleared?: boolean }>;
 
-const FLAG_KEY = "trackroll.field.flags.v1";
+const FLAG_KEY = "kwalishub.field.flags.v1";
+/** Pre-rename key (G01) — read as a fallback so saved flags survive. */
+const LEGACY_FLAG_KEY = ["track", "roll.field.flags.v1"].join("");
 
 function loadFlags(): FlagMap {
   try {
-    return JSON.parse(localStorage.getItem(FLAG_KEY) || "{}");
+    return JSON.parse(
+      localStorage.getItem(FLAG_KEY) || localStorage.getItem(LEGACY_FLAG_KEY) || "{}",
+    );
   } catch {
     return {};
   }

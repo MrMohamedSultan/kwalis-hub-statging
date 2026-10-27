@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "TrackRoll",
+    "appName": "Kwalis Hub",
     "platformName": "Kwalis HUB",
     "save": "Save Changes",
     "cancel": "Cancel",
@@ -77,7 +77,7 @@
       "submitting": "Submitting...",
       "success": {
         "title": "Request Submitted Successfully",
-        "message": "Thank you for your interest in TrackRoll. Our team will review your request and get back to you within 1-2 business days."
+        "message": "Thank you for your interest in Kwalis Hub. Our team will review your request and get back to you within 1-2 business days."
       }
     },
     "industries": {

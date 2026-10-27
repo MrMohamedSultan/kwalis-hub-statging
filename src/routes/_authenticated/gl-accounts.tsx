@@ -130,7 +130,7 @@ function GlAccountsPage() {
           rows,
         },
       ],
-      { documentTitle: "TrackRoll — GL Chart of Accounts" },
+      { documentTitle: "GL Chart of Accounts" },
     );
     toast.success(`Exported ${filtered.length} GL accounts to PDF.`);
   };
