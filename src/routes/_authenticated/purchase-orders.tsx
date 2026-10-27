@@ -9,6 +9,10 @@ import { useCan } from "@/lib/rbac";
 import { useAuthRoles } from "@/lib/auth-roles";
 import { PermissionDeniedBanner } from "@/lib/permission-guard";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { CurrencyFxFields, useProjectFx } from "@/components/ap/CurrencyFxFields";
+import { toBaseAmount } from "@/lib/ap-calc";
+import { invoicedOnPo, poIsCommitment, poOpenCommitment } from "@/lib/budget-position";
+import { humanizeDbError } from "@/lib/db-errors";
 
 import { useTranslation } from "react-i18next";
 export const Route = createFileRoute("/_authenticated/purchase-orders")({
@@ -24,17 +28,26 @@ type PO = {
   id: string;
   po_number: string;
   vendor_name: string;
+  vendor_id?: string | null;
   description: string;
   budget_code: string | null;
   linked_budget_line_id: string | null;
   amount: number;
+  currency?: string | null;
+  fx_rate?: number | null;
+  amount_original?: number | null;
   status: string;
   date: string | null;
   notes: string | null;
   created_at: string;
+  created_by?: string | null;
+  approved_by?: string | null;
 };
 
-const PO_STATUSES = ["Draft", "Open", "Approved", "Issued", "Closed", "Cancelled"] as const;
+/** States the maker may set; Approved / Issued are reached through "Approve" by someone else (B10). */
+const EDITABLE_STATUSES = ["Draft", "Open", "Closed", "Cancelled"] as const;
+const APPROVED_STATES = ["Approved", "Issued"];
+const isApproved = (s: string) => APPROVED_STATES.includes(s);
 
 function PurchaseOrdersPage() {
   const { t } = useTranslation();
@@ -43,13 +56,20 @@ function PurchaseOrdersPage() {
   const roles = useAuthRoles();
   const activeProject = useStore((s) => s.projects.find((p) => p.id === s.activeProjectId));
   const budget = useStore((s) => s.budget);
+  const invoices = useStore((s) => s.invoices);
   const projectId = activeProject?.id ?? null;
   const orgId = activeProject?.organizationId ?? null;
+  const fx = useProjectFx(projectId);
 
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [pos, setPos] = useState<PO[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState<PO | "new" | null>(null);
+  const [me, setMe] = useState<string | null>(null);
+
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
+  }, []);
 
   const budgetLines = useMemo(
     () =>
@@ -79,36 +99,57 @@ function PurchaseOrdersPage() {
     setLoading(false);
   }
 
+  // Keep the shared store (invoice PO picker, Remaining Budget card) in step.
+  const refreshStore = () => void useStore.getState().reloadScopedData();
+
   useEffect(() => {
     if (projectId && roles.loaded) void reload();
   }, [projectId, roles.loaded]);
 
   // Wait for auth/roles and active project to resolve before evaluating permissions
   if (!roles.loaded || !projectId) {
-    return <div className="p-6 text-muted-foreground">Loading…</div>;
+    return <div className="p-6 text-muted-foreground">{t("common.loading")}</div>;
   }
   if (!can("accounting.view"))
     return <PermissionDeniedBanner perm="accounting.view" action="View Purchase Orders" />;
   const canEdit = can("invoices.add");
   const canApprove = can("invoices.approve");
 
+  const invoiceLinks = invoices.map((i) => ({
+    price: i.price,
+    purchaseOrderId: i.purchaseOrderId,
+  }));
   const totals = pos.reduce(
     (acc, p) => {
-      const isCommitted = p.status === "Approved"; // Only Approved POs roll into Budget "Committed"
       const isPending = p.status === "Draft" || p.status === "Open";
       return {
-        total: acc.total + (Number(p.amount) || 0),
-        committed: acc.committed + (isCommitted ? Number(p.amount) || 0 : 0),
+        total: acc.total + (poIsCommitment(p.status) ? Number(p.amount) || 0 : 0),
+        open:
+          acc.open +
+          poOpenCommitment(
+            { id: p.id, amount: Number(p.amount) || 0, status: p.status },
+            invoiceLinks,
+          ),
         pending: acc.pending + (isPending ? 1 : 0),
       };
     },
-    { total: 0, committed: 0, pending: 0 },
+    { total: 0, open: 0, pending: 0 },
   );
+
+  const setStatus = async (p: PO, status: string, okMsg: string) => {
+    const { error } = await supabase.from("purchase_orders").update({ status }).eq("id", p.id);
+    if (error) toast.error(humanizeDbError(error));
+    else {
+      toast.success(okMsg);
+      void reload();
+      refreshStore();
+    }
+  };
 
   return (
     <>
       <PageTitle
-        title="Purchase Orders"
+        title={t("ap.purchase_orders")}
         action={
           canEdit ? (
             <button
@@ -125,17 +166,17 @@ function PurchaseOrdersPage() {
       <div className="grid gap-3 md:grid-cols-3 mb-6">
         {[
           {
-            label: "Total POs Value",
+            label: t("ap.po_total_value"),
             value: formatUSD(totals.total),
             tone: "from-info/20 to-info/5 border-info/30",
           },
           {
-            label: "Committed (Approved only)",
-            value: formatUSD(totals.committed),
+            label: t("ap.po_open_commitment"),
+            value: formatUSD(totals.open),
             tone: "from-success/20 to-success/5 border-success/30",
           },
           {
-            label: "Awaiting Approval",
+            label: t("ap.awaiting_approval"),
             value: String(totals.pending),
             tone: "from-warning/20 to-warning/5 border-warning/30",
           },
@@ -152,124 +193,130 @@ function PurchaseOrdersPage() {
 
       <div className="rounded-2xl border border-border bg-surface/60 overflow-hidden">
         <div className="px-4 py-3 border-b border-border font-semibold flex items-center justify-between">
-          <span>Purchase Orders</span>
+          <span>{t("ap.purchase_orders")}</span>
           <button
             onClick={reload}
             className="text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
           >
             <RotateCcw className="size-3" />
-            Refresh
+            {t("ap.refresh")}
           </button>
         </div>
-        <table className="w-full text-sm">
-          <thead className="bg-surface text-xs uppercase tracking-wider text-muted-foreground">
-            <tr>
-              <th className="text-start p-3">PO #</th>
-              <th className="text-start p-3">Vendor</th>
-              <th className="text-start p-3">Description</th>
-              <th className="text-start p-3">Budget Line</th>
-              <th className="text-end p-3">Amount</th>
-              <th className="text-start p-3">Status</th>
-              <th className="text-end p-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-surface text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <td colSpan={7} className="p-4 text-center text-muted-foreground">
-                  Loading…
-                </td>
+                <th className="text-start p-3">{t("ap.po_number")}</th>
+                <th className="text-start p-3">{t("ap.vendor")}</th>
+                <th className="text-start p-3">{t("ap.description")}</th>
+                <th className="text-start p-3">{t("ap.budget_line")}</th>
+                <th className="text-end p-3">{t("ap.amount")}</th>
+                <th className="text-end p-3">{t("ap.invoiced")}</th>
+                <th className="text-start p-3">{t("common.status")}</th>
+                <th className="text-end p-3">{t("common.actions")}</th>
               </tr>
-            )}
-            {!loading &&
-              pos.map((p) => {
-                const line = budgetLines.find((l) => l.id === p.linked_budget_line_id);
-                return (
-                  <tr key={p.id} className="border-t border-border">
-                    <td className="p-3 font-mono text-xs">{p.po_number}</td>
-                    <td className="p-3">{p.vendor_name}</td>
-                    <td className="p-3">{p.description}</td>
-                    <td className="p-3">
-                      {line ? `${line.code} — ${line.desc}` : (p.budget_code ?? "—")}
-                    </td>
-                    <td className="p-3 text-end tabular-nums">
-                      {formatUSD(Number(p.amount) || 0)}
-                    </td>
-                    <td className="p-3">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${
-                          p.status === "Approved" || p.status === "Issued"
-                            ? "bg-success/20 text-success"
-                            : p.status === "Open"
-                              ? "bg-warning/20 text-warning"
-                              : p.status === "Cancelled"
-                                ? "bg-destructive/20 text-destructive"
-                                : "bg-surface-2 text-muted-foreground"
-                        }`}
-                      >
-                        {p.status}
-                      </span>
-                    </td>
-                    <td className="p-3 text-end space-x-1">
-                      {canEdit && (
-                        <button
-                          onClick={() => setShowForm(p)}
-                          className="text-xs px-2 py-1 rounded-lg bg-surface-2 hover:bg-muted"
+            </thead>
+            <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan={8} className="p-4 text-center text-muted-foreground">
+                    {t("common.loading")}
+                  </td>
+                </tr>
+              )}
+              {!loading &&
+                pos.map((p) => {
+                  const line = budgetLines.find((l) => l.id === p.linked_budget_line_id);
+                  const invoiced = invoicedOnPo(p.id, invoiceLinks);
+                  const ownPo = !!me && p.created_by === me;
+                  return (
+                    <tr key={p.id} className="border-t border-border">
+                      <td className="p-3 font-mono text-xs">{p.po_number}</td>
+                      <td className="p-3">{p.vendor_name}</td>
+                      <td className="p-3">{p.description}</td>
+                      <td className="p-3">
+                        {line ? `${line.code} — ${line.desc}` : (p.budget_code ?? "—")}
+                      </td>
+                      <td className="p-3 text-end tabular-nums">
+                        {formatUSD(Number(p.amount) || 0)}
+                        {p.currency &&
+                          p.currency !== fx.baseCurrency &&
+                          p.amount_original != null && (
+                            <div className="text-[10px] text-muted-foreground" dir="ltr">
+                              {Number(p.amount_original).toLocaleString()} {p.currency} ×{" "}
+                              {Number(p.fx_rate ?? 1)}
+                            </div>
+                          )}
+                      </td>
+                      <td className="p-3 text-end tabular-nums text-muted-foreground">
+                        {invoiced > 0 ? formatUSD(invoiced) : "—"}
+                      </td>
+                      <td className="p-3">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${
+                            isApproved(p.status)
+                              ? "bg-success/20 text-success"
+                              : p.status === "Open"
+                                ? "bg-warning/20 text-warning"
+                                : p.status === "Cancelled"
+                                  ? "bg-destructive/20 text-destructive"
+                                  : "bg-surface-2 text-muted-foreground"
+                          }`}
                         >
-                          Edit
-                        </button>
-                      )}
-                      {canApprove && p.status !== "Approved" && p.status !== "Cancelled" && (
-                        <>
+                          {t(`ap.po_status.${p.status}`, { defaultValue: p.status })}
+                        </span>
+                      </td>
+                      <td className="p-3 text-end space-x-1 rtl:space-x-reverse whitespace-nowrap">
+                        {canEdit && (
                           <button
-                            onClick={async () => {
-                              const { error } = await supabase
-                                .from("purchase_orders")
-                                .update({ status: "Approved" })
-                                .eq("id", p.id);
-                              if (error) toast.error(error.message);
-                              else {
-                                toast.success(t("purchase_orders.po_approved_committed_rolled_up"));
-                                void reload();
-                              }
-                            }}
-                            className="text-xs px-2 py-1 rounded-lg bg-success/15 hover:bg-success/25 text-success inline-flex items-center gap-1"
+                            onClick={() => setShowForm(p)}
+                            className="text-xs px-2 py-1 rounded-lg bg-surface-2 hover:bg-muted"
                           >
-                            <Check className="size-3" />
-                            Approve
+                            {t("common.edit")}
                           </button>
-                          <button
-                            onClick={async () => {
-                              const { error } = await supabase
-                                .from("purchase_orders")
-                                .update({ status: "Cancelled" })
-                                .eq("id", p.id);
-                              if (error) toast.error(error.message);
-                              else {
-                                toast.success(t("purchase_orders.po_rejected"));
-                                void reload();
+                        )}
+                        {canApprove && !isApproved(p.status) && p.status !== "Cancelled" && (
+                          <>
+                            <button
+                              disabled={ownPo}
+                              title={ownPo ? t("ap.maker_checker_own_po") : undefined}
+                              onClick={() =>
+                                setStatus(
+                                  p,
+                                  "Approved",
+                                  t("purchase_orders.po_approved_committed_rolled_up"),
+                                )
                               }
-                            }}
-                            className="text-xs px-2 py-1 rounded-lg bg-destructive/15 hover:bg-destructive/25 text-destructive inline-flex items-center gap-1"
-                          >
-                            <XIcon className="size-3" />
-                            Reject
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            {!loading && pos.length === 0 && (
-              <tr>
-                <td colSpan={7} className="p-6 text-center text-muted-foreground">
-                  {t("purchase_orders.no_purchase_orders_yet")}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                              className="text-xs px-2 py-1 rounded-lg bg-success/15 hover:bg-success/25 text-success inline-flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <Check className="size-3" />
+                              {t("ap.approve")}
+                            </button>
+                            <button
+                              onClick={() =>
+                                setStatus(p, "Cancelled", t("purchase_orders.po_rejected"))
+                              }
+                              className="text-xs px-2 py-1 rounded-lg bg-destructive/15 hover:bg-destructive/25 text-destructive inline-flex items-center gap-1"
+                            >
+                              <XIcon className="size-3" />
+                              {t("ap.reject")}
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              {!loading && pos.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="p-6 text-center text-muted-foreground">
+                    {t("purchase_orders.no_purchase_orders_yet")}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {showForm && (
@@ -277,44 +324,46 @@ function PurchaseOrdersPage() {
           initial={showForm === "new" ? null : showForm}
           vendors={vendors}
           budgetLines={budgetLines}
+          fx={fx}
           onClose={() => setShowForm(null)}
           onSave={async (v) => {
             const selected = budgetLines.find((l) => l.id === v.linked_budget_line_id);
+            const vendor = vendors.find((x) => x.id === v.vendor_id);
+            const row = {
+              vendor_name: vendor?.name ?? v.vendor_name,
+              vendor_id: vendor?.id ?? null,
+              description: v.description,
+              amount: v.amount,
+              currency: v.currency,
+              fx_rate: v.fx_rate,
+              amount_original: v.amount_original,
+              status: v.status,
+              budget_code: selected?.code ?? null,
+              linked_budget_line_id: v.linked_budget_line_id || null,
+              notes: v.notes,
+            };
             if (showForm !== "new" && showForm) {
               const { error } = await supabase
                 .from("purchase_orders")
-                .update({
-                  po_number: v.po_number,
-                  vendor_name: v.vendor_name,
-                  description: v.description,
-                  amount: v.amount,
-                  status: v.status,
-                  budget_code: selected?.code ?? null,
-                  linked_budget_line_id: v.linked_budget_line_id || null,
-                  notes: v.notes,
-                })
+                .update(row as any)
                 .eq("id", showForm.id);
-              if (error) return toast.error(error.message);
+              if (error) return toast.error(humanizeDbError(error));
               toast.success(t("purchase_orders.po_updated"));
             } else {
               const { error } = await supabase.from("purchase_orders").insert({
+                ...row,
                 project_id: projectId,
                 organization_id: orgId,
-                po_number: v.po_number,
-                vendor_name: v.vendor_name,
-                description: v.description,
-                amount: v.amount,
-                status: v.status,
-                budget_code: selected?.code ?? null,
-                linked_budget_line_id: v.linked_budget_line_id || null,
-                notes: v.notes,
+                // Empty → the database assigns <PROJECT CODE>-PO-0001 (B11).
+                po_number: "",
                 date: new Date().toISOString().slice(0, 10),
-              });
-              if (error) return toast.error(error.message);
+              } as any);
+              if (error) return toast.error(humanizeDbError(error));
               toast.success(t("purchase_orders.po_created"));
             }
             setShowForm(null);
             void reload();
+            refreshStore();
           }}
         />
       )}
@@ -326,46 +375,63 @@ function POForm({
   initial,
   vendors,
   budgetLines,
+  fx,
   onClose,
   onSave,
 }: {
   initial: PO | null;
   vendors: Vendor[];
   budgetLines: { id: string; code: string; desc: string }[];
+  fx: ReturnType<typeof useProjectFx>;
   onClose: () => void;
   onSave: (v: {
-    po_number: string;
+    vendor_id: string;
     vendor_name: string;
     description: string;
     amount: number;
+    currency: string;
+    fx_rate: number;
+    amount_original: number;
     status: string;
     linked_budget_line_id: string;
     notes: string;
   }) => void;
 }) {
   const { t } = useTranslation();
+  const inputCls = "w-full rounded-lg bg-background border border-border px-3 py-2 text-sm";
 
-  const [po, setPo] = useState(initial?.po_number ?? `PO-${Date.now().toString().slice(-6)}`);
-  const [vendor, setVendor] = useState(initial?.vendor_name ?? "");
+  const initialVendorId =
+    initial?.vendor_id ?? vendors.find((v) => v.name === initial?.vendor_name)?.id ?? "";
+  const [vendorId, setVendorId] = useState(initialVendorId);
   const [desc, setDesc] = useState(initial?.description ?? "");
-  const [amount, setAmount] = useState(initial ? Number(initial.amount) : 0);
+  const [currency, setCurrency] = useState(initial?.currency ?? fx.baseCurrency);
+  const [fxRate, setFxRate] = useState<number>(Number(initial?.fx_rate ?? 1) || 1);
+  const [original, setOriginal] = useState<number>(
+    initial ? Number(initial.amount_original ?? initial.amount) : 0,
+  );
   const [status, setStatus] = useState<string>(initial?.status ?? "Draft");
   const [lineId, setLineId] = useState(initial?.linked_budget_line_id ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const approvedNow = !!initial && isApproved(initial.status);
+  const isBase = currency === fx.baseCurrency;
+  const baseAmount = toBaseAmount(original, isBase ? 1 : fxRate);
+  const statusOptions = approvedNow
+    ? [initial!.status, ...EDITABLE_STATUSES]
+    : [...EDITABLE_STATUSES].filter((s) => (initial ? true : s === "Draft" || s === "Open"));
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-2xl border border-border bg-background p-5 shadow-2xl"
+        className="w-full max-w-lg rounded-2xl border border-border bg-background p-5 shadow-2xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold flex items-center gap-2">
             <ClipboardList className="size-4" />
-            {initial ? "Edit Purchase Order" : "New Purchase Order"}
+            {initial ? t("ap.edit_po") : t("ap.new_po")}
           </h3>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
             <XIcon className="size-4" />
@@ -374,14 +440,18 @@ function POForm({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (!vendor) return toast.error(t("purchase_orders.vendor_required"));
+            if (!vendorId) return toast.error(t("purchase_orders.vendor_required"));
             if (!desc) return toast.error(t("purchase_orders.description_required"));
-            if (amount <= 0) return toast.error("Amount must be > 0");
+            if (original <= 0) return toast.error(t("ap.amount_positive"));
+            if (!isBase && !(fxRate > 0)) return toast.error(t("ap.fx_rate_required"));
             onSave({
-              po_number: po,
-              vendor_name: vendor,
+              vendor_id: vendorId,
+              vendor_name: vendors.find((v) => v.id === vendorId)?.name ?? "",
               description: desc,
-              amount,
+              amount: baseAmount,
+              currency,
+              fx_rate: isBase ? 1 : fxRate,
+              amount_original: original,
               status,
               linked_budget_line_id: lineId,
               notes,
@@ -390,75 +460,96 @@ function POForm({
           className="space-y-3"
         >
           <div className="grid grid-cols-2 gap-3">
-            <Field label="PO Number">
+            <Field label={t("ap.po_number")}>
               <input
-                value={po}
-                onChange={(e) => setPo(e.target.value)}
-                className="w-full rounded-lg bg-background border border-border px-3 py-2 text-sm"
+                value={initial?.po_number ?? ""}
+                placeholder={t("ap.po_number_auto")}
+                readOnly
+                className={`${inputCls} bg-surface text-muted-foreground font-mono`}
               />
             </Field>
-            <Field label="Status">
+            <Field label={t("common.status")}>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="w-full rounded-lg bg-background border border-border px-3 py-2 text-sm"
+                className={inputCls}
               >
-                {PO_STATUSES.map((s) => (
+                {statusOptions.map((s) => (
                   <option key={s} value={s}>
-                    {s}
+                    {t(`ap.po_status.${s}`, { defaultValue: s })}
                   </option>
                 ))}
               </select>
             </Field>
           </div>
-          <Field label="Vendor">
-            <input
-              list="vendors-list"
-              value={vendor}
-              onChange={(e) => setVendor(e.target.value)}
-              className="w-full rounded-lg bg-background border border-border px-3 py-2 text-sm"
-              placeholder={t("purchase_orders.select_or_type_vendor_name")}
+          {!approvedNow && (
+            <p className="text-[11px] text-muted-foreground">{t("ap.po_approval_hint")}</p>
+          )}
+          <Field label={t("ap.vendor")}>
+            <SearchableSelect
+              value={vendorId}
+              onChange={setVendorId}
+              options={vendors.map((v) => ({
+                value: v.id,
+                label: v.name,
+                keywords: v.category ?? undefined,
+              }))}
+              placeholder={t("ap.select_vendor")}
+              searchPlaceholder={t("ap.search_vendor")}
+              allowEmpty={false}
             />
-            <datalist id="vendors-list">
-              {vendors.map((v) => (
-                <option key={v.id} value={v.name} />
-              ))}
-            </datalist>
+            {vendors.length === 0 && (
+              <div className="mt-1 text-[11px] text-warning">{t("ap.no_vendors_hint")}</div>
+            )}
           </Field>
-          <Field label="Description">
-            <input
-              value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-              className="w-full rounded-lg bg-background border border-border px-3 py-2 text-sm"
-            />
+          <Field label={t("ap.description")}>
+            <input value={desc} onChange={(e) => setDesc(e.target.value)} className={inputCls} />
           </Field>
-          <Field label="Budget Line">
+          <Field label={t("ap.budget_line")}>
             <SearchableSelect
               value={lineId}
               onChange={setLineId}
               options={budgetLines.map((l) => ({ value: l.id, code: l.code, label: l.desc }))}
               placeholder={t("purchase_orders.select_budget_line")}
-              searchPlaceholder="Search code or description…"
-              emptyValueLabel="— No budget line —"
+              searchPlaceholder={t("ap.search_budget_line")}
+              emptyValueLabel={t("ap.no_budget_line")}
             />
           </Field>
-
-          <Field label="Amount (USD)">
+          <CurrencyFxFields
+            fx={fx}
+            currency={currency}
+            fxRate={fxRate}
+            inputCls={inputCls}
+            onChange={(v) => {
+              setCurrency(v.currency);
+              setFxRate(v.fxRate);
+            }}
+          />
+          <Field label={t("ap.amount_in", { ccy: currency })}>
             <input
               type="number"
-              value={amount}
-              onChange={(e) => setAmount(Number(e.target.value))}
-              className="w-full rounded-lg bg-background border border-border px-3 py-2 text-sm"
+              value={original}
+              onChange={(e) => setOriginal(Number(e.target.value))}
+              className={inputCls}
               min={0}
               step="0.01"
+              dir="ltr"
             />
+            {!isBase && (
+              <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+                {t("ap.equals_base", {
+                  amount: baseAmount.toLocaleString("en-US", { minimumFractionDigits: 2 }),
+                  base: fx.baseCurrency,
+                })}
+              </div>
+            )}
           </Field>
-          <Field label="Notes">
+          <Field label={t("common.notes")}>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              className="w-full rounded-lg bg-background border border-border px-3 py-2 text-sm"
+              className={inputCls}
             />
           </Field>
           <div className="flex justify-end gap-2 pt-2">
@@ -467,13 +558,13 @@ function POForm({
               onClick={onClose}
               className="px-4 py-2 text-sm rounded-lg bg-surface hover:bg-muted"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="submit"
               className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground font-semibold"
             >
-              Save
+              {t("ap.save")}
             </button>
           </div>
         </form>
