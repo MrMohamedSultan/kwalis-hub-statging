@@ -35,7 +35,8 @@ export function DepartmentUtilization({
     }))
     .sort((a, b) => b.pct - a.pct);
 
-  const money = (v: number) => formatCurrency(convert(v), { currency: code, compact: true });
+  // G16: financial figures are shown in full (no 1.8K abbreviations).
+  const money = (v: number) => formatCurrency(convert(v), { currency: code });
 
   return (
     <ChartCard

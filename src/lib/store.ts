@@ -2334,15 +2334,13 @@ export const lineTotalUSD = (l: BudgetLine) => {
  */
 export const lineTotal = (l: BudgetLine) => lineTotalSAR(l);
 /** Compact display total in the active display currency. */
-export const formatMoney = (n: number) => {
-  const v = convertForDisplay(Number(n) || 0);
-  const code = displayCurrencyCode();
-  const abs = Math.abs(v);
-  const sign = v < 0 ? "-" : "";
-  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}m ${code}`;
-  if (abs >= 1000) return `${sign}${(abs / 1000).toFixed(0)}k ${code}`;
-  return `${sign}${abs.toLocaleString()} ${code}`;
-};
+/**
+ * Money for tiles and panels. G16: financial figures are never abbreviated
+ * ("1.8K" for 1,750) — this renders the full grouped value with the active
+ * currency code, e.g. "1,750 SAR" / "-12,417,300 SAR" (X17: one format).
+ * Chart axes keep their own compact tick formatter.
+ */
+export const formatMoney = (n: number) => formatDisplayMoney(n);
 /** Full display amount with the active currency code (e.g. "17,100,000 SAR"). */
 export const formatUSD = (n: number) => formatDisplayMoney(n);
 /** Plain-number formatter in the active display currency — no code appended. */

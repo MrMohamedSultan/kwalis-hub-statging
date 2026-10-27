@@ -2785,7 +2785,7 @@ function RebateTrackingReport() {
         </h3>
         <div className="overflow-x-auto max-h-[360px]">
           <table className="w-full text-sm">
-            <thead className="bg-surface/60 text-left text-xs uppercase tracking-wide text-muted-foreground sticky top-0">
+            <thead className="bg-surface text-left text-xs uppercase tracking-wide text-muted-foreground sticky top-0">
               <tr>
                 <th className="px-3 py-2">Code</th>
                 <th className="px-3 py-2">Description</th>
@@ -2813,7 +2813,7 @@ function RebateTrackingReport() {
         </h3>
         <div className="overflow-x-auto max-h-[360px]">
           <table className="w-full text-sm">
-            <thead className="bg-surface/60 text-left text-xs uppercase tracking-wide text-muted-foreground sticky top-0">
+            <thead className="bg-surface text-left text-xs uppercase tracking-wide text-muted-foreground sticky top-0">
               <tr>
                 <th className="px-3 py-2">Date</th>
                 <th className="px-3 py-2">Invoice #</th>

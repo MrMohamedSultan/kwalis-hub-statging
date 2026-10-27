@@ -106,12 +106,13 @@ export function pivotByBeneficiary(milestones: PayableMilestone[]): PayableRow[]
   return Array.from(map.values());
 }
 
+/**
+ * Grouped amount. G16: money is never abbreviated ("1.8K" for 1,750) — the
+ * `short` flag is kept for call-site compatibility but renders in full.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function fmt(n: number, short = false): string {
-  const v = Number(n) || 0;
-  if (short && Math.abs(v) >= 1000) {
-    return `${(v / 1000).toFixed(Math.abs(v) % 1000 === 0 ? 0 : 1)}K`;
-  }
-  return formatAmount(v, 0);
+  return formatAmount(Number(n) || 0, 0);
 }
 
 export function milestoneHeaders(milestones: PayableMilestone[], maxMilestones: number): string[] {
