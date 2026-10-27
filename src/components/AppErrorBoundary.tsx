@@ -20,6 +20,7 @@
 // ============================================================
 import { Component, type ReactNode } from "react";
 import i18n from "@/lib/i18n";
+import { IS_DEV, userFacingErrorMessage } from "@/lib/error-message";
 import { reportLovableError } from "@/lib/lovable-error-reporting";
 
 type Props = {
@@ -38,8 +39,7 @@ export class AppErrorBoundary extends Component<Props, State> {
   static getDerivedStateFromError(error: unknown): State {
     return {
       hasError: true,
-      message:
-        error instanceof Error ? error.message : typeof error === "string" ? error : undefined,
+      message: userFacingErrorMessage(error, IS_DEV),
     };
   }
 
