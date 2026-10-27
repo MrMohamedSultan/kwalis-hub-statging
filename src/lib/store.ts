@@ -461,6 +461,8 @@ type State = {
   ) => Promise<void>;
   updatePayrollGlAccount: (rowId: string, glAccountId: string | null) => Promise<void>;
   setPayrollLedger: (refId: string, ledger: PaymentLedgerEntry[]) => Promise<void>;
+  /** Re-read one payroll row after the database changed it (e.g. a payment request moved an instalment). */
+  refreshPayrollRow: (payrollRowId: string) => Promise<void>;
   /** Toggle a single contract milestone's payable state without touching the contract. */
   setMilestoneStatus: (
     payrollRowId: string,
@@ -1716,13 +1718,20 @@ export const useStore = create<State>()(
         }
       },
       updatePerson: async (id, patch) => {
+        const before = get().people.find((p) => p.id === id);
         set((s) => ({ people: s.people.map((p) => (p.id === id ? { ...p, ...patch } : p)) }));
         const updated = get().people.find((p) => p.id === id);
-        if (updated)
-          await supabase
+        if (updated) {
+          const { error } = await supabase
             .from("people")
             .update(toPersonRow(updated) as any)
             .eq("id", id);
+          if (error) {
+            // The database refused (e.g. a contract approved by its own creator): undo.
+            if (before) set((s) => ({ people: s.people.map((p) => (p.id === id ? before : p)) }));
+            throw error;
+          }
+        }
       },
       removePerson: async (id) => {
         // Cascade: clear managed attachments (storage + metadata) for the contract.
@@ -1991,6 +2000,17 @@ export const useStore = create<State>()(
           .update({ gl_account_id: glAccountId })
           .eq("id", rowId);
         if (error) throw error;
+      },
+
+      refreshPayrollRow: async (payrollRowId) => {
+        const { data, error } = await supabase
+          .from("payroll")
+          .select("*")
+          .eq("id", payrollRowId)
+          .maybeSingle();
+        if (error || !data) return;
+        const fresh = fromPayrollRow(data);
+        set((s) => ({ payroll: s.payroll.map((r) => (r.id === payrollRowId ? fresh : r)) }));
       },
 
       setMilestoneStatus: async (payrollRowId, milestoneId, status, execution) => {

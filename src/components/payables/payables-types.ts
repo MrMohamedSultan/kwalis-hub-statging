@@ -29,6 +29,16 @@ export interface PayableMilestone {
   /** External proof-of-payment link. */
   receipt_url?: string;
   notes?: string;
+  /** Payment request paying this instalment (db/pending/176), when there is one. */
+  payment_request_id?: string;
+  payment_request_status?:
+    "draft" | "waiting_approval" | "approved" | "paid" | "rejected" | "cancelled";
+  /** Rejection / cancellation reason of the latest request. */
+  payment_request_reason?: string;
+  /** The current user raised the open request. */
+  requested_by_me?: boolean;
+  /** Contract approved (Active) — payment can be requested only then. */
+  contract_approved?: boolean;
 }
 
 /** Frontend-only pivot: one row per contract / beneficiary. */
