@@ -425,7 +425,10 @@ export function reportPdfTables(
   });
 }
 
-export async function exportReportPdf(doc: ReportDoc): Promise<string> {
+export async function exportReportPdf(
+  doc: ReportDoc,
+  opts: { compact?: boolean } = {},
+): Promise<string> {
   const [{ exportPdfReport }, { brandedFileName }] = await Promise.all([
     import("@/lib/export-pdf"),
     import("./branding"),
@@ -442,7 +445,7 @@ export async function exportReportPdf(doc: ReportDoc): Promise<string> {
       numericColumns: t.numericColumns,
       boldRows: t.boldRows,
     })),
-    { documentTitle: doc.title, subtitle: doc.subtitle },
+    { documentTitle: doc.title, subtitle: doc.subtitle, fontSize: opts.compact ? 7 : undefined },
   );
   return filename;
 }

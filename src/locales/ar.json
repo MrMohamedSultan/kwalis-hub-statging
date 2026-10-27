@@ -2956,6 +2956,14 @@
     "funding_amount": "المبلغ",
     "funding_currency": "العملة",
     "funding_preview": "يُسجَّل بقيمة:",
-    "funding_no_rate": "لا يوجد سعر صرف مضبوط لعملة {{currency}} — اضبطه من الإعدادات ← العملات."
+    "funding_no_rate": "لا يوجد سعر صرف مضبوط لعملة {{currency}} — اضبطه من الإعدادات ← العملات.",
+    "fx_source_rate_table": "جدول أسعار الصرف للمشروع",
+    "fx_source_project": "إعدادات المشروع",
+    "fx_source_company": "إعدادات الشركة",
+    "paid_caption": "كل المدفوعات المسجلة لهذا المشروع — بنفس أرقام بطاقة المدفوع في لوحة التحكم.",
+    "report_general_ledger": "دفتر الأستاذ العام",
+    "total_actual": "إجمالي الفعلي",
+    "total_paid": "إجمالي المدفوع",
+    "total_commitment": "إجمالي الالتزامات"
   }
 }

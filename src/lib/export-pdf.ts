@@ -20,6 +20,8 @@ export type PdfMeta = {
   documentTitle?: string;
   /** Small line under the title in the page header (filters, currency…). */
   subtitle?: string;
+  /** Table font size (default 8.5pt; wide ledgers use 7). */
+  fontSize?: number;
   author?: string;
   /**
    * Language direction of the export. When "rtl" (Arabic), the document is
@@ -100,8 +102,8 @@ export async function exportPdfReport(
       showHead: "everyPage",
       styles: {
         font,
-        fontSize: 8.5,
-        cellPadding: 4,
+        fontSize: meta?.fontSize ?? 8.5,
+        cellPadding: meta?.fontSize && meta.fontSize < 8 ? 3 : 4,
         overflow: "linebreak",
         halign: rtl ? "right" : "left",
       },

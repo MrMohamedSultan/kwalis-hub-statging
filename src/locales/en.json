@@ -2956,6 +2956,14 @@
     "funding_amount": "Amount",
     "funding_currency": "Currency",
     "funding_preview": "Booked as:",
-    "funding_no_rate": "No exchange rate is configured for {{currency}} — set it in Settings → Currency."
+    "funding_no_rate": "No exchange rate is configured for {{currency}} — set it in Settings → Currency.",
+    "fx_source_rate_table": "project exchange-rate schedule",
+    "fx_source_project": "project settings",
+    "fx_source_company": "company settings",
+    "paid_caption": "Every payment recorded for this project — the same figures as the dashboard Paid card.",
+    "report_general_ledger": "General Ledger",
+    "total_actual": "Total Actual",
+    "total_paid": "Total Paid",
+    "total_commitment": "Total Commitment"
   }
 }
