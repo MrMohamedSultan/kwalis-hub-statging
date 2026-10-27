@@ -2,7 +2,16 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { recordAudit } from "@/lib/audit-log";
 
-export type GlAccountCategory = "ATL" | "BTL" | "Post-Production" | "Admin & Other";
+export type GlAccountCategory =
+  "ATL" | "BTL" | "Post-Production" | "Admin & Other" | "Balance Sheet";
+
+/**
+ * expense = cost accounts a budget code maps to; the others are balance-sheet
+ * accounts (db/pending/174) used by petty cash / treasury and never offered on
+ * a cost document.
+ */
+export type GlAccountType =
+  "expense" | "bank" | "cash" | "petty_cash" | "payable" | "wht_payable" | "vat" | "funding";
 
 export type GlAccount = {
   id: string;
@@ -11,6 +20,7 @@ export type GlAccount = {
   category: GlAccountCategory;
   description: string | null;
   isActive: boolean;
+  accountType: GlAccountType;
 };
 
 export const GL_CATEGORIES: { key: GlAccountCategory; label: string; hint: string }[] = [
@@ -18,6 +28,7 @@ export const GL_CATEGORIES: { key: GlAccountCategory; label: string; hint: strin
   { key: "BTL", label: "BTL — Below-the-Line", hint: "Crew, gear, production costs" },
   { key: "Post-Production", label: "Post-Production", hint: "Editing, VFX, sound" },
   { key: "Admin & Other", label: "Admin & Other", hint: "Insurance, permits, catering" },
+  { key: "Balance Sheet", label: "Balance Sheet", hint: "Bank, cash, petty cash, payables, tax" },
 ];
 
 let cache: GlAccount[] | null = null;
@@ -36,13 +47,17 @@ function mapRow(r: any): GlAccount {
     category: r.category,
     description: r.description ?? null,
     isActive: !!r.is_active,
+    // `select("*")` so this keeps working before db/pending/174 adds the column.
+    accountType:
+      (r.account_type as GlAccountType | undefined) ??
+      (r.code === "2140" ? "wht_payable" : "expense"),
   };
 }
 
 async function fetchGlAccounts(): Promise<GlAccount[]> {
   const { data, error } = await supabase
     .from("gl_accounts")
-    .select("id, code, name, category, description, is_active")
+    .select("*")
     .order("code", { ascending: true });
   if (error) throw error;
   return (data ?? []).map(mapRow);

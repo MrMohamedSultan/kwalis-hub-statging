@@ -37,6 +37,7 @@ const CATEGORY_COLORS: Record<GlAccountCategory | "Uncategorized", string> = {
   BTL: "#34d399",
   "Post-Production": "#a78bfa",
   "Admin & Other": "#f59e0b",
+  "Balance Sheet": "#64748b",
   Uncategorized: "#94a3b8",
 };
 
