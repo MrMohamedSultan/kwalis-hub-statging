@@ -1,142 +1,194 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { useCan } from "@/lib/rbac";
+import { useAuthRoles } from "@/lib/auth-roles";
 import { Modal } from "@/components/Modal";
 import { DateInput } from "@/components/ui/date-input";
 import {
-  STATUS_LABEL,
   STATUS_COLORS,
+  statusLabelKey,
   approvePaymentRequest,
   rejectPaymentRequest,
+  cancelPaymentRequest,
   submitForApproval,
   executePaymentRequest,
   deletePaymentRequest,
   getProofSignedUrl,
   useIsCreator,
+  type ChainStatus,
   type PaymentRequest,
 } from "@/lib/payment-requests";
-import { Send, Check, X, UploadCloud, Trash2, Paperclip, Eye, RefreshCw } from "lucide-react";
+import {
+  Send,
+  Check,
+  X,
+  UploadCloud,
+  Trash2,
+  Paperclip,
+  Eye,
+  RefreshCw,
+  Ban,
+  Hourglass,
+} from "lucide-react";
 
-import { useTranslation } from "react-i18next";
 export function PaymentStatusBadge({ status }: { status: PaymentRequest["status"] }) {
+  const { t } = useTranslation();
   return (
     <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${STATUS_COLORS[status]}`}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${STATUS_COLORS[status] ?? STATUS_COLORS.draft}`}
     >
-      {STATUS_LABEL[status]}
+      {t(statusLabelKey(status))}
     </span>
   );
 }
 
 /**
  * Conditional action buttons for a single payment request.
- * Renders the correct action(s) for the current status + user permissions:
- *  - draft + payments.request (creator)  → "Send to Approval" · "Delete"
- *  - waiting_approval + payments.approve → "Approve" · "Reject"
- *  - approved + payments.execute         → "Execute & Upload Receipt"
+ *  - draft (creator)               → Send for approval · Delete
+ *  - waiting_approval, your turn   → Approve · Reject (with reason)
+ *  - waiting_approval, not yours   → "Waiting for: <level>"
+ *  - approved + payments.execute   → Execute & upload receipt
+ *  - requester (before approval) / org admin (before payment) → Cancel (with reason)
+ *
+ * `chain` comes from payment_request_chain_status; without it the old
+ * single-approval rule (payments.approve) is used.
  */
 export function PaymentWorkflowActions({
   request,
+  chain,
   compact = false,
+  onChanged,
 }: {
   request: PaymentRequest;
+  chain?: ChainStatus | null;
   compact?: boolean;
+  onChanged?: () => void;
 }) {
   const { t } = useTranslation();
-
   const can = useCan();
+  const { isSuperAdmin, adminOrgIds } = useAuthRoles();
   const isCreator = useIsCreator(request);
+  const isOrgAdmin = isSuperAdmin || adminOrgIds.includes(request.organization_id);
   const [busy, setBusy] = useState(false);
-  const [rejectOpen, setRejectOpen] = useState(false);
+  const [reasonFor, setReasonFor] = useState<"reject" | "cancel" | null>(null);
   const [executeOpen, setExecuteOpen] = useState(false);
 
   const btnBase =
     "inline-flex items-center gap-1.5 rounded-lg font-semibold border transition disabled:opacity-60";
   const sz = compact ? "px-2 py-1 text-[11px]" : "px-3 py-1.5 text-xs";
 
-  const doSubmit = async () => {
+  const waiting = request.status === "waiting_approval";
+  const myTurn = waiting && !isCreator && (chain ? chain.can_act : can("payments.approve"));
+  const canReject = waiting && !isCreator && (myTurn || isOrgAdmin);
+  const canCancel =
+    (isCreator && (request.status === "draft" || waiting)) ||
+    (isOrgAdmin && (request.status === "draft" || waiting || request.status === "approved"));
+
+  const run = async (fn: () => Promise<unknown>, ok: string, fail: string) => {
     setBusy(true);
     try {
-      await submitForApproval(request.id);
-      toast.success(t("paymentworkflowactions.x_2"));
+      await fn();
+      toast.success(ok);
+      onChanged?.();
     } catch (e: any) {
-      toast.error(e?.message ?? "تعذّر إرسال الطلب.");
+      toast.error(e?.message ?? fail);
     } finally {
       setBusy(false);
     }
   };
+
   const doApprove = async () => {
     setBusy(true);
     try {
-      await approvePaymentRequest(request.id);
-      toast.success(t("paymentworkflowactions.x_3"));
+      const status = await approvePaymentRequest(request.id);
+      toast.success(
+        status === "approved" ? t("approvals.toast.approved") : t("approvals.toast.levelApproved"),
+      );
+      onChanged?.();
     } catch (e: any) {
-      toast.error(e?.message ?? "تعذّر اعتماد الطلب.");
+      toast.error(e?.message ?? t("approvals.toast.approveFailed"));
     } finally {
       setBusy(false);
     }
   };
+
   const doDelete = async () => {
-    if (!confirm(t("paymentworkflowactions.x_7"))) return;
-    setBusy(true);
-    try {
-      await deletePaymentRequest(request.id);
-      toast.success(t("paymentworkflowactions.x_4"));
-    } catch (e: any) {
-      toast.error(e?.message ?? "تعذّر الحذف.");
-    } finally {
-      setBusy(false);
-    }
+    if (!confirm(t("approvals.confirmDeleteDraft"))) return;
+    await run(
+      () => deletePaymentRequest(request.id),
+      t("approvals.toast.deleted"),
+      t("approvals.toast.deleteFailed"),
+    );
   };
 
   const openProof = async () => {
     if (!request.proof_path) return;
     const url = await getProofSignedUrl(request.proof_path);
     if (!url) {
-      toast.error(t("paymentworkflowactions.x"));
+      toast.error(t("approvals.toast.proofFailed"));
       return;
     }
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
   return (
-    <div className="flex items-center gap-1.5 flex-wrap" dir="rtl">
+    <div className="flex items-center gap-1.5 flex-wrap">
       {request.status === "draft" && isCreator && can("payments.request") && (
         <>
           <button
-            onClick={doSubmit}
+            onClick={() =>
+              run(
+                () => submitForApproval(request.id),
+                t("approvals.toast.submitted"),
+                t("approvals.toast.submitFailed"),
+              )
+            }
             disabled={busy}
             className={`${btnBase} ${sz} bg-success/15 text-success border-success/30 hover:bg-success/25`}
           >
-            <Send className="size-3" /> إرسال لطلب الاعتماد
+            <Send className="size-3" /> {t("approvals.action.submit")}
           </button>
           <button
             onClick={doDelete}
             disabled={busy}
-            title="حذف المسودة"
+            title={t("approvals.action.deleteDraft")}
+            aria-label={t("approvals.action.deleteDraft")}
             className={`${btnBase} ${sz} bg-surface text-muted-foreground border-border hover:bg-muted`}
           >
             <Trash2 className="size-3" />
           </button>
         </>
       )}
-      {request.status === "waiting_approval" && can("payments.approve") && (
-        <>
-          <button
-            onClick={doApprove}
-            disabled={busy}
-            className={`${btnBase} ${sz} bg-success/15 text-success border-success/30 hover:bg-success/25`}
-          >
-            <Check className="size-3" /> اعتماد وموافقة
-          </button>
-          <button
-            onClick={() => setRejectOpen(true)}
-            disabled={busy}
-            className={`${btnBase} ${sz} bg-destructive/15 text-destructive border-destructive/30 hover:bg-destructive/25`}
-          >
-            <X className="size-3" /> رفض الطلب
-          </button>
-        </>
+      {myTurn && (
+        <button
+          onClick={doApprove}
+          disabled={busy}
+          className={`${btnBase} ${sz} bg-success/15 text-success border-success/30 hover:bg-success/25`}
+        >
+          <Check className="size-3" />{" "}
+          {chain && chain.required_levels > 1
+            ? t("approvals.action.approveLevel", {
+                level: chain.next_level,
+                total: chain.required_levels,
+              })
+            : t("approvals.action.approve")}
+        </button>
+      )}
+      {canReject && (
+        <button
+          onClick={() => setReasonFor("reject")}
+          disabled={busy}
+          className={`${btnBase} ${sz} bg-destructive/15 text-destructive border-destructive/30 hover:bg-destructive/25`}
+        >
+          <X className="size-3" /> {t("approvals.action.reject")}
+        </button>
+      )}
+      {waiting && !myTurn && chain?.next_label && (
+        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+          <Hourglass className="size-3" />
+          {t("approvals.waitingFor", { label: chain.next_label })}
+        </span>
       )}
       {request.status === "approved" && can("payments.execute") && (
         <button
@@ -144,7 +196,7 @@ export function PaymentWorkflowActions({
           disabled={busy}
           className={`${btnBase} ${sz} bg-info/15 text-info border-info/30 hover:bg-info/25`}
         >
-          <UploadCloud className="size-3" /> تنفيذ السداد ورفع الإيصال
+          <UploadCloud className="size-3" /> {t("approvals.action.execute")}
         </button>
       )}
       {request.status === "paid" && request.proof_path && (
@@ -152,50 +204,96 @@ export function PaymentWorkflowActions({
           onClick={openProof}
           className={`${btnBase} ${sz} bg-surface text-info border-border hover:bg-muted`}
         >
-          <Eye className="size-3" /> معاينة الإيصال
+          <Eye className="size-3" /> {t("approvals.action.viewReceipt")}
         </button>
       )}
-      {rejectOpen && <RejectModal request={request} onClose={() => setRejectOpen(false)} />}
-      {executeOpen && <ExecuteModal request={request} onClose={() => setExecuteOpen(false)} />}
+      {canCancel && (
+        <button
+          onClick={() => setReasonFor("cancel")}
+          disabled={busy}
+          title={t("approvals.action.cancelHint")}
+          className={`${btnBase} ${sz} bg-surface text-muted-foreground border-border hover:bg-muted`}
+        >
+          <Ban className="size-3" /> {t("approvals.action.cancel")}
+        </button>
+      )}
+      {reasonFor && (
+        <ReasonModal
+          mode={reasonFor}
+          onClose={() => setReasonFor(null)}
+          onConfirm={async (reason) => {
+            if (reasonFor === "reject") {
+              await rejectPaymentRequest(request.id, reason);
+              toast.success(t("approvals.toast.rejected"));
+            } else {
+              await cancelPaymentRequest(request.id, reason);
+              toast.success(t("approvals.toast.cancelled"));
+            }
+            onChanged?.();
+          }}
+        />
+      )}
+      {executeOpen && (
+        <ExecuteModal
+          request={request}
+          onClose={() => setExecuteOpen(false)}
+          onDone={() => onChanged?.()}
+        />
+      )}
     </div>
   );
 }
 
-function RejectModal({ request, onClose }: { request: PaymentRequest; onClose: () => void }) {
+/** Reject or cancel — both need a written reason that the requester sees. */
+function ReasonModal({
+  mode,
+  onClose,
+  onConfirm,
+}: {
+  mode: "reject" | "cancel";
+  onClose: () => void;
+  onConfirm: (reason: string) => Promise<void>;
+}) {
   const { t } = useTranslation();
-
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (reason.trim().length < 3) {
-      toast.error(t("paymentworkflowactions.x_8"));
+    const clean = reason.trim();
+    if (clean.length < 3) {
+      toast.error(t("approvals.reasonTooShort"));
       return;
     }
     setBusy(true);
     try {
-      await rejectPaymentRequest(request.id, reason.trim());
-      toast.success(t("paymentworkflowactions.x_6"));
+      await onConfirm(clean.slice(0, 1000));
       onClose();
-    } catch (e: any) {
-      toast.error(e?.message ?? "تعذّر رفض الطلب.");
+    } catch (err: any) {
+      toast.error(err?.message ?? t("approvals.toast.actionFailed"));
     } finally {
       setBusy(false);
     }
   };
   return (
-    <Modal title="رفض طلب السداد" onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3" dir="rtl">
+    <Modal
+      title={mode === "reject" ? t("approvals.rejectTitle") : t("approvals.cancelTitle")}
+      onClose={onClose}
+    >
+      <form onSubmit={submit} className="space-y-3">
+        {mode === "cancel" && (
+          <p className="text-xs text-muted-foreground">{t("approvals.cancelExplain")}</p>
+        )}
         <label className="text-sm block">
           <div className="text-muted-foreground mb-1 uppercase tracking-wider text-xs">
-            سبب الرفض
+            {mode === "reject" ? t("approvals.rejectReason") : t("approvals.cancelReason")}
           </div>
           <textarea
             rows={3}
             value={reason}
+            maxLength={1000}
             onChange={(e) => setReason(e.target.value)}
             required
-            placeholder="اشرح سبب رفض هذا الطلب…"
+            placeholder={t("approvals.reasonPlaceholder")}
             className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 outline-none focus:ring-2 ring-destructive text-start"
           />
         </label>
@@ -205,14 +303,18 @@ function RejectModal({ request, onClose }: { request: PaymentRequest; onClose: (
             onClick={onClose}
             className="px-4 py-2 rounded-xl border border-border hover:bg-muted"
           >
-            إلغاء
+            {t("approvals.close")}
           </button>
           <button
             type="submit"
             disabled={busy}
-            className="px-4 py-2 rounded-xl bg-destructive text-white font-semibold disabled:opacity-60"
+            className="px-4 py-2 rounded-xl bg-destructive text-destructive-foreground font-semibold disabled:opacity-60"
           >
-            {busy ? "جاري الرفض…" : "تأكيد الرفض"}
+            {busy
+              ? t("approvals.working")
+              : mode === "reject"
+                ? t("approvals.confirmReject")
+                : t("approvals.confirmCancel")}
           </button>
         </div>
       </form>
@@ -224,21 +326,32 @@ const ALLOWED_RECEIPT_MIME = ["application/pdf", "image/png", "image/jpeg"];
 const ALLOWED_RECEIPT_EXT = [".pdf", ".png", ".jpg", ".jpeg"];
 const MAX_RECEIPT_BYTES = 10 * 1024 * 1024; // 10 MB
 
-function isValidReceipt(file: File): string | null {
+/** i18n key of the problem with a receipt file, or null when it is fine. */
+function receiptProblem(file: File): string | null {
   const name = file.name.toLowerCase();
   const extOk = ALLOWED_RECEIPT_EXT.some((e) => name.endsWith(e));
   const mimeOk = ALLOWED_RECEIPT_MIME.includes(file.type);
-  if (!extOk || !mimeOk) return "يجب أن يكون الإيصال ملف PDF أو PNG أو JPEG.";
-  if (file.size > MAX_RECEIPT_BYTES) return "حجم الإيصال يتجاوز ١٠ ميغابايت.";
-  if (file.size <= 0) return "ملف الإيصال فارغ.";
+  if (!extOk || !mimeOk) return "approvals.receipt.badType";
+  if (file.size > MAX_RECEIPT_BYTES) return "approvals.receipt.tooBig";
+  if (file.size <= 0) return "approvals.receipt.empty";
   return null;
 }
 
-function ExecuteModal({ request, onClose }: { request: PaymentRequest; onClose: () => void }) {
+const METHODS = ["Cash", "Transfer", "Check", "Card", "Bank"] as const;
+
+function ExecuteModal({
+  request,
+  onClose,
+  onDone,
+}: {
+  request: PaymentRequest;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const { t } = useTranslation();
 
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [method, setMethod] = useState<"Cash" | "Transfer" | "Check" | "Card" | "Bank">("Transfer");
+  const [method, setMethod] = useState<(typeof METHODS)[number]>("Transfer");
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -254,25 +367,17 @@ function ExecuteModal({ request, onClose }: { request: PaymentRequest; onClose: 
   const isImage = !!file && file.type.startsWith("image/");
   const isPdf = !!file && file.type === "application/pdf";
 
-  const METHOD_LABEL: Record<string, string> = {
-    Cash: "نقدي",
-    Transfer: "تحويل بنكي",
-    Check: "شيك",
-    Card: "بطاقة",
-    Bank: "بنك",
-  };
-
   const pickFile = (f: File | null) => {
     if (!f) {
       setFile(null);
       setFileError(null);
       return;
     }
-    const err = isValidReceipt(f);
+    const err = receiptProblem(f);
     if (err) {
       setFile(null);
       setFileError(err);
-      toast.error(err);
+      toast.error(t(err));
       return;
     }
     setFile(f);
@@ -281,25 +386,20 @@ function ExecuteModal({ request, onClose }: { request: PaymentRequest; onClose: 
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) {
-      const msg = "يرجى إرفاق إيصال إثبات السداد (PDF أو PNG أو JPEG).";
-      setFileError(msg);
-      toast.error(msg);
-      return;
-    }
-    const err = isValidReceipt(file);
+    const err = file ? receiptProblem(file) : "approvals.receipt.required";
     if (err) {
       setFileError(err);
-      toast.error(err);
+      toast.error(t(err));
       return;
     }
     setBusy(true);
     try {
       await executePaymentRequest({ id: request.id, paymentDate: date, method, proofFile: file });
-      toast.success(t("paymentworkflowactions.x_5"));
+      toast.success(t("approvals.toast.paid"));
+      onDone();
       onClose();
     } catch (e: any) {
-      toast.error(e?.message ?? "تعذّر تنفيذ السداد.");
+      toast.error(e?.message ?? t("approvals.toast.payFailed"));
     } finally {
       setBusy(false);
     }
@@ -310,30 +410,30 @@ function ExecuteModal({ request, onClose }: { request: PaymentRequest; onClose: 
     ? "border-destructive/60 bg-destructive/10"
     : "border-border bg-surface-2 hover:bg-muted";
   return (
-    <Modal title="تنفيذ السداد ورفع الإيصال" onClose={onClose}>
-      <form onSubmit={submit} className="grid grid-cols-2 gap-3" dir="rtl">
+    <Modal title={t("approvals.executeTitle")} onClose={onClose}>
+      <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="text-sm">
           <div className="text-muted-foreground mb-1 uppercase tracking-wider text-xs">
-            تاريخ السداد
+            {t("approvals.paymentDate")}
           </div>
           <DateInput value={date} onChange={setDate} className={cls} />
         </label>
         <label className="text-sm">
           <div className="text-muted-foreground mb-1 uppercase tracking-wider text-xs">
-            طريقة السداد
+            {t("approvals.paymentMethod")}
           </div>
           <select value={method} onChange={(e) => setMethod(e.target.value as any)} className={cls}>
-            {["Cash", "Transfer", "Check", "Card", "Bank"].map((m) => (
+            {METHODS.map((m) => (
               <option key={m} value={m}>
-                {METHOD_LABEL[m]}
+                {t(`approvals.method.${m}`)}
               </option>
             ))}
           </select>
         </label>
-        <div className="text-sm col-span-2">
+        <div className="text-sm sm:col-span-2">
           <div className="text-muted-foreground mb-1 uppercase tracking-wider text-xs flex items-center justify-between">
             <span>
-              إيصال / إثبات السداد <span className="text-destructive">*</span>
+              {t("approvals.receipt.label")} <span className="text-destructive">*</span>
             </span>
             {file && (
               <button
@@ -341,7 +441,7 @@ function ExecuteModal({ request, onClose }: { request: PaymentRequest; onClose: 
                 onClick={() => fileRef.current?.click()}
                 className="inline-flex items-center gap-1 text-[11px] font-semibold text-info hover:text-info normal-case tracking-normal"
               >
-                <RefreshCw className="size-3" /> استبدال الملف
+                <RefreshCw className="size-3" /> {t("approvals.receipt.replace")}
               </button>
             )}
           </div>
@@ -361,8 +461,8 @@ function ExecuteModal({ request, onClose }: { request: PaymentRequest; onClose: 
                 {previewUrl && isImage && (
                   <img
                     src={previewUrl}
-                    alt="معاينة الإيصال"
-                    className="max-h-40 rounded-lg border border-border object-contain bg-black/20"
+                    alt={t("approvals.receipt.preview")}
+                    className="max-h-40 rounded-lg border border-border object-contain bg-surface-2"
                   />
                 )}
                 {previewUrl && isPdf && (
@@ -372,16 +472,14 @@ function ExecuteModal({ request, onClose }: { request: PaymentRequest; onClose: 
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 text-[11px] text-info hover:text-info"
                   >
-                    <Eye className="size-3" /> معاينة الملف قبل التأكيد
+                    <Eye className="size-3" /> {t("approvals.receipt.previewPdf")}
                   </a>
                 )}
               </div>
             ) : (
               <>
                 <UploadCloud className="size-6 text-muted-foreground" />
-                <div className="text-xs text-muted-foreground">
-                  اضغط لإرفاق الإيصال — PDF أو PNG أو JPEG (بحد أقصى ١٠ ميغابايت)
-                </div>
+                <div className="text-xs text-muted-foreground">{t("approvals.receipt.pick")}</div>
               </>
             )}
             <input
@@ -392,35 +490,34 @@ function ExecuteModal({ request, onClose }: { request: PaymentRequest; onClose: 
               onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
             />
           </div>
-          {fileError && (
+          {fileError ? (
             <div
               role="alert"
               className="mt-1.5 text-[11px] text-destructive flex items-start gap-1"
             >
               <span aria-hidden>⚠</span>
-              <span>{fileError}</span>
+              <span>{t(fileError)}</span>
             </div>
-          )}
-          {!fileError && (
+          ) : (
             <div className="mt-1.5 text-[11px] text-muted-foreground">
-              الصيغ المقبولة: PDF، PNG، JPEG · الحد الأقصى ١٠ ميغابايت
+              {t("approvals.receipt.formats")}
             </div>
           )}
         </div>
-        <div className="col-span-2 flex justify-end gap-2 mt-1">
+        <div className="sm:col-span-2 flex justify-end gap-2 mt-1">
           <button
             type="button"
             onClick={onClose}
             className="px-4 py-2 rounded-xl border border-border hover:bg-muted"
           >
-            إلغاء
+            {t("approvals.close")}
           </button>
           <button
             type="submit"
             disabled={busy || !file}
-            className="px-4 py-2 rounded-xl bg-success text-white font-semibold disabled:opacity-60"
+            className="px-4 py-2 rounded-xl bg-success text-success-foreground font-semibold disabled:opacity-60"
           >
-            {busy ? "جاري التنفيذ…" : "تأكيد السداد"}
+            {busy ? t("approvals.working") : t("approvals.confirmPaid")}
           </button>
         </div>
       </form>

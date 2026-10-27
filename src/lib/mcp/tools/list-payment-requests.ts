@@ -11,11 +11,11 @@ export default defineTool({
   name: "list_payment_requests",
   title: "List payment requests",
   description:
-    "List payment requests for a project, optionally filtered by status (draft, pending, approved, rejected, executed).",
+    "List payment requests for a project, optionally filtered by status (draft, waiting_approval, approved, paid, rejected, cancelled).",
   inputSchema: {
     project_id: z.string().uuid().describe("Project UUID."),
     status: z
-      .enum(["draft", "pending", "approved", "rejected", "executed"])
+      .enum(["draft", "waiting_approval", "approved", "paid", "rejected", "cancelled"])
       .nullable()
       .describe("Optional status filter; null returns all statuses."),
   },
@@ -28,7 +28,7 @@ export default defineTool({
     let q = supabase
       .from("payment_requests")
       .select(
-        "id, source_type, source_id, requested_amount, total_amount, status, note, created_at",
+        "id, source_type, source_id, source_label, requested_amount, total_amount, currency, status, notes, rejection_reason, created_at",
       )
       .eq("project_id", project_id)
       .order("created_at", { ascending: false })

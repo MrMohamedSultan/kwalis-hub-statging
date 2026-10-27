@@ -1,31 +1,25 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
-import type { PaymentRequest } from "@/lib/payment-requests";
-import { FileText, Send, CheckCircle2, XCircle, Wallet, Clock } from "lucide-react";
+import type { ChainStatus, PaymentRequest } from "@/lib/payment-requests";
+import {
+  FileText,
+  Send,
+  CheckCircle2,
+  XCircle,
+  Wallet,
+  Clock,
+  Ban,
+  ShieldCheck,
+} from "lucide-react";
 
 type Step = {
   icon: React.ReactNode;
   label: string;
-  actorId: string | null;
   at: string | null;
   detail?: string | null;
   tone: "muted" | "info" | "success" | "danger";
 };
-
-function fmt(at: string | null) {
-  if (!at) return "";
-  try {
-    return new Date(at).toLocaleString("ar-SA", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return at;
-  }
-}
 
 const toneCls: Record<Step["tone"], string> = {
   muted: "bg-surface text-muted-foreground border-border",
@@ -34,14 +28,25 @@ const toneCls: Record<Step["tone"], string> = {
   danger: "bg-destructive/15 text-destructive border-destructive/30",
 };
 
-export function PaymentTimeline({ request }: { request: PaymentRequest }) {
+/** Audit trail of one request, including every approval-chain level. */
+export function PaymentTimeline({
+  request,
+  chain,
+}: {
+  request: PaymentRequest;
+  chain?: ChainStatus | null;
+}) {
+  const { t, i18n } = useTranslation();
   const [names, setNames] = useState<Record<string, string>>({});
+  const levelSteps = chain?.steps ?? [];
 
   const ids = [
     request.requested_by,
     request.approved_by,
     request.rejected_by,
     request.executed_by,
+    request.cancelled_by ?? null,
+    ...levelSteps.map((s) => s.approved_by),
   ].filter(Boolean) as string[];
 
   useEffect(() => {
@@ -59,89 +64,113 @@ export function PaymentTimeline({ request }: { request: PaymentRequest }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ids.join(",")]);
 
-  const nameOf = (uid: string | null) => (uid ? (names[uid] ?? "مستخدم") : "—");
-
-  const METHOD_AR: Record<string, string> = {
-    Cash: "نقدي",
-    Transfer: "تحويل بنكي",
-    Check: "شيك",
-    Card: "بطاقة",
-    Bank: "بنك",
+  const nameOf = (uid: string | null | undefined) =>
+    uid ? (names[uid] ?? t("approvals.timeline.user")) : "—";
+  const fmt = (at: string | null) => {
+    if (!at) return "";
+    try {
+      return new Date(at).toLocaleString(i18n.language?.startsWith("ar") ? "ar-SA" : "en-GB", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return at;
+    }
   };
 
   const steps: Step[] = [
     {
       icon: <FileText className="size-3.5" />,
-      label: `تم إنشاء الطلب بواسطة ${nameOf(request.requested_by)}`,
-      actorId: request.requested_by,
+      label: t("approvals.timeline.created", { name: nameOf(request.requested_by) }),
       at: request.created_at,
       tone: "muted",
     },
-    ...(request.submitted_at
-      ? [
-          {
-            icon: <Send className="size-3.5" />,
-            label: `تم الإرسال للاعتماد بواسطة ${nameOf(request.requested_by)}`,
-            actorId: request.requested_by,
-            at: request.submitted_at,
-            tone: "info" as const,
-          },
-        ]
-      : []),
-    ...(request.approved_at
-      ? [
-          {
-            icon: <CheckCircle2 className="size-3.5" />,
-            label: `تم الاعتماد بواسطة ${nameOf(request.approved_by)}`,
-            actorId: request.approved_by,
-            at: request.approved_at,
-            tone: "success" as const,
-          },
-        ]
-      : []),
-    ...(request.rejected_at
-      ? [
-          {
-            icon: <XCircle className="size-3.5" />,
-            label: `تم الرفض بواسطة ${nameOf(request.rejected_by)}`,
-            actorId: request.rejected_by,
-            at: request.rejected_at,
-            detail: request.rejection_reason,
-            tone: "danger" as const,
-          },
-        ]
-      : []),
-    ...(request.executed_at
-      ? [
-          {
-            icon: <Wallet className="size-3.5" />,
-            label: `تم السداد ورفع الإيصال بواسطة ${nameOf(request.executed_by)}`,
-            actorId: request.executed_by,
-            at: request.executed_at,
-            detail: request.payment_method
-              ? `${METHOD_AR[request.payment_method] ?? request.payment_method} · ${request.payment_date ?? ""}`
-              : null,
-            tone: "success" as const,
-          },
-        ]
-      : []),
   ];
+  if (request.submitted_at)
+    steps.push({
+      icon: <Send className="size-3.5" />,
+      label: t("approvals.timeline.submitted", { name: nameOf(request.requested_by) }),
+      at: request.submitted_at,
+      tone: "info",
+    });
+  // chain levels: approved ones, then the ones still to come
+  for (const s of levelSteps) {
+    steps.push(
+      s.approved_by
+        ? {
+            icon: <ShieldCheck className="size-3.5" />,
+            label: t("approvals.timeline.levelApproved", {
+              level: s.level,
+              label: s.label,
+              name: nameOf(s.approved_by),
+            }),
+            at: s.approved_at,
+            detail: s.note,
+            tone: "success",
+          }
+        : {
+            icon: <Clock className="size-3.5" />,
+            label: t("approvals.timeline.levelWaiting", { level: s.level, label: s.label }),
+            at: null,
+            tone: "muted",
+          },
+    );
+  }
+  if (request.approved_at)
+    steps.push({
+      icon: <CheckCircle2 className="size-3.5" />,
+      label: t("approvals.timeline.approved", { name: nameOf(request.approved_by) }),
+      at: request.approved_at,
+      tone: "success",
+    });
+  if (request.rejected_at)
+    steps.push({
+      icon: <XCircle className="size-3.5" />,
+      label: t("approvals.timeline.rejected", { name: nameOf(request.rejected_by) }),
+      at: request.rejected_at,
+      detail: request.rejection_reason,
+      tone: "danger",
+    });
+  if (request.executed_at)
+    steps.push({
+      icon: <Wallet className="size-3.5" />,
+      label: t("approvals.timeline.paid", { name: nameOf(request.executed_by) }),
+      at: request.executed_at,
+      detail: request.payment_method
+        ? `${t(`approvals.method.${request.payment_method}`, { defaultValue: request.payment_method })} · ${request.payment_date ?? ""}`
+        : null,
+      tone: "success",
+    });
+  if (request.cancelled_at)
+    steps.push({
+      icon: <Ban className="size-3.5" />,
+      label: t("approvals.timeline.cancelled", { name: nameOf(request.cancelled_by) }),
+      at: request.cancelled_at,
+      detail: request.cancellation_reason,
+      tone: "danger",
+    });
 
-  if (
-    request.status === "waiting_approval" ||
-    (request.status === "approved" && !request.executed_at)
-  ) {
+  if (request.status === "waiting_approval" && levelSteps.length === 0) {
     steps.push({
       icon: <Clock className="size-3.5" />,
-      label: request.status === "waiting_approval" ? "بانتظار المعتمد" : "بانتظار التنفيذ",
-      actorId: null,
+      label: t("approvals.timeline.waitingApprover"),
+      at: null,
+      tone: "muted",
+    });
+  } else if (request.status === "approved" && !request.executed_at) {
+    steps.push({
+      icon: <Clock className="size-3.5" />,
+      label: t("approvals.timeline.waitingPayment"),
       at: null,
       tone: "muted",
     });
   }
 
   return (
-    <ol className="space-y-2" dir="rtl">
+    <ol className="space-y-2">
       {steps.map((s, i) => (
         <li
           key={i}

@@ -2,20 +2,26 @@ import { guardRoutePermission } from "@/lib/route-permission-guard";
 import { createFileRoute } from "@tanstack/react-router";
 import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { AppShell, PageTitle } from "@/components/AppShell";
-import { useStore, formatUSD } from "@/lib/store";
+import { useStore } from "@/lib/store";
 import { useCan } from "@/lib/rbac";
 import { useAuthRoles } from "@/lib/auth-roles";
+import { formatCurrency } from "@/lib/format";
 import {
   usePaymentRequests,
+  usePaymentChainStatus,
   approvePaymentRequest,
-  STATUS_LABEL,
-  type PaymentRequestStatus,
-  type PaymentSourceKind,
+  filterApprovalRows,
+  requestTypeKey,
+  statusLabelKey,
+  type ApprovalTab,
+  type RequestModule,
 } from "@/lib/payment-requests";
 import { PaymentStatusBadge, PaymentWorkflowActions } from "@/components/PaymentWorkflowActions";
 import { PaymentTimeline } from "@/components/PaymentTimeline";
-import { Wallet, ChevronLeft, ChevronDown, Check } from "lucide-react";
+import { ApprovalChainSettings } from "@/components/ApprovalChainSettings";
+import { Wallet, ChevronRight, ChevronDown, Check, Settings2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/payment-approvals")({
   // Server-verified gate: typing the URL directly cannot bypass this.
@@ -23,119 +29,86 @@ export const Route = createFileRoute("/_authenticated/payment-approvals")({
   component: PaymentApprovalsPage,
 });
 
-const STATUS_TABS: (PaymentRequestStatus | "all")[] = [
-  "all",
-  "draft",
+const STATUS_TABS: ApprovalTab[] = [
+  "my_turn",
   "waiting_approval",
   "approved",
   "paid",
+  "draft",
   "rejected",
+  "cancelled",
+  "all",
 ];
 
-const TAB_LABEL: Record<PaymentRequestStatus | "all", string> = {
-  all: "الكل",
-  draft: STATUS_LABEL.draft,
-  waiting_approval: STATUS_LABEL.waiting_approval,
-  approved: STATUS_LABEL.approved,
-  paid: STATUS_LABEL.paid,
-  rejected: STATUS_LABEL.rejected,
-};
-
-// Group source_types into user-facing "Module" buckets.
-const MODULES: { key: string; label: string; types: PaymentSourceKind[] }[] = [
-  { key: "all", label: "كل الأقسام", types: [] },
-  { key: "payroll", label: "الرواتب", types: ["payroll_row"] },
-  { key: "crew", label: "طاقم العمل", types: ["crew_contract"] },
-  { key: "cast", label: "الممثلون", types: ["cast_contract"] },
-  { key: "vendor", label: "الموردون", types: ["vendor_contract", "purchase_order", "invoice"] },
-  { key: "petty_cash", label: "المصروف النثري", types: ["petty_cash"] },
-];
-
-const SOURCE_TYPE_AR: Record<PaymentSourceKind, string> = {
-  invoice: "فاتورة",
-  purchase_order: "أمر شراء",
-  petty_cash: "مصروف نثري",
-  payroll_row: "راتب",
-  crew_contract: "عقد طاقم",
-  cast_contract: "عقد ممثل",
-  vendor_contract: "عقد مورد",
-};
+const MODULES: (RequestModule | "all")[] = ["all", "contracts", "payroll", "vendor", "petty_cash"];
 
 function PaymentApprovalsPage() {
+  const { t } = useTranslation();
   const activeProjectId = useStore((s) => s.activeProjectId);
   const projects = useStore((s) => s.projects);
   const activeProject = projects.find((p) => p.id === activeProjectId);
   const orgId = activeProject?.organizationId ?? null;
   const can = useCan();
-  const { userId } = useAuthRoles();
+  const { userId, isSuperAdmin, adminOrgIds } = useAuthRoles();
 
   const canApprove = can("payments.approve");
   const canExecute = can("payments.execute");
   const canRequest = can("payments.request");
-  const isApproverOrExecutor = canApprove || canExecute;
+  const seesAll = canApprove || canExecute;
+  const isOrgAdmin = isSuperAdmin || (!!orgId && adminOrgIds.includes(orgId));
 
-  const orgProjects = useMemo(
-    () => projects.filter((p) => p.organizationId === orgId),
-    [projects, orgId],
-  );
-  const accessibleProjectIds = useMemo(() => new Set(orgProjects.map((p) => p.id)), [orgProjects]);
-
+  // Scoped to the active project: this screen lives inside a project.
   const { rows, loading, refresh } = usePaymentRequests(
-    orgId ? { organizationId: orgId } : undefined,
+    orgId && activeProjectId ? { organizationId: orgId, projectId: activeProjectId } : undefined,
   );
-  const [tab, setTab] = useState<PaymentRequestStatus | "all">("waiting_approval");
-  const [projectFilter, setProjectFilter] = useState<string>("all");
-  const [moduleFilter, setModuleFilter] = useState<string>("all");
+  const reloadKey = useMemo(() => rows.map((r) => `${r.id}:${r.status}`).join(","), [rows]);
+  const { byId: chain, refresh: refreshChain } = usePaymentChainStatus(
+    orgId,
+    activeProjectId ?? null,
+    reloadKey,
+  );
+  const myTurn = useMemo(
+    () =>
+      new Set(
+        Object.values(chain)
+          .filter((c) => c.can_act)
+          .map((c) => c.request_id),
+      ),
+    [chain],
+  );
+
+  const [tab, setTab] = useState<ApprovalTab>(seesAll ? "my_turn" : "all");
+  const [moduleFilter, setModuleFilter] = useState<RequestModule | "all">("all");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [showChain, setShowChain] = useState(false);
 
-  const filtered = useMemo(() => {
-    const modTypes = MODULES.find((m) => m.key === moduleFilter)?.types ?? [];
-    return rows.filter((r) => {
-      if (r.project_id && !accessibleProjectIds.has(r.project_id)) return false;
-      if (!isApproverOrExecutor) {
-        if (!canRequest) return false;
-        if (r.requested_by !== userId) return false;
-      }
-      if (tab !== "all" && r.status !== tab) return false;
-      if (projectFilter !== "all" && r.project_id !== projectFilter) return false;
-      if (moduleFilter !== "all" && !modTypes.includes(r.source_type)) return false;
-      return true;
-    });
-  }, [
-    rows,
-    tab,
-    projectFilter,
-    moduleFilter,
-    accessibleProjectIds,
-    isApproverOrExecutor,
-    canRequest,
-    userId,
-  ]);
-
-  const visibleRows = useMemo(() => {
-    return rows.filter((r) => {
-      if (r.project_id && !accessibleProjectIds.has(r.project_id)) return false;
-      if (!isApproverOrExecutor) {
-        if (!canRequest) return false;
-        if (r.requested_by !== userId) return false;
-      }
-      return true;
-    });
-  }, [rows, accessibleProjectIds, isApproverOrExecutor, canRequest, userId]);
+  const scope = { projectId: activeProjectId ?? null, myTurn, seesAll, userId };
+  const filtered = useMemo(
+    () => filterApprovalRows(rows, { ...scope, tab, module: moduleFilter }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, tab, moduleFilter, activeProjectId, myTurn, seesAll, userId],
+  );
+  const visibleRows = useMemo(
+    () => filterApprovalRows(rows, { ...scope, tab: "all", module: "all" }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, activeProjectId, myTurn, seesAll, userId],
+  );
 
   const counts = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const r of visibleRows) map[r.status] = (map[r.status] ?? 0) + 1;
-    map.all = visibleRows.length;
+    const map: Record<string, number> = { all: visibleRows.length, my_turn: 0 };
+    for (const r of visibleRows) {
+      map[r.status] = (map[r.status] ?? 0) + 1;
+      if (myTurn.has(r.id)) map.my_turn += 1;
+    }
     return map;
-  }, [visibleRows]);
+  }, [visibleRows, myTurn]);
 
-  // IDs eligible for bulk approve within the current filter.
+  // Bulk approval: only requests where it is the current user's turn.
   const selectableIds = useMemo(
-    () => filtered.filter((r) => r.status === "waiting_approval").map((r) => r.id),
-    [filtered],
+    () => filtered.filter((r) => myTurn.has(r.id)).map((r) => r.id),
+    [filtered, myTurn],
   );
   const selectedIds = useMemo(
     () => selectableIds.filter((id) => selected[id]),
@@ -153,6 +126,11 @@ function PaymentApprovalsPage() {
     }
   };
 
+  const reload = async () => {
+    await refresh();
+    await refreshChain();
+  };
+
   const bulkApprove = async () => {
     if (!selectedIds.length) return;
     setBulkBusy(true);
@@ -168,74 +146,79 @@ function PaymentApprovalsPage() {
     }
     setBulkBusy(false);
     setSelected({});
-    await refresh();
-    if (fail === 0) toast.success(`تم اعتماد ${ok} طلب.`);
-    else toast.error(`تم اعتماد ${ok} · فشل ${fail}.`);
+    await reload();
+    if (fail === 0) toast.success(t("approvals.bulk.done", { count: ok }));
+    else toast.error(t("approvals.bulk.partial", { ok, fail }));
   };
 
   const hasAnyPaymentPerm = canRequest || canApprove || canExecute;
   const selectCls =
     "bg-surface-2 border border-border rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-2 ring-brand";
+  const showSelect = selectableIds.length > 0;
+  const cols = showSelect ? 8 : 7;
 
   return (
     <AppShell>
-      <div dir="rtl">
-        <PageTitle title="إدارة واعتمادات السداد" />
+      <div>
+        <PageTitle title={t("approvals.title")} />
         <p className="text-sm text-muted-foreground mb-4 inline-flex items-center gap-2">
           <Wallet className="size-4 text-primary" />
-          طلب ← اعتماد ← تنفيذ. المعتمدون والمنفّذون يتخذون الإجراءات هنا.
+          {t("approvals.subtitle")}
         </p>
 
         {!hasAnyPaymentPerm ? (
           <div className="rounded-2xl border border-border bg-surface-2 p-6 text-sm text-muted-foreground">
-            لا تملك صلاحية عرض اعتمادات السداد. تواصل مع مسؤول المؤسسة لمنحك إحدى الصلاحيات:
-            <code className="mx-1 text-brand">payments.request</code>،
-            <code className="mx-1 text-brand">payments.approve</code>، أو
-            <code className="mx-1 text-brand">payments.execute</code>.
+            {t("approvals.noPermission")}
+            <code className="mx-1 text-brand">payments.request</code>
+            <code className="mx-1 text-brand">payments.approve</code>
+            <code className="mx-1 text-brand">payments.execute</code>
           </div>
-        ) : !orgId ? (
-          <div className="text-sm text-muted-foreground">اختر مشروعاً لعرض طلبات السداد.</div>
+        ) : !orgId || !activeProjectId ? (
+          <div className="text-sm text-muted-foreground">{t("approvals.pickProject")}</div>
         ) : (
           <>
+            {isOrgAdmin && (
+              <div className="mb-3">
+                <button
+                  type="button"
+                  onClick={() => setShowChain((v) => !v)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted"
+                  aria-expanded={showChain}
+                >
+                  <Settings2 className="size-3.5" /> {t("approvals.chain.toggle")}
+                </button>
+              </div>
+            )}
+            {isOrgAdmin && showChain && (
+              <ApprovalChainSettings organizationId={orgId} onChanged={() => void refreshChain()} />
+            )}
+
             <div className="flex flex-wrap items-center gap-3 mb-3">
               <label className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
-                المشروع
-                <select
-                  value={projectFilter}
-                  onChange={(e) => setProjectFilter(e.target.value)}
-                  className={selectCls}
-                >
-                  <option value="all">كل المشاريع</option>
-                  {orgProjects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.code ? `${p.code} · ${p.name}` : p.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
-                القسم
+                {t("approvals.module.label")}
                 <select
                   value={moduleFilter}
-                  onChange={(e) => setModuleFilter(e.target.value)}
+                  onChange={(e) => setModuleFilter(e.target.value as RequestModule | "all")}
                   className={selectCls}
                 >
                   {MODULES.map((m) => (
-                    <option key={m.key} value={m.key}>
-                      {m.label}
+                    <option key={m} value={m}>
+                      {t(`approvals.module.${m}`)}
                     </option>
                   ))}
                 </select>
               </label>
               <div className="text-xs text-muted-foreground ms-auto">
-                {filtered.length} من {rows.length} طلب
+                {t("approvals.countOf", { shown: filtered.length, total: visibleRows.length })}
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-1.5 mb-4">
+            <div className="flex flex-wrap gap-1.5 mb-4" role="tablist">
               {STATUS_TABS.map((s) => (
                 <button
                   key={s}
+                  role="tab"
+                  aria-selected={tab === s}
                   onClick={() => setTab(s)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
                     tab === s
@@ -243,18 +226,25 @@ function PaymentApprovalsPage() {
                       : "bg-surface-2 text-muted-foreground border-border hover:bg-muted"
                   }`}
                 >
-                  {TAB_LABEL[s]}
+                  {s === "all"
+                    ? t("approvals.tab.all")
+                    : s === "my_turn"
+                      ? t("approvals.tab.myTurn")
+                      : t(statusLabelKey(s))}
                   <span className="ms-1.5 text-[10px] text-muted-foreground">{counts[s] ?? 0}</span>
                 </button>
               ))}
             </div>
 
-            {canApprove && selectableIds.length > 0 && (
+            {showSelect && (
               <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface-2/60 px-3 py-2">
                 <span className="text-xs text-muted-foreground">
                   {selectedIds.length > 0
-                    ? `تم تحديد ${selectedIds.length} من ${selectableIds.length} طلب بانتظار الاعتماد`
-                    : `${selectableIds.length} طلب بانتظار الاعتماد ضمن التصفية الحالية`}
+                    ? t("approvals.bulk.selected", {
+                        count: selectedIds.length,
+                        total: selectableIds.length,
+                      })
+                    : t("approvals.bulk.available", { count: selectableIds.length })}
                 </span>
                 <button
                   onClick={bulkApprove}
@@ -262,59 +252,54 @@ function PaymentApprovalsPage() {
                   className="ms-auto inline-flex items-center gap-1.5 rounded-lg border border-success/30 bg-success/15 text-success hover:bg-success/25 px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
                 >
                   <Check className="size-3.5" />
-                  {bulkBusy ? "جاري الاعتماد…" : "اعتماد الطلبات المحددة"}
+                  {bulkBusy ? t("approvals.working") : t("approvals.bulk.approve")}
                 </button>
               </div>
             )}
 
-            <div className="rounded-2xl border border-border overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="rounded-2xl border border-border overflow-x-auto">
+              <table className="w-full text-sm min-w-[720px]">
                 <thead className="bg-surface-2 text-muted-foreground text-xs uppercase tracking-wider">
                   <tr>
                     <th className="px-3 py-2 w-8"></th>
-                    {canApprove && (
+                    {showSelect && (
                       <th className="px-2 py-2 w-8">
                         <input
                           type="checkbox"
-                          aria-label="تحديد الكل"
+                          aria-label={t("approvals.selectAll")}
                           checked={allSelected}
                           onChange={toggleAll}
-                          disabled={selectableIds.length === 0}
                         />
                       </th>
                     )}
-                    <th className="px-3 py-2 text-start">المصدر</th>
-                    <th className="px-3 py-2 text-start">النوع</th>
-                    <th className="px-3 py-2 text-end">المبلغ</th>
-                    <th className="px-3 py-2 text-end">الإجمالي / المرتبط</th>
-                    <th className="px-3 py-2 text-start">الحالة</th>
-                    <th className="px-3 py-2 text-start">الإجراءات</th>
+                    <th className="px-3 py-2 text-start">{t("approvals.col.source")}</th>
+                    <th className="px-3 py-2 text-start">{t("approvals.col.type")}</th>
+                    <th className="px-3 py-2 text-end">{t("approvals.col.amount")}</th>
+                    <th className="px-3 py-2 text-end">{t("approvals.col.totalRequested")}</th>
+                    <th className="px-3 py-2 text-start">{t("approvals.col.status")}</th>
+                    <th className="px-3 py-2 text-start">{t("approvals.col.actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading && (
                     <tr>
-                      <td
-                        colSpan={canApprove ? 8 : 7}
-                        className="px-3 py-4 text-center text-muted-foreground"
-                      >
-                        جارٍ التحميل…
+                      <td colSpan={cols} className="px-3 py-4 text-center text-muted-foreground">
+                        {t("approvals.loading")}
                       </td>
                     </tr>
                   )}
                   {!loading && filtered.length === 0 && (
                     <tr>
-                      <td
-                        colSpan={canApprove ? 8 : 7}
-                        className="px-3 py-4 text-center text-muted-foreground"
-                      >
-                        لا توجد طلبات مطابقة لهذه التصفية.
+                      <td colSpan={cols} className="px-3 py-4 text-center text-muted-foreground">
+                        {tab === "my_turn" ? t("approvals.emptyMyTurn") : t("approvals.empty")}
                       </td>
                     </tr>
                   )}
                   {filtered.map((r) => {
                     const open = !!expanded[r.id];
-                    const canSelect = canApprove && r.status === "waiting_approval";
+                    const c = chain[r.id] ?? null;
+                    const money = (n: number) =>
+                      formatCurrency(n, { currency: r.currency || "SAR", decimals: 2 });
                     return (
                       <Fragment key={r.id}>
                         <tr className="border-t border-border">
@@ -322,21 +307,24 @@ function PaymentApprovalsPage() {
                             <button
                               onClick={() => setExpanded((x) => ({ ...x, [r.id]: !open }))}
                               className="p-1 rounded hover:bg-muted text-muted-foreground"
-                              aria-label={open ? "إخفاء السجل" : "عرض السجل"}
+                              aria-label={
+                                open ? t("approvals.hideTrail") : t("approvals.showTrail")
+                              }
+                              aria-expanded={open}
                             >
                               {open ? (
                                 <ChevronDown className="size-4" />
                               ) : (
-                                <ChevronLeft className="size-4" />
+                                <ChevronRight className="size-4 rtl:-scale-x-100" />
                               )}
                             </button>
                           </td>
-                          {canApprove && (
+                          {showSelect && (
                             <td className="px-2 py-2">
                               <input
                                 type="checkbox"
-                                aria-label="تحديد الطلب"
-                                disabled={!canSelect}
+                                aria-label={t("approvals.selectOne")}
+                                disabled={!myTurn.has(r.id)}
                                 checked={!!selected[r.id]}
                                 onChange={(e) =>
                                   setSelected((s) => ({ ...s, [r.id]: e.target.checked }))
@@ -351,40 +339,53 @@ function PaymentApprovalsPage() {
                             {r.source_label ?? r.source_id}
                           </td>
                           <td className="px-3 py-2 text-xs text-muted-foreground">
-                            {SOURCE_TYPE_AR[r.source_type] ?? r.source_type}
+                            {t(requestTypeKey(r), { defaultValue: r.source_type })}
                           </td>
                           <td className="px-3 py-2 text-end tabular-nums font-semibold" dir="ltr">
-                            {formatUSD(Number(r.requested_amount))}
+                            {money(Number(r.requested_amount))}
                           </td>
                           <td
                             className="px-3 py-2 text-end tabular-nums text-xs text-muted-foreground"
                             dir="ltr"
                           >
-                            {formatUSD(Number(r.total_amount))} /{" "}
-                            {formatUSD(Number(r.previously_paid))}
+                            {money(Number(r.total_amount))} / {money(Number(r.previously_paid))}
                           </td>
                           <td className="px-3 py-2">
                             <PaymentStatusBadge status={r.status} />
-                            {r.status === "rejected" && r.rejection_reason && (
-                              <div
-                                className="text-[11px] text-destructive mt-1 max-w-[200px] truncate"
-                                title={r.rejection_reason}
-                              >
-                                {r.rejection_reason}
+                            {c && c.required_levels > 0 && r.status === "waiting_approval" && (
+                              <div className="text-[11px] text-muted-foreground mt-1">
+                                {t("approvals.levelProgress", {
+                                  done: c.approved_levels,
+                                  total: c.required_levels,
+                                })}
                               </div>
                             )}
+                            {(r.status === "rejected" || r.status === "cancelled") &&
+                              (r.rejection_reason || r.cancellation_reason) && (
+                                <div
+                                  className="text-[11px] text-destructive mt-1 max-w-[200px] truncate"
+                                  title={r.rejection_reason ?? r.cancellation_reason ?? ""}
+                                >
+                                  {r.rejection_reason ?? r.cancellation_reason}
+                                </div>
+                              )}
                           </td>
                           <td className="px-3 py-2">
-                            <PaymentWorkflowActions request={r} compact />
+                            <PaymentWorkflowActions
+                              request={r}
+                              chain={c}
+                              compact
+                              onChanged={() => void reload()}
+                            />
                           </td>
                         </tr>
                         {open && (
                           <tr className="border-t border-border bg-surface-2/50">
-                            <td colSpan={canApprove ? 8 : 7} className="px-4 py-3">
+                            <td colSpan={cols} className="px-4 py-3">
                               <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
-                                سجل التدقيق
+                                {t("approvals.trail")}
                               </div>
-                              <PaymentTimeline request={r} />
+                              <PaymentTimeline request={r} chain={c} />
                             </td>
                           </tr>
                         )}

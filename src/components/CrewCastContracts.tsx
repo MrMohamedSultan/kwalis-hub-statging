@@ -787,8 +787,13 @@ export function PeoplePage({ kind, title }: { kind: "crew" | "cast"; title: stri
                           value={status}
                           onChange={async (e) => {
                             const next = e.target.value as ContractStatus;
-                            await updatePerson(p.id, { contractStatus: next });
-                            toast.success(`${p.fullName} status → ${next}`);
+                            try {
+                              await updatePerson(p.id, { contractStatus: next });
+                              toast.success(`${p.fullName} status → ${next}`);
+                            } catch (err: any) {
+                              // e.g. maker-checker: the creator cannot approve (db/pending/176)
+                              toast.error(err?.message ?? t("approvals.contractApproveFailed"));
+                            }
                           }}
                           className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold outline-none focus:ring-2 ring-brand ${STATUS_TONE[status]}`}
                         >
@@ -818,8 +823,14 @@ export function PeoplePage({ kind, title }: { kind: "crew" | "cast"; title: stri
                               {status !== "Active" && (
                                 <button
                                   onClick={async () => {
-                                    await updatePerson(p.id, { contractStatus: "Active" });
-                                    toast.success(`${p.fullName} contract approved`);
+                                    try {
+                                      await updatePerson(p.id, { contractStatus: "Active" });
+                                      toast.success(`${p.fullName} contract approved`);
+                                    } catch (err: any) {
+                                      toast.error(
+                                        err?.message ?? t("approvals.contractApproveFailed"),
+                                      );
+                                    }
                                   }}
                                   className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs bg-success/15 text-success border border-success/30 hover:bg-success/25"
                                   title={t("crewcastcontracts.approve_contract_active")}

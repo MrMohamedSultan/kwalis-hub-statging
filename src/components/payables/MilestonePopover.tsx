@@ -8,6 +8,7 @@ import { storageAudited } from "@/lib/storage-audit";
 import { useState, type ReactNode } from "react";
 import { Paperclip } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Link } from "@tanstack/react-router";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { STATUS_CONFIG, fmt, useStatusLabel } from "./payables-utils";
@@ -584,7 +585,7 @@ export function MilestonePopover({
                 }}
                 className="flex-1 cursor-pointer rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
           </div>
@@ -598,6 +599,17 @@ export function MilestonePopover({
             </div>
           </div>
         )}
+
+        {milestone.milestone_status === "pending" &&
+          (milestone.payment_request_status === "rejected" ||
+            milestone.payment_request_status === "cancelled") && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
+              {milestone.payment_request_status === "rejected"
+                ? t("approvals.payables.lastRejected")
+                : t("approvals.payables.lastCancelled")}
+              {milestone.payment_request_reason ? `: ${milestone.payment_request_reason}` : ""}
+            </div>
+          )}
 
         {milestone.milestone_status === "paid" && (
           <div className="space-y-1 rounded-lg bg-success/10 p-3">
@@ -696,10 +708,15 @@ export function MilestonePopover({
         <div className="shrink-0 space-y-2 border-t border-border px-4 py-3">
           {milestone.milestone_status === "pending" && (
             <>
+              {milestone.contract_approved === false && (
+                <p className="text-[11px] text-warning">
+                  {t("approvals.payables.contractNotApproved")}
+                </p>
+              )}
               <ActionButton
                 label={t("payables.milestone.requestPayment")}
                 variant="destructive"
-                disabled={isSubmitting}
+                disabled={isSubmitting || milestone.contract_approved === false}
                 onClick={() => doAction({ milestone_status: "requested" })}
               />
               <ActionButton
@@ -713,46 +730,41 @@ export function MilestonePopover({
 
           {milestone.milestone_status === "requested" && (
             <>
-              <ActionButton
-                label={t("payables.milestone.markAsPaid")}
-                variant="success"
-                disabled={isSubmitting}
-                onClick={() => setShowPayForm(true)}
-              />
-              <ActionButton
-                label={t("payables.milestone.cancelRequest")}
-                variant="outline"
-                disabled={isSubmitting}
-                onClick={() => doAction({ milestone_status: "pending" })}
-              />
-              <ActionButton
-                label={t("payables.milestone.editAmount")}
-                variant="outline"
-                disabled={isSubmitting}
-                onClick={() => setIsEditing(true)}
-              />
+              <p className="text-[11px] text-muted-foreground">
+                {t("approvals.payables.awaiting")}
+              </p>
+              <Link
+                to="/payment-approvals"
+                className="block w-full rounded-lg border border-border px-3 py-2 text-center text-xs font-semibold text-foreground hover:bg-muted"
+              >
+                {t("approvals.payables.openApprovals")}
+              </Link>
+              {milestone.requested_by_me && milestone.payment_request_id && (
+                <ActionButton
+                  label={t("payables.milestone.cancelRequest")}
+                  variant="outline"
+                  disabled={isSubmitting}
+                  onClick={() => doAction({ milestone_status: "pending" })}
+                />
+              )}
             </>
           )}
 
           {milestone.milestone_status === "approved" && (
-            <>
-              <ActionButton
-                label={t("payables.milestone.markAsPaid")}
-                variant="success"
-                disabled={isSubmitting}
-                onClick={() => setShowPayForm(true)}
-              />
-              <ActionButton
-                label={t("payables.milestone.editAmount")}
-                variant="outline"
-                disabled={isSubmitting}
-                onClick={() => setIsEditing(true)}
-              />
-            </>
+            <ActionButton
+              label={t("payables.milestone.markAsPaid")}
+              variant="success"
+              disabled={isSubmitting}
+              onClick={() => setShowPayForm(true)}
+            />
           )}
 
           {milestone.milestone_status === "paid" &&
-            (!showUndo ? (
+            (milestone.payment_request_id ? (
+              <p className="text-[11px] text-muted-foreground">
+                {t("approvals.payables.paidLocked")}
+              </p>
+            ) : !showUndo ? (
               <ActionButton
                 label={t("payables.milestone.undoPayment")}
                 variant="ghost-destructive"

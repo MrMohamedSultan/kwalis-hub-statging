@@ -37,6 +37,7 @@ import {
   buildTrajectory,
   departmentLabeler,
 } from "./real-slices";
+import { AWAITING_APPROVAL_STATUS } from "@/lib/payment-requests";
 import type {
   ActivityEvent,
   ApprovalItem,
@@ -49,6 +50,7 @@ interface PaymentRequestRow {
   source_type: string;
   source_label: string | null;
   total_amount: number;
+  requested_amount?: number | null;
   status: string;
   submitted_at: string | null;
   created_at: string;
@@ -108,7 +110,8 @@ function buildReal(
     title: p.source_label || p.source_type || "—",
     vendor: null,
     submitter: null,
-    amount: safeNumber(p.total_amount),
+    // What the approver is asked to release — the request, not the whole source.
+    amount: safeNumber(p.requested_amount ?? p.total_amount),
     ageDays: ageDays(p.submitted_at ?? p.created_at),
   }));
 
@@ -193,10 +196,11 @@ export function useOperationalDashboard(projectId: string | null, opts: Dashboar
         supabase
           .from("payment_requests")
           .select(
-            "id, source_type, source_label, total_amount, status, submitted_at, created_at, updated_at",
+            "id, source_type, source_label, total_amount, requested_amount, status, submitted_at, created_at, updated_at",
           )
           .eq("project_id", projectId!)
-          .eq("status", "pending")
+          // B18: requests wait as "waiting_approval" — "pending" never exists.
+          .eq("status", AWAITING_APPROVAL_STATUS)
           .order("submitted_at", { ascending: false })
           .limit(20),
         supabase
@@ -220,9 +224,9 @@ export function useOperationalDashboard(projectId: string | null, opts: Dashboar
       ]);
 
       // Date range filter — each section uses its relevant timestamp.
-      const pending = ((pendingRes.data ?? []) as PaymentRequestRow[]).filter((p) =>
-        inDateRange(p.submitted_at ?? p.created_at, from, to),
-      );
+      // The approval queue is live work, not period activity: a request
+      // submitted before the selected range is still waiting today.
+      const pending = (pendingRes.data ?? []) as PaymentRequestRow[];
       const recent = ((recentRes.data ?? []) as PaymentRequestRow[]).filter((p) =>
         inDateRange(p.updated_at, from, to),
       );
