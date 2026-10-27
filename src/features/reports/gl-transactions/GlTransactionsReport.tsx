@@ -282,7 +282,7 @@ export function GlTransactionsReport() {
         if (source !== "all" && r.source_type !== source) return false;
         if (search) {
           const q = search.toLowerCase();
-          const hay = [humanRef(r), r.description, r.counterparty]
+          const hay = [humanRef(r), r.reference, r.description, r.counterparty]
             .filter(Boolean)
             .join(" ")
             .toLowerCase();
