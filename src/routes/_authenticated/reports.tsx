@@ -37,6 +37,13 @@ import { buildQfeLedger, type QfeLedgerRow } from "@/lib/qfeLedger";
 import { useSearchHotkey } from "@/hooks/use-search-hotkey";
 import { AuditHistoryPanel } from "@/components/AuditHistoryPanel";
 import { useSeriesBudget } from "@/lib/series-budget";
+import { CostReportPanel } from "@/components/reports/CostReportPanel";
+import {
+  costReportTotals,
+  finalReportSummary,
+  groupCostReport,
+  useCostReportRows,
+} from "@/lib/cost-report";
 
 import { useTranslation } from "react-i18next";
 import i18n from "@/lib/i18n";
@@ -235,12 +242,15 @@ function ReportsPage() {
         ))}
       </div>
       <ReportExportContext.Provider value={exportRef}>
-        {tab === "gl" && <GLReport />}
-        {tab === "glacct" && <GlAccountReport />}
+        {tab === "gl" && <CostReportPanel initialGrouping="line" />}
+        {tab === "glacct" && <CostReportPanel initialGrouping="account" />}
         {tab === "gltx" && <GlTransactionsReport />}
         {tab === "paid" && <PaidReport />}
         {tab === "final" && (
-          <FinalReport seasonFilter={seasonFilter} setSeasonFilter={setSeasonFilter} />
+          <>
+            <CostReportPanel initialGrouping="category" />
+            <FinalReport seasonFilter={seasonFilter} setSeasonFilter={setSeasonFilter} />
+          </>
         )}
         {tab === "rebate" && <RebateReport />}
         {tab === "qfe" && <QfeRebateAuditReport />}
@@ -254,84 +264,11 @@ function ReportsPage() {
   );
 }
 
+/** Final Report by category — the Cost Report rows (glossary, db/pending/180). */
 function useSummary() {
-  const { budget, payroll, invoices, receipts } = useStore();
-  return useMemo(() => {
-    const deptToGroup = new Map<string, string>();
-    HEADER_ACCOUNTS.forEach((h) => {
-      deptToGroup.set(h.name.toUpperCase(), h.group);
-      deptToGroup.set(h.code, h.group);
-    });
-    // Skip payroll rows that mirror an invoice split (avoid double-counting with invoice math).
-    const payrollRows = payroll.filter((r) => !(r.refId ?? "").startsWith("invoice:"));
-    const rows = GROUPS.map((g) => {
-      const lines = budget.filter((b) => b.group === g);
-      const budgetTotal = lines.reduce((a, l) => a + lineTotal(l), 0);
-      const payrollPaid = payrollRows.reduce((a, r) => {
-        const grp = r.kind === "cast" ? "ATL" : "BTL";
-        if (grp !== g) return a;
-        return (
-          a +
-          r.payments.reduce(
-            (s, p, i) =>
-              s + (p === "Paid" ? slotAmount(r.totalAmount, r.percents, i, r.payments.length) : 0),
-            0,
-          )
-        );
-      }, 0);
-      const invoicePaid = invoices.reduce((a, i) => {
-        const grp = deptToGroup.get((i.department ?? "").toUpperCase()) ?? "BTL";
-        if (grp !== g) return a;
-        const term = Math.max(0, Math.min(100, Number(i.paymentTerm ?? 100)));
-        return a + i.price * (term / 100);
-      }, 0);
-      const invoiceCommit = invoices.reduce((a, i) => {
-        const grp = deptToGroup.get((i.department ?? "").toUpperCase()) ?? "BTL";
-        if (grp !== g) return a;
-        const term = Math.max(0, Math.min(100, Number(i.paymentTerm ?? 100)));
-        return a + i.price * ((100 - term) / 100);
-      }, 0);
-      const receiptsPaid = receipts.reduce((a, r) => {
-        const grp = deptToGroup.get((r.department ?? "").toUpperCase()) ?? "BTL";
-        return grp === g ? a + Number(r.amount || 0) : a;
-      }, 0);
-      const actualPaid = payrollPaid + invoicePaid + receiptsPaid;
-      const commitments =
-        invoiceCommit +
-        payrollRows.reduce((a, r) => {
-          const grp = r.kind === "cast" ? "ATL" : "BTL";
-          if (grp !== g) return a;
-          return (
-            a +
-            r.payments.reduce(
-              (s, p, i) =>
-                s + (p === "Due" ? slotAmount(r.totalAmount, r.percents, i, r.payments.length) : 0),
-              0,
-            )
-          );
-        }, 0);
-      const efc = Math.max(budgetTotal, actualPaid + commitments);
-      return {
-        group: g,
-        actualPaid,
-        commitments,
-        budget: budgetTotal,
-        efc,
-        variance: budgetTotal - efc,
-      };
-    });
-    const totals = rows.reduce(
-      (a, r) => ({
-        actualPaid: a.actualPaid + r.actualPaid,
-        commitments: a.commitments + r.commitments,
-        budget: a.budget + r.budget,
-        efc: a.efc + r.efc,
-        variance: a.variance + r.variance,
-      }),
-      { actualPaid: 0, commitments: 0, budget: 0, efc: 0, variance: 0 },
-    );
-    return { rows, totals };
-  }, [budget, payroll, invoices, receipts]);
+  const activeProjectId = useStore((st) => st.activeProjectId);
+  const { data = [] } = useCostReportRows(activeProjectId);
+  return useMemo(() => finalReportSummary(data, GROUPS), [data]);
 }
 
 function FinalReport({
@@ -362,11 +299,11 @@ function FinalReport({
     key: "budget" | "actualPaid" | "commitments" | "efc" | "variance";
     tone?: "variance";
   }> = [
-    { label: "Budget", key: "budget" },
-    { label: "Actual Paid", key: "actualPaid" },
-    { label: "Commitments", key: "commitments" },
-    { label: "Estimated Final Cost", key: "efc" },
-    { label: "Variance", key: "variance", tone: "variance" },
+    { label: t("glossary.term.budget"), key: "budget" },
+    { label: t("glossary.term.actual"), key: "actualPaid" },
+    { label: t("glossary.term.commitment"), key: "commitments" },
+    { label: t("glossary.term.efc"), key: "efc" },
+    { label: t("glossary.term.variance"), key: "variance", tone: "variance" },
   ];
 
   useReportExport(() => ({

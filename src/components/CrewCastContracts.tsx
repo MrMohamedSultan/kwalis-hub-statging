@@ -70,6 +70,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import { checkInstalmentSchedule } from "@/lib/instalments";
 import { DateInput } from "@/components/ui/date-input";
 import { DatePickerPill } from "@/components/ui/date-picker-pill";
 import { humanizeDbError } from "@/lib/db-errors";
@@ -2245,6 +2246,29 @@ function ContractForm({
           : first.message,
       );
       return;
+    }
+    // A05 (db/pending/180): every instalment named, the schedule equals the
+    // contract (net payable) value; dates out of order only ask.
+    {
+      const check = checkInstalmentSchedule(schedule, netPayable);
+      const first = check.errors[0];
+      if (first) {
+        toast.error(
+          first.kind === "missing_label"
+            ? t("glossary.schedule.missingLabel", { n: first.index + 1 })
+            : first.kind === "missing_due_date"
+              ? t("glossary.schedule.missingDueDate", { n: first.index + 1 })
+              : first.kind === "sum_mismatch"
+                ? t("glossary.schedule.sumMismatch", {
+                    total: formatAmount(first.total, 2),
+                    expected: formatAmount(first.expected, 2),
+                    currency: baseCurrency,
+                  })
+                : t("glossary.schedule.invalid"),
+        );
+        return;
+      }
+      if (check.warnings.length > 0 && !window.confirm(t("glossary.schedule.dateOrder"))) return;
     }
     if (!isScheduleTotalValid(scheduleTotalPct)) {
       toast.error(

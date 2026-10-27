@@ -39,6 +39,12 @@ export interface PayableMilestone {
   requested_by_me?: boolean;
   /** Contract approved (Active) — payment can be requested only then. */
   contract_approved?: boolean;
+  /** A04: contract cancelled (cancel_payroll_contract). */
+  contract_cancelled?: boolean;
+  /** Reason sent with an un-approve / withdraw action (not stored on the row). */
+  action_reason?: string;
+  /** Stored instalment status without a payment request behind it (legacy hand-set). */
+  legacy_status?: boolean;
 }
 
 /** Frontend-only pivot: one row per contract / beneficiary. */
@@ -51,7 +57,13 @@ export interface PayableRow {
   contract_total: number;
   currency: string;
   total_paid: number;
+  /** Approved, not paid (glossary: Payable). */
+  payable: number;
+  /** Not approved yet (glossary: Commitment); 0 once the contract is cancelled. */
+  commitment: number;
+  /** payable + commitment — still to pay on the contract. */
   remaining: number;
+  contract_cancelled: boolean;
   milestones: PayableMilestone[];
 }
 

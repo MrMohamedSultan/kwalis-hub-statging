@@ -26,7 +26,11 @@ import {
 
 import i18n from "@/lib/i18n";
 import { normalizeVatTreatment, type VatTreatment } from "./ap-calc";
-import { computeBudgetPosition, type LogisticsCommitment } from "./budget-position";
+import {
+  computeBudgetPosition,
+  legacyContractPaid,
+  type LogisticsCommitment,
+} from "./budget-position";
 /**
  * Historical union kept for back-compat with existing rows. Widened to `string`
  * so newly-added unit labels (MONTHS, WEEKS, ALLOW, ACTORS, EPISODES, TRIPS,
@@ -426,6 +430,9 @@ export type PayrollRow = {
   /** GL account code where WHT is posted (e.g. "2140" — Withholding Tax Liability). */
   whtGlCode?: string;
   whtTreatment?: "inclusive" | "exclusive";
+  /** A04: set by cancel_payroll_contract — no Commitment left on the contract. */
+  contractCancelledAt?: string | null;
+  contractCancellationReason?: string | null;
 };
 
 export type ProjectStatus = ProjectStatusOption;
@@ -973,7 +980,15 @@ const fromPayrollRow = (r: any): PayrollRow => {
     label: e?.label ?? "",
     percent: Number(e?.percent ?? 0),
     dueDate: e?.dueDate ?? e?.due_date ?? "",
-    status: e?.status === "Paid" || e?.status === "Hold" ? e.status : "Pending",
+    // Keep every stored state (Approved = Actual); Hold is shown as "Requested".
+    status:
+      e?.status === "Paid" || e?.status === "Hold" || e?.status === "Approved"
+        ? e.status
+        : "Pending",
+    paidDate: e?.paidDate ?? null,
+    paidRef: e?.paidRef ?? null,
+    paymentMethod: e?.paymentMethod ?? null,
+    proofPath: e?.proofPath ?? null,
     // Preserve the "no explicit amount" case: coercing null to 0 would
     // hydrate an edit form with a hard 0 milestone instead of a
     // percent-derived one.
@@ -1000,6 +1015,8 @@ const fromPayrollRow = (r: any): PayrollRow => {
     netPayable: r.net_payable != null ? Number(r.net_payable) : undefined,
     whtGlCode: r.wht_gl_code ?? undefined,
     whtTreatment: r.wht_treatment === "exclusive" ? "exclusive" : "inclusive",
+    contractCancelledAt: r.contract_cancelled_at ?? null,
+    contractCancellationReason: r.contract_cancellation_reason ?? null,
   };
 };
 /** Strict 2-decimal rounding for money and money-derived percentages. */
@@ -2110,7 +2127,8 @@ export const useStore = create<State>()(
                 description: `${row.name} — Payment ${idx + 1}`,
                 amount: slotAmount,
                 vat_amount: 0,
-                currency: "USD",
+                // payroll amounts are stored in the base currency (SAR)
+                currency: "SAR",
                 payment_status: "Paid",
                 reference_no: refNo,
                 metadata: { payroll_id: rowId, slot_index: idx, kind: row.kind },
@@ -2233,7 +2251,8 @@ export const useStore = create<State>()(
                 description: `${row.name} — Payment ${idx + 1}${e.bankRef ? ` (Ref ${e.bankRef})` : ""}`,
                 amount: Number(e.amount || 0),
                 vat_amount: 0,
-                currency: "USD",
+                // payroll amounts are stored in the base currency (SAR)
+                currency: "SAR",
                 payment_status: "Paid",
                 reference_no: `payroll:${row.id}:${idx}`,
                 metadata: {
@@ -2543,7 +2562,8 @@ export const useTotals = (logistics?: LogisticsCommitment[]) => {
     payments,
     receipts,
     logistics,
-    legacyPaidFor: paidPayrollAmount,
+    // same rule as public.payroll_legacy_paid (db/pending/180)
+    legacyPaidFor: (r) => legacyContractPaid(r, payments),
   });
   const invoicesOpen = invoices.reduce((a, i) => {
     const due = (Number(i.price) || 0) + (Number(i.vatAmount) || 0) - (Number(i.whtAmount) || 0);

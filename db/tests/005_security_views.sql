@@ -10,7 +10,8 @@ SELECT t.eq('B sees 0 rows of P1 in budget_line_actuals',    (SELECT count(*) FR
 -- a legitimate member still gets the dashboard figures
 SELECT t.as_user(:'A');
 SELECT t.eq('A still reads P1 budget',  (SELECT round(sum(budget_sar),2) FROM v_budget_code_position WHERE project_id = :'P1'), 335000.00);
-SELECT t.eq('A still reads P1 actual',  (SELECT round(actual_sar,2) FROM v_project_position WHERE project_id = :'P1'), 250039.47);
+-- 180 glossary: contracts without instalments are Actual only for what was paid on them (2,000) + invoices 6,200 + petty cash 800
+SELECT t.eq('A still reads P1 actual',  (SELECT round(actual_sar,2) FROM v_project_position WHERE project_id = :'P1'), 9000.00);
 SELECT t.eq('A still reads active lines (draft excluded)', (SELECT count(*) FROM v_active_budget_lines WHERE project_id = :'P1'), 6::bigint);
 RESET ROLE;
 SET ROLE anon;

@@ -6,11 +6,17 @@
 //              car rentals / accommodation not yet invoiced
 //   Paid       money out of the bank / floats (payments ledger)
 //   Remaining  Budget − Actual − Commitment
+//   Payable    Actual − Paid
+//   ETC        per code, editable; default max(Remaining, 0)
+//   EFC        Actual + Commitment + ETC
+//   Variance   Budget − EFC (positive = saving)
+//   Cash       Funding − Paid − VAT paid + VAT recovered − WHT remitted
 //
 // Every screen that shows "Remaining Budget" should call
 // computeBudgetPosition() (or useTotals(), which wraps it) instead of adding
 // its own pieces. Mirrors the PO / logistics rules of v_ledger_transactions
-// (db/pending/174).
+// (db/pending/174) and the payroll split of db/pending/180
+// (public.payroll_contract_actual / payroll_legacy_paid).
 // =====================================================================
 import type { CashAdvanceReceipt, Invoice, Payment, PayrollRow, PurchaseOrder } from "@/lib/store";
 import { round2 } from "@/lib/ap-calc";
@@ -47,6 +53,33 @@ export function poOpenCommitment(
 
 /** Payroll rows created as installments of an invoice are the invoice, not a contract. */
 const isInvoiceInstallment = (r: PayrollRow) => (r.refId ?? "").startsWith("invoice:");
+
+/** A contract cancelled with cancel_payroll_contract (A04) has no Commitment left. */
+export const isContractCancelled = (r: Pick<PayrollRow, "contractCancelledAt">) =>
+  !!r.contractCancelledAt;
+
+/**
+ * What was paid on a contract that has no instalment schedule: the payments
+ * ledger or the legacy Paid slots, whichever is larger (public.payroll_legacy_paid).
+ */
+export function legacyContractPaid(
+  r: Pick<PayrollRow, "id" | "totalAmount" | "payments" | "percents">,
+  payments: Pick<Payment, "sourceType" | "sourceId" | "amount">[],
+): number {
+  const ledger = payments.reduce(
+    (a, p) =>
+      String(p.sourceType) === "payroll" && p.sourceId === r.id ? a + (Number(p.amount) || 0) : a,
+    0,
+  );
+  const slots = r.payments ?? [];
+  const total = Number(r.totalAmount) || 0;
+  const bySlots = slots.reduce((a, st, i) => {
+    if (st !== "Paid") return a;
+    const pct = Number(r.percents?.[i] ?? (slots.length ? 100 / slots.length : 0));
+    return a + (total * pct) / 100;
+  }, 0);
+  return Math.max(ledger, bySlots);
+}
 
 /**
  * Actual on a contract = approved / paid installments (decision 1).
@@ -114,7 +147,7 @@ export function computeBudgetPosition(input: BudgetPositionInput): BudgetPositio
     const total = Number(r.totalAmount) || 0;
     const act = contractActual(r, input.legacyPaidFor(r));
     contractsActual += act;
-    contractsCommitment += Math.max(0, total - act);
+    if (!isContractCancelled(r)) contractsCommitment += Math.max(0, total - act);
   }
 
   const invoicesActual = invoices.reduce((a, i) => a + (Number(i.price) || 0), 0);
@@ -157,5 +190,93 @@ export function computeBudgetPosition(input: BudgetPositionInput): BudgetPositio
       pettyActual: round2(pettyActual),
       logisticsCommitment: round2(logisticsCommitment),
     },
+  };
+}
+
+// ---------------------------------------------------------------------
+// Cost Report line (R06) — same arithmetic as public.get_cost_report.
+// ---------------------------------------------------------------------
+export type CostLine = {
+  budget: number;
+  actual: number;
+  commitment: number;
+  remaining: number;
+  etc: number;
+  efc: number;
+  variance: number;
+  /** Actual / Budget × 100; null when the budget is 0. */
+  pctSpent: number | null;
+};
+
+/** `etcOverride` = the accountant's ETC (null / undefined = default max(Remaining, 0)). */
+export function costLine(
+  budget: number,
+  actual: number,
+  commitment: number,
+  etcOverride?: number | null,
+): CostLine {
+  const b = round2(Number(budget) || 0);
+  const a = round2(Number(actual) || 0);
+  const c = round2(Number(commitment) || 0);
+  const remaining = round2(b - a - c);
+  const etc = round2(
+    etcOverride != null && Number.isFinite(Number(etcOverride))
+      ? Math.max(0, Number(etcOverride))
+      : Math.max(remaining, 0),
+  );
+  const efc = round2(a + c + etc);
+  return {
+    budget: b,
+    actual: a,
+    commitment: c,
+    remaining,
+    etc,
+    efc,
+    variance: round2(b - efc),
+    pctSpent: b !== 0 ? round2((a / b) * 100) : null,
+  };
+}
+
+// ---------------------------------------------------------------------
+// Cash position (A09 / A12) — same arithmetic as public.get_funding_position.
+// ---------------------------------------------------------------------
+export type CashInput = {
+  funding: number;
+  paid: number;
+  vatPaid: number;
+  vatRecovered: number;
+  whtRemitted: number;
+  /** Approved, not paid yet (unpaid invoices + approved instalments). */
+  upcoming: number;
+};
+
+export type CashPosition = CashInput & {
+  cashBalance: number;
+  expectedBalance: number;
+  hasFunding: boolean;
+  overdrawn: boolean;
+  paymentsExceedFunding: boolean;
+  /** Paid / Funding × 100; null when there is no funding. */
+  utilisationPct: number | null;
+};
+
+export function cashPosition(i: CashInput): CashPosition {
+  const n = (v: number) => round2(Number(v) || 0);
+  const funding = n(i.funding);
+  const paid = n(i.paid);
+  const cashBalance = round2(funding - paid - n(i.vatPaid) + n(i.vatRecovered) - n(i.whtRemitted));
+  return {
+    funding,
+    paid,
+    vatPaid: n(i.vatPaid),
+    vatRecovered: n(i.vatRecovered),
+    whtRemitted: n(i.whtRemitted),
+    upcoming: n(i.upcoming),
+    cashBalance,
+    expectedBalance: round2(cashBalance - n(i.upcoming)),
+    hasFunding: funding > 0,
+    overdrawn: cashBalance < 0,
+    paymentsExceedFunding: paid > funding,
+    utilisationPct: funding > 0 ? round2((paid / funding) * 100) : null,
   };
 }

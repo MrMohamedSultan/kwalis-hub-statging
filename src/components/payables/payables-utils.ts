@@ -87,7 +87,10 @@ export function pivotByBeneficiary(milestones: PayableMilestone[]): PayableRow[]
         contract_total: m.contract_total,
         currency: m.currency,
         total_paid: 0,
+        payable: 0,
+        commitment: 0,
         remaining: m.contract_total,
+        contract_cancelled: !!m.contract_cancelled,
         milestones: [],
       });
     }
@@ -95,12 +98,19 @@ export function pivotByBeneficiary(milestones: PayableMilestone[]): PayableRow[]
     row.milestones.push(m);
     if (m.milestone_status === "paid") {
       row.total_paid += m.milestone_amount;
+    } else if (m.milestone_status === "approved") {
+      // Approved = Actual, not paid yet (glossary: Payable)
+      row.payable += m.milestone_amount;
     }
   }
 
   for (const row of map.values()) {
     row.milestones.sort((a, b) => a.milestone_number - b.milestone_number);
-    row.remaining = row.contract_total - row.total_paid;
+    // Commitment = contract value − actual (approved + paid); none once cancelled (A04)
+    row.commitment = row.contract_cancelled
+      ? 0
+      : Math.max(0, row.contract_total - row.total_paid - row.payable);
+    row.remaining = row.payable + row.commitment;
   }
 
   return Array.from(map.values());
@@ -173,10 +183,11 @@ export function uniqueDepartments(rows: PayableRow[]): string[] {
 import { useTranslation } from "react-i18next";
 
 export const STATUS_LABEL_KEY: Record<MilestoneUiStatus, string> = {
-  pending: "payables.milestone.pending",
-  requested: "payables.milestone.requested",
-  approved: "payables.milestone.approved",
-  paid: "payables.milestone.paid",
+  // glossary words, same on every screen (A02)
+  pending: "glossary.status.pending",
+  requested: "glossary.status.requested",
+  approved: "glossary.status.approved",
+  paid: "glossary.status.paid",
 };
 
 /** Localized copy of CATEGORY_CONFIG. Icons stay identical. */

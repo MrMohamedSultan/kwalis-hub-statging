@@ -164,3 +164,144 @@ describe("computeBudgetPosition (B05 B17)", () => {
     expect(p.payable).toBe(600);
   });
 });
+
+// ---- db/pending/180: glossary scenario -------------------------------------
+import { cashPosition, costLine, legacyContractPaid } from "@/lib/budget-position";
+
+describe("glossary scenario (180)", () => {
+  const contracts = [
+    contract({
+      id: "ka",
+      totalAmount: 10000,
+      paymentSchedule: [
+        {
+          id: "m1",
+          label: "Signing",
+          percent: 0,
+          dueDate: "2026-09-20",
+          amount: 4000,
+          status: "Approved",
+        },
+        {
+          id: "m2",
+          label: "Final",
+          percent: 60,
+          dueDate: "2026-11-20",
+          amount: null,
+          status: "Pending",
+        },
+      ],
+    }),
+    contract({
+      id: "kb",
+      totalAmount: 6000,
+      paymentSchedule: [
+        {
+          id: "m1",
+          label: "Prep",
+          percent: 0,
+          dueDate: "2026-09-25",
+          amount: 2000,
+          status: "Paid",
+        },
+        {
+          id: "m2",
+          label: "Wrap",
+          percent: 0,
+          dueDate: "2026-12-01",
+          amount: 4000,
+          status: "Hold",
+        },
+      ],
+    }),
+  ];
+  const input = {
+    ...base,
+    totalBudget: 93750,
+    payroll: contracts,
+    invoices: [inv({ id: "i1", price: 1000, purchaseOrderId: "po1" })],
+    purchaseOrders: [po({ id: "po1", amount: 1000 })],
+    payments: [{ id: "p", sourceType: "payroll", sourceId: "kb", amount: 2000 } as any],
+    logistics: [{ amount: 3000 }, { amount: 5000 }],
+  };
+  it("matches the database numbers", () => {
+    const p = computeBudgetPosition(input);
+    expect([p.actual, p.commitment, p.paid, p.payable, p.remaining]).toEqual([
+      7000, 18000, 2000, 5000, 68750,
+    ]);
+  });
+  it("a cancelled contract keeps its Actual and drops its Commitment (A04)", () => {
+    const p = computeBudgetPosition({
+      ...input,
+      payroll: [{ ...contracts[0], contractCancelledAt: "2026-10-28" }, contracts[1]],
+    });
+    expect([p.actual, p.commitment]).toEqual([7000, 12000]);
+  });
+  it("legacy contract without schedule: payments ledger or Paid slots", () => {
+    const r = contract({
+      id: "x",
+      totalAmount: 1000,
+      payments: ["Paid", "Upcoming"],
+      percents: [30, 70],
+    });
+    expect(legacyContractPaid(r, [])).toBe(300);
+    expect(
+      legacyContractPaid(r, [{ sourceType: "payroll", sourceId: "x", amount: 500 } as any]),
+    ).toBe(500);
+  });
+});
+
+describe("cost line (R06)", () => {
+  it("default ETC = Remaining, EFC = Budget, Variance 0", () => {
+    expect(costLine(20000, 4000, 6000)).toMatchObject({
+      remaining: 10000,
+      etc: 10000,
+      efc: 20000,
+      variance: 0,
+      pctSpent: 20,
+    });
+  });
+  it("editing ETC moves EFC and Variance", () => {
+    expect(costLine(20000, 4000, 6000, 15000)).toMatchObject({ efc: 25000, variance: -5000 });
+  });
+  it("overspent line: ETC never below 0", () => {
+    expect(costLine(1000, 900, 300)).toMatchObject({
+      remaining: -200,
+      etc: 0,
+      efc: 1200,
+      variance: -200,
+    });
+    expect(costLine(0, 50, 0).pctSpent).toBeNull();
+  });
+});
+
+describe("cash position (A12)", () => {
+  it("Cash = Funding − Paid − VAT paid + VAT recovered − WHT remitted", () => {
+    const c = cashPosition({
+      funding: 50000,
+      paid: 2000,
+      vatPaid: 300,
+      vatRecovered: 100,
+      whtRemitted: 50,
+      upcoming: 5000,
+    });
+    expect([c.cashBalance, c.expectedBalance, c.utilisationPct]).toEqual([47750, 42750, 4]);
+    expect(c.hasFunding).toBe(true);
+  });
+  it("no funding: flagged, no utilisation %", () => {
+    const c = cashPosition({
+      funding: 0,
+      paid: 2000,
+      vatPaid: 0,
+      vatRecovered: 0,
+      whtRemitted: 0,
+      upcoming: 0,
+    });
+    expect([c.hasFunding, c.paymentsExceedFunding, c.overdrawn, c.utilisationPct]).toEqual([
+      false,
+      true,
+      true,
+      null,
+    ]);
+  });
+});
