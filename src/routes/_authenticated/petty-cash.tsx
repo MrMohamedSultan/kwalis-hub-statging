@@ -28,9 +28,14 @@ import { BudgetCodeSelector } from "@/components/BudgetCodeSelector";
 import { GlAccountSelector } from "@/components/GlAccountSelector";
 import { useGlAccounts } from "@/lib/gl-accounts";
 import { recordAudit } from "@/lib/audit-log";
+import { parseOpenParam } from "@/lib/document-refs";
 
 import { useTranslation } from "react-i18next";
 export const Route = createFileRoute("/_authenticated/petty-cash")({
+  validateSearch: (s: Record<string, unknown>): { open?: string } => {
+    const open = parseOpenParam(s.open);
+    return open ? { open } : {};
+  },
   component: () => (
     <AppShell>
       <PettyCashPage />
@@ -304,6 +309,17 @@ function PettyCashPage() {
   const [showRecFor, setShowRecFor] = useState<Advance | null>(null);
   const [showRecPicker, setShowRecPicker] = useState(false);
   const [historyFor, setHistoryFor] = useState<Advance | null>(null);
+  // G11: ?open=<float id | receipt id> opens the float's history (receipts included).
+  const { open: openId } = Route.useSearch();
+  const openedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openId || openedRef.current === openId) return;
+    const advanceId = receipts.find((r) => r.id === openId)?.advance_id ?? openId;
+    const adv = advances.find((a) => a.id === advanceId);
+    if (!adv) return;
+    openedRef.current = openId;
+    setHistoryFor(adv);
+  }, [openId, advances, receipts]);
 
   if (!roles.loaded || !projectId) {
     return <div className="p-6 text-muted-foreground">Loading…</div>;

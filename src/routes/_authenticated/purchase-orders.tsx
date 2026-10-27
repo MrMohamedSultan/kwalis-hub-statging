@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ClipboardList, Plus, X as XIcon, RotateCcw, Check } from "lucide-react";
 import { AppShell, PageTitle } from "@/components/AppShell";
@@ -13,9 +13,14 @@ import { CurrencyFxFields, useProjectFx } from "@/components/ap/CurrencyFxFields
 import { toBaseAmount } from "@/lib/ap-calc";
 import { invoicedOnPo, poIsCommitment, poOpenCommitment } from "@/lib/budget-position";
 import { humanizeDbError } from "@/lib/db-errors";
+import { parseOpenParam } from "@/lib/document-refs";
 
 import { useTranslation } from "react-i18next";
 export const Route = createFileRoute("/_authenticated/purchase-orders")({
+  validateSearch: (s: Record<string, unknown>): { open?: string } => {
+    const open = parseOpenParam(s.open);
+    return open ? { open } : {};
+  },
   component: () => (
     <AppShell>
       <PurchaseOrdersPage />
@@ -66,6 +71,16 @@ function PurchaseOrdersPage() {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState<PO | "new" | null>(null);
   const [me, setMe] = useState<string | null>(null);
+  // G11: ?open=<id> opens that purchase order once the list is loaded.
+  const { open: openId } = Route.useSearch();
+  const openedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openId || openedRef.current === openId) return;
+    const po = pos.find((p) => p.id === openId);
+    if (!po) return;
+    openedRef.current = openId;
+    setShowForm(po);
+  }, [openId, pos]);
 
   useEffect(() => {
     void supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
