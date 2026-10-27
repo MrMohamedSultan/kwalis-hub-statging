@@ -145,3 +145,26 @@ describe("bidi isolation of interpolated values (G14)", () => {
     expect(i18n.t("exports.page_x_of_y", { page: 1, total: 3 })).toBe("Page 1 of 3");
   });
 });
+
+describe("SheetJS branding rows (G02)", () => {
+  it("puts company/project/title on top and the footer underneath", async () => {
+    const { brandedRows } = await import("@/lib/export/sheetjs-branding");
+    const rows = brandedRows(
+      [
+        ["Name", "Amount"],
+        ["A", 1750],
+      ],
+      {
+        company: "Co",
+        project: "MON26 — Film",
+        title: "Vendor Ledger",
+        footer: "Exported from Kwalis Hub",
+      },
+    );
+    expect(rows[0]).toEqual(["Co"]);
+    expect(rows[2]).toEqual(["Vendor Ledger"]);
+    expect(rows[4]).toEqual(["Name", "Amount"]);
+    expect(rows[5][1]).toBe(1750);
+    expect(rows[rows.length - 1]).toEqual(["Exported from Kwalis Hub"]);
+  });
+});

@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { useExportAction } from "@/hooks/use-export-action";
 import { toast } from "sonner";
-import { loadPdf, loadXlsx } from "@/lib/lazy-export-libs";
+import { loadXlsx } from "@/lib/lazy-export-libs";
 import { formatDateDMY } from "@/lib/date-format";
 
 import { useTranslation } from "react-i18next";
@@ -390,7 +390,13 @@ function DailyTransportPage() {
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Transport Sheet");
-    XLSX.writeFile(wb, `transport-${transportDate}.xlsx`);
+    const { writeBrandedSheetJs } = await import("@/lib/export/sheetjs-branding");
+    await writeBrandedSheetJs(
+      XLSX,
+      wb,
+      "Daily Transport",
+      `Daily Transport — ${formatDateDMY(transportDate)}`,
+    );
   };
 
   const exportPDF = async () => {
@@ -398,20 +404,19 @@ function DailyTransportPage() {
       toast.error(t("daily_transport.nothing_to_export"));
       return;
     }
-    const { jsPDF, autoTable } = await loadPdf();
-    const doc = new jsPDF({ orientation: "landscape" });
-    doc.setFontSize(14);
-    doc.text(`Daily Transport Sheet — ${projectName}`, 14, 14);
-    doc.setFontSize(10);
-    doc.text(`Date: ${formatDateDMY(transportDate)}`, 14, 21);
-    autoTable(doc, {
-      startY: 26,
-      head: [["Time", "Passengers", "Pick-up", "Drop-off", "Vehicle", "Driver", "Notes"]],
-      body: exportRows().map((r) => Object.values(r)),
-      styles: { fontSize: 9, cellPadding: 2 },
-      headStyles: { fillColor: [30, 41, 59] },
-    });
-    doc.save(`transport-${transportDate}.pdf`);
+    // Shared Kwalis Hub header/footer, Arabic-capable font, standard name (G02/X16).
+    const { exportPdfReport } = await import("@/lib/export-pdf");
+    await exportPdfReport(
+      "Daily Transport",
+      [
+        {
+          title: `Daily Transport Sheet — ${formatDateDMY(transportDate)}`,
+          headers: ["Time", "Passengers", "Pick-up", "Drop-off", "Vehicle", "Driver", "Notes"],
+          rows: exportRows().map((r) => Object.values(r).map((v) => String(v ?? ""))),
+        },
+      ],
+      { documentTitle: `Daily Transport Sheet — ${projectName}` },
+    );
   };
 
   if (!activeProjectId) {

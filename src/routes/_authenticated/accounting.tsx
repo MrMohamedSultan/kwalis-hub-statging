@@ -1223,7 +1223,13 @@ function VendorLedgerModal({ vendor, onClose }: { vendor: Vendor; onClose: () =>
       XLSX.utils.json_to_sheet(payRows.length ? payRows : [{ Note: "No Payments" }]),
       "Payments",
     );
-    XLSX.writeFile(wb, `vendor-ledger-${vendor.name.replace(/\s+/g, "_")}.xlsx`);
+    const { writeBrandedSheetJs } = await import("@/lib/export/sheetjs-branding");
+    await writeBrandedSheetJs(
+      XLSX,
+      wb,
+      `Vendor Ledger ${vendor.name}`,
+      `Vendor Ledger — ${vendor.name}`,
+    );
     toast.success(t("accounting.excel_export_ready"));
   };
 

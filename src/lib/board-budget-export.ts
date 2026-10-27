@@ -6,7 +6,6 @@ import { formatDateTime } from "@/lib/date-format";
 import type ExcelJSTypes from "exceljs";
 import { loadExcelJs } from "@/lib/lazy-export-libs";
 import { exportPdfReport } from "@/lib/export-pdf";
-import { downloadBlob } from "@/lib/download";
 
 export type BoardExportLine = {
   code: string;
@@ -150,11 +149,9 @@ export async function exportBoardBudgetExcel(payload: BoardExportPayload): Promi
     }
   }
 
-  const buffer = await wb.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  downloadBlob(`${safeName(payload)}.xlsx`, blob);
+  // Shared Kwalis Hub identity + standard file name (G02).
+  const { saveBrandedWorkbook } = await import("@/lib/export/xlsx-report");
+  await saveBrandedWorkbook(wb, "Board Budget", "Board Budget Review");
 }
 
 export function exportBoardBudgetPdf(payload: BoardExportPayload): void {

@@ -385,7 +385,8 @@ export function CrewPayrollTab({
     XLSX.utils.book_append_sheet(wb, ws1, "Contracts");
     const ws2 = XLSX.utils.json_to_sheet(detail);
     XLSX.utils.book_append_sheet(wb, ws2, "Ledger");
-    XLSX.writeFile(wb, `${moduleLabel.replace(/\s/g, "_")}_${filterSuffix}_${stamp()}.xlsx`);
+    const { writeBrandedSheetJs } = await import("@/lib/export/sheetjs-branding");
+    await writeBrandedSheetJs(XLSX, wb, `${moduleLabel} ${filterSuffix}`, moduleLabel);
     toast.success(
       `Exported ${summary.length} contract${summary.length === 1 ? "" : "s"} · ${detail.length} ledger entr${detail.length === 1 ? "y" : "ies"} to Excel.`,
     );

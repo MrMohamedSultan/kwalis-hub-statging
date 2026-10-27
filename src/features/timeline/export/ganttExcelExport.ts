@@ -795,29 +795,15 @@ export async function buildTimelineWorkbook(
  * Download
  * ================================================================== */
 
-const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 export async function exportTimelineToExcel(
   options: GanttExportOptions & { report?: ExtractionReport },
 ): Promise<ExportSummary> {
   const { workbook, summary } = await buildTimelineWorkbook(options);
-  const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], { type: XLSX_MIME });
-
-  const safe = options.projectName.replace(/[^\p{L}\p{N}\- ]/gu, '').trim() || 'Project';
-  const version = options.versionLabel ? `_${options.versionLabel.split(/[\s·]/)[0]}` : '';
-  const name =
-    options.fileName ??
-    `Production-Timeline_${safe}${version}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Shared Kwalis Hub identity + standard file name (G02).
+  const { saveBrandedWorkbook } = await import('@/lib/export/xlsx-report');
+  const version = options.versionLabel ? ` ${options.versionLabel.split(/[\s·]/)[0]}` : '';
+  await saveBrandedWorkbook(workbook, options.fileName ?? `Production Timeline${version}`);
 
   return summary;
 }

@@ -1190,7 +1190,8 @@ async function exportExcel(report: ReturnType<typeof buildTopSheetReport>, proje
     XLSX.utils.book_append_sheet(wb, ws2, i18n.t("export.validationIssues"));
   }
 
-  XLSX.writeFile(wb, `top-sheet-report-${slug(projectName)}.xlsx`);
+  const { writeBrandedSheetJs } = await import("@/lib/export/sheetjs-branding");
+  await writeBrandedSheetJs(XLSX, wb, "Top Sheet Report");
 }
 
 async function exportPDF(

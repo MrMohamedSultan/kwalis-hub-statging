@@ -254,15 +254,9 @@ export function BudgetVsActualPanel({ isDraft }: { isDraft: boolean }) {
       ],
       true,
     );
-    const buf = await wb.xlsx.writeBuffer();
-    const blob = new Blob([buf], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${project?.code ?? "project"}-budget-vs-spend.xlsx`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    // Shared Kwalis Hub identity + standard file name (G02).
+    const { saveBrandedWorkbook } = await import("@/lib/export/xlsx-report");
+    await saveBrandedWorkbook(wb, "Budget vs Spend");
   }
 
   const money = (n: number, tone = "") => (

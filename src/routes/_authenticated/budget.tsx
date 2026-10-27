@@ -4086,11 +4086,8 @@ export function ViewEditBudget() {
                   }));
 
                   ws.views = [{ state: "frozen", ySplit: 2 }];
-                  const buf = await wb.xlsx.writeBuffer();
-                  const blob = new Blob([buf], {
-                    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                  });
-                  downloadBlob(`budget-${filterSuffix}-${dateStr}.xlsx`, blob);
+                  const { saveBrandedWorkbook } = await import("@/lib/export/xlsx-report");
+                  await saveBrandedWorkbook(wb, `Budget ${filterSuffix}`, "Budget");
                   toast.success(
                     `Exported ${rows.length} row${rows.length === 1 ? "" : "s"} · ${filterLabel}`,
                   );
@@ -4352,11 +4349,8 @@ export function ViewEditBudget() {
 
                     rows.forEach((r) => ws.addRow(Object.values(r)));
                     ws.views = [{ state: "frozen", ySplit: 2 }];
-                    const buf = await wb.xlsx.writeBuffer();
-                    const blob = new Blob([buf], {
-                      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    });
-                    downloadBlob(`budget-snapshot-${dateStr}.xlsx`, blob);
+                    const { saveBrandedWorkbook } = await import("@/lib/export/xlsx-report");
+                    await saveBrandedWorkbook(wb, "Budget Snapshot");
                   } catch (e) {
                     console.warn("[snapshot] Excel export failed, CSV was still saved", e);
                   }
@@ -6497,12 +6491,9 @@ async function exportTopSheetExcel(a: TopSheetExportArgs) {
     autoFit(ws, [10, 30, 22, 9, 11, 9, 10, 10, 11, 12, 10, 28, 18]);
   }
 
-  const buf = await wb.xlsx.writeBuffer();
-  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf as ArrayBuffer);
-  const blob = new Blob([bytes], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  downloadBlob(`${safeName(a.projectName)}_Budget.xlsx`, blob);
+  // Shared Kwalis Hub identity + standard file name (G02).
+  const { saveBrandedWorkbook } = await import("@/lib/export/xlsx-report");
+  await saveBrandedWorkbook(wb, "Budget", "Budget — Top Sheet");
 }
 
 function exportTopSheetPDF(a: TopSheetExportArgs) {
