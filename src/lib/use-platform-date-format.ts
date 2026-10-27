@@ -4,7 +4,13 @@
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useStore } from "@/lib/store";
-import { DEFAULT_DATE_FORMAT, isDateFormat, setDateFormat, useDateFormat } from "@/lib/date-format";
+import {
+  DEFAULT_DATE_FORMAT,
+  isDateFormat,
+  readCachedFormat,
+  setDateFormat,
+  useDateFormat,
+} from "@/lib/date-format";
 
 export async function fetchOrgDateFormat(orgId: string): Promise<string> {
   const { data, error } = await supabase
@@ -36,6 +42,10 @@ export function usePlatformDateFormat(): void {
     const p = s.projects.find((x) => x.id === s.activeProjectId);
     return p?.organizationId ?? null;
   });
+  useEffect(() => {
+    // Last known company format first (instant), then the authoritative one.
+    setDateFormat(readCachedFormat());
+  }, []);
   useEffect(() => {
     if (!orgId) return;
     let cancelled = false;

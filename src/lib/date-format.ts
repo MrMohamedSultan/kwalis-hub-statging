@@ -30,7 +30,7 @@ export function isDateFormat(v: unknown): v is DateFormat {
 
 const STORAGE_KEY = "kwalis.dateFormat";
 
-function readCachedFormat(): DateFormat {
+export function readCachedFormat(): DateFormat {
   try {
     if (typeof localStorage === "undefined") return DEFAULT_DATE_FORMAT;
     const v = localStorage.getItem(STORAGE_KEY);
@@ -44,7 +44,9 @@ type DateFormatState = { format: DateFormat; setFormat: (f: DateFormat) => void 
 
 /** Reactive store — components that call {@link useDateFormat} re-render on change. */
 export const useDateFormatStore = create<DateFormatState>((set) => ({
-  format: readCachedFormat(),
+  // Server and first client render agree on the default (no hydration
+  // mismatch); the cached company format is applied right after mount.
+  format: DEFAULT_DATE_FORMAT,
   setFormat: (format) => {
     try {
       localStorage.setItem(STORAGE_KEY, format);
