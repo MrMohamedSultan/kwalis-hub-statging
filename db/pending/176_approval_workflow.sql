@@ -610,8 +610,10 @@ BEGIN
       RAISE EXCEPTION 'payment_requests: instalment % not found on this contract', NEW.payroll_milestone_id
         USING ERRCODE = '22023';
     END IF;
-    IF TG_OP = 'INSERT' AND m->>'status' IN ('Approved', 'Paid') THEN
-      RAISE EXCEPTION 'payment_requests: this instalment is already %', lower(m->>'status')
+    -- (Hold / Approved set by hand before this file carry no request: they
+    --  are requested like Pending ones.)
+    IF TG_OP = 'INSERT' AND m->>'status' = 'Paid' THEN
+      RAISE EXCEPTION 'payment_requests: this instalment is already paid'
         USING ERRCODE = '22023';
     END IF;
     v_amt := public.payroll_milestone_amount(m, COALESCE(p.net_payable, p.total_amount));

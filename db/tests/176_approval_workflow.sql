@@ -102,6 +102,16 @@ SELECT t.denied('X08 a cancelled request cannot be deleted', $$DELETE FROM payme
 RESET ROLE;
 SELECT t.eq('X08 cancellation is in the audit trail', (SELECT count(*) > 0 FROM audit_history WHERE table_name='payment_requests' AND record_id='c1760000-0000-0000-0000-000000000003' AND operation='UPDATE'), true);
 
+-- a legacy instalment put on Hold by hand (before 176) can still be requested
+SELECT set_config('request.jwt.claim.sub', '', false);
+UPDATE payroll SET payment_schedule = jsonb_set(payment_schedule,'{2,status}','"Hold"') WHERE id=:'ROK';
+SELECT t.as_user(:'A');
+INSERT INTO payment_requests(id,organization_id,project_id,source_type,source_id,payroll_milestone_id,total_amount,requested_amount,status,requested_by,submitted_at)
+VALUES ('c1760000-0000-0000-0000-000000000004',:'O1',:'P1','payroll_row',:'ROK','m3',4000,2000,'waiting_approval',:'A',now());
+SELECT t.eq('legacy Hold instalment requested', (SELECT payment_schedule->2->>'status' FROM payroll WHERE id=:'ROK'), 'Hold');
+SELECT t.denied('a paid instalment cannot be requested again', $$INSERT INTO payment_requests(organization_id,project_id,source_type,source_id,payroll_milestone_id,total_amount,requested_amount,status,requested_by) VALUES ('10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','payroll_row','b1760000-0000-0000-0000-000000000002','m1',4000,1000,'waiting_approval','00000000-0000-0000-0000-00000000000a')$$);
+RESET ROLE;
+
 -- ---------------------------------------------------------------- D05 / X11 chain
 SELECT t.eq('USD request converted at the project rate', payment_request_amount_sar(1000, 'USD', :'P1'), 3750.00);
 SELECT t.eq('SAR stays SAR', payment_request_amount_sar(1000, 'SAR', :'P1'), 1000.00);

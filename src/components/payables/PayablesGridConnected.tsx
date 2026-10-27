@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
-import { useStore, type MilestoneStatus, type PayrollRow } from "@/lib/store";
+import { useStore, type PayrollRow } from "@/lib/store";
 import { useCan } from "@/lib/rbac";
 import { useAuthRoles } from "@/lib/auth-roles";
 import { useProjectLock } from "@/lib/project-lock";
@@ -25,9 +25,6 @@ import type { MilestoneUiStatus, PayableCategory, PayableMilestone } from "./pay
  * a payment_requests row (Payment Approvals), approval / payment there moves
  * the instalment to Approved / Paid. The grid never sets those by hand.
  */
-const toUiStatus = (s?: MilestoneStatus): MilestoneUiStatus =>
-  s === "Paid" ? "paid" : s === "Approved" ? "approved" : s === "Hold" ? "requested" : "pending";
-
 /** UI status of an instalment whose payment request is open or paid (the request wins). */
 const fromRequestStatus = (s?: string): MilestoneUiStatus | null =>
   s === "waiting_approval"
@@ -101,9 +98,11 @@ export function PayablesGridConnected({ category }: { category: PayableCategory 
           milestone_number: i + 1,
           milestone_label: m.label || undefined,
           milestone_amount: amount,
+          // The request wins. Hold / Approved set by hand before the approval
+          // flow have no request behind them: they are requested again.
           milestone_status:
             fromRequestStatus(req?.status) ??
-            (m.status ? toUiStatus(m.status) : legacyPaid ? "paid" : "pending"),
+            (m.status === "Paid" || (!m.status && legacyPaid) ? "paid" : "pending"),
           due_date: m.dueDate || undefined,
           paid_date: m.paidDate ?? undefined,
           payment_ref: m.paidRef ?? undefined,
