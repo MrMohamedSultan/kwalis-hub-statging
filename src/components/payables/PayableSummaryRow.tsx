@@ -15,7 +15,8 @@ export function PayableSummaryRow({
   const { t } = useTranslation();
   const deal = rows.reduce((s, r) => s + r.contract_total, 0);
   const paid = rows.reduce((s, r) => s + r.total_paid, 0);
-  const remaining = rows.reduce((s, r) => s + r.remaining, 0);
+  const payable = rows.reduce((s, r) => s + r.payable, 0);
+  const commitment = rows.reduce((s, r) => s + r.commitment, 0);
 
   const perMilestone = Array.from({ length: maxMilestones }, (_, i) =>
     rows.reduce((s, r) => {
@@ -38,7 +39,10 @@ export function PayableSummaryRow({
           {fmt(paid)}
         </div>
         <div className="flex h-12 w-[100px] shrink-0 items-center justify-end px-3 text-end font-mono text-sm font-bold tabular-nums text-foreground">
-          {fmt(remaining)}
+          {fmt(payable)}
+        </div>
+        <div className="flex h-12 w-[100px] shrink-0 items-center justify-end px-3 text-end font-mono text-sm font-bold tabular-nums text-foreground">
+          {fmt(commitment)}
         </div>
       </div>
       <div className="flex h-12 items-center">

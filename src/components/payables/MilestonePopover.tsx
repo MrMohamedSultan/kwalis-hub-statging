@@ -488,6 +488,8 @@ export function MilestonePopover({
   const [editAmount, setEditAmount] = useState(milestone.milestone_amount);
   const [showPayForm, setShowPayForm] = useState(false);
   const [showUndo, setShowUndo] = useState(false);
+  const [showUnapprove, setShowUnapprove] = useState(false);
+  const [unapproveReason, setUnapproveReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -706,7 +708,12 @@ export function MilestonePopover({
 
       {renderFooter && (
         <div className="shrink-0 space-y-2 border-t border-border px-4 py-3">
-          {milestone.milestone_status === "pending" && (
+          {milestone.milestone_status === "pending" && milestone.contract_cancelled && (
+            <p className="text-[11px] text-muted-foreground">
+              {t("glossary.contract.cancelledNote")}
+            </p>
+          )}
+          {milestone.milestone_status === "pending" && !milestone.contract_cancelled && (
             <>
               {milestone.contract_approved === false && (
                 <p className="text-[11px] text-warning">
@@ -750,13 +757,55 @@ export function MilestonePopover({
             </>
           )}
 
-          {milestone.milestone_status === "approved" && (
-            <ActionButton
-              label={t("payables.milestone.markAsPaid")}
-              variant="success"
-              disabled={isSubmitting}
-              onClick={() => setShowPayForm(true)}
-            />
+          {milestone.milestone_status === "approved" && !showUnapprove && (
+            <>
+              <p className="text-[11px] text-muted-foreground">{t("glossary.unapprove.frozen")}</p>
+              {!milestone.legacy_status && (
+                <ActionButton
+                  label={t("payables.milestone.markAsPaid")}
+                  variant="success"
+                  disabled={isSubmitting}
+                  onClick={() => setShowPayForm(true)}
+                />
+              )}
+              <ActionButton
+                label={t("glossary.unapprove.action")}
+                variant="ghost-destructive"
+                disabled={isSubmitting}
+                onClick={() => setShowUnapprove(true)}
+              />
+            </>
+          )}
+          {milestone.milestone_status === "approved" && showUnapprove && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-destructive">
+                {t("glossary.unapprove.question")}
+              </p>
+              <textarea
+                value={unapproveReason}
+                onChange={(e) => setUnapproveReason(e.target.value)}
+                placeholder={t("glossary.unapprove.reasonPlaceholder")}
+                rows={2}
+                maxLength={1000}
+                className="w-full resize-none rounded-lg border border-border bg-input px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <div className="flex gap-2">
+                <ActionButton
+                  label={t("glossary.unapprove.confirm")}
+                  variant="destructive"
+                  disabled={isSubmitting || unapproveReason.trim().length < 3}
+                  onClick={() =>
+                    doAction({ milestone_status: "pending", action_reason: unapproveReason.trim() })
+                  }
+                />
+                <ActionButton
+                  label={t("common.cancel")}
+                  variant="outline"
+                  disabled={isSubmitting}
+                  onClick={() => setShowUnapprove(false)}
+                />
+              </div>
+            </div>
           )}
 
           {milestone.milestone_status === "paid" &&

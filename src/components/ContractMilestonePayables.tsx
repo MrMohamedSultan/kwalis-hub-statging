@@ -22,6 +22,7 @@ import { Modal } from "@/components/Modal";
 import { supabase } from "@/integrations/supabase/client";
 
 import { useTranslation } from "react-i18next";
+import i18n from "@/lib/i18n";
 type Kind = "crew" | "cast";
 
 type MilestoneRow = {
@@ -62,7 +63,7 @@ function rowTone(m: MilestoneRow) {
     return {
       row: "bg-warning/5 hover:bg-warning/10",
       badge: "bg-warning/15 text-warning border-warning/30",
-      label: "On Hold",
+      label: i18n.t("glossary.status.requested"),
     };
   }
   if (m.overdue) {
@@ -274,7 +275,7 @@ export function ContractMilestonePayables({ kind }: { kind: Kind }) {
     { key: "overdue", label: "Action Needed" },
     { key: "upcoming", label: "Upcoming" },
     { key: "approved", label: "Approved" },
-    { key: "hold", label: "On Hold" },
+    { key: "hold", label: i18n.t("glossary.status.requested") },
     { key: "paid", label: "Paid" },
   ];
 
@@ -338,7 +339,7 @@ export function ContractMilestonePayables({ kind }: { kind: Kind }) {
           tone="text-info border-info/30 bg-info/10"
         />
         <SummaryTile
-          label="On Hold"
+          label={i18n.t("glossary.status.requested")}
           value={totals.hold}
           tone="text-warning border-warning/30 bg-warning/10"
         />

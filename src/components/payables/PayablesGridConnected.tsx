@@ -13,6 +13,7 @@ import {
   toRequestMethod,
   usePaymentRequests,
 } from "@/lib/payment-requests";
+import { supabase } from "@/integrations/supabase/client";
 import { PayablesGrid } from "./PayablesGrid";
 import type { MilestoneUiStatus, PayableCategory, PayableMilestone } from "./payables-types";
 
@@ -98,11 +99,18 @@ export function PayablesGridConnected({ category }: { category: PayableCategory 
           milestone_number: i + 1,
           milestone_label: m.label || undefined,
           milestone_amount: amount,
-          // The request wins. Hold / Approved set by hand before the approval
-          // flow have no request behind them: they are requested again.
+          // The request wins. Hold set by hand before the approval flow has no
+          // request behind it: it is requested again. A hand-set Approved is
+          // Actual in every total (db/pending/180), so it shows as Approved.
           milestone_status:
             fromRequestStatus(req?.status) ??
-            (m.status === "Paid" || (!m.status && legacyPaid) ? "paid" : "pending"),
+            (m.status === "Paid" || (!m.status && legacyPaid)
+              ? "paid"
+              : m.status === "Approved"
+                ? "approved"
+                : "pending"),
+          legacy_status: !fromRequestStatus(req?.status) && m.status === "Approved",
+          contract_cancelled: !!row.contractCancelledAt,
           due_date: m.dueDate || undefined,
           paid_date: m.paidDate ?? undefined,
           payment_ref: m.paidRef ?? undefined,
@@ -174,6 +182,17 @@ export function PayablesGridConnected({ category }: { category: PayableCategory 
             payrollMilestoneId: msId,
           });
           toast.success(t("payables.toasts.requested"));
+        } else if (next === "pending" && ms.milestone_status === "approved") {
+          // A03 un-approve: the approved request is cancelled; the database writes
+          // the reversing entry (accrual_reversals) and the instalment is Pending again.
+          const reason = (updates.action_reason ?? "").trim();
+          if (reason.length < 3) throw new Error(t("glossary.unapprove.reasonRequired"));
+          if (ms.payment_request_id && ms.payment_request_status === "approved") {
+            await cancelPaymentRequest(ms.payment_request_id, reason);
+          } else {
+            await setMilestoneStatus(rowId, msId, "Pending");
+          }
+          toast.success(t("glossary.unapprove.done"));
         } else if (next === "pending" && ms.milestone_status === "requested") {
           // Withdraw: the request is cancelled (recorded), the instalment returns to Pending.
           if (!ms.payment_request_id) return;
@@ -227,12 +246,37 @@ export function PayablesGridConnected({ category }: { category: PayableCategory 
     ],
   );
 
+  // A04: cancel a contract — approved instalments stay Actual, the rest
+  // leaves Commitment (public.cancel_payroll_contract, org admins only).
+  const onCancelContract = useCallback(
+    async (contractId: string, name: string) => {
+      const reason = window.prompt(t("glossary.contract.cancelPrompt", { name }))?.trim();
+      if (!reason) return;
+      if (reason.length < 3) {
+        toast.error(t("glossary.unapprove.reasonRequired"));
+        return;
+      }
+      const { error } = await (supabase.rpc as any)("cancel_payroll_contract", {
+        _payroll: contractId,
+        _reason: reason.slice(0, 1000),
+      });
+      if (error) {
+        toast.error(error.message ?? t("payables.toasts.failed"));
+        return;
+      }
+      toast.success(t("glossary.contract.cancelledToast"));
+      await Promise.all([refreshRequests(), refreshPayrollRow(contractId)]);
+    },
+    [t, refreshRequests, refreshPayrollRow],
+  );
+
   return (
     <PayablesGrid
       category={category}
       milestones={milestones}
       onMilestoneUpdate={onMilestoneUpdate}
       readOnly={readOnly}
+      onCancelContract={category === "vendor" ? undefined : onCancelContract}
     />
   );
 }

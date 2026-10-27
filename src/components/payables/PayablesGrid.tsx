@@ -26,7 +26,12 @@ export function PayablesGrid({
   isLoading = false,
   onMilestoneUpdate,
   readOnly = false,
-}: PayablesGridProps & { readOnly?: boolean }) {
+  onCancelContract,
+}: PayablesGridProps & {
+  readOnly?: boolean;
+  /** A04: cancel the contract (org admin); omitted = no action shown. */
+  onCancelContract?: (contractId: string, name: string) => void;
+}) {
   const { t } = useTranslation();
   const categoryConfig = useCategoryConfig();
   const config = categoryConfig[category];
@@ -106,13 +111,16 @@ export function PayablesGrid({
                 <HeadCell w={260}>{t("payables.beneficiary")}</HeadCell>
                 <HeadCell w={160}>{config.roleLabel}</HeadCell>
                 <HeadCell w={110} end>
-                  {t("payables.totalDeal")}
+                  {t("glossary.term.contractValue")}
                 </HeadCell>
                 <HeadCell w={100} end>
-                  {t("payables.totalPaid")}
+                  {t("glossary.term.paid")}
                 </HeadCell>
                 <HeadCell w={100} end>
-                  {t("payables.remaining")}
+                  {t("glossary.term.payable")}
+                </HeadCell>
+                <HeadCell w={100} end>
+                  {t("glossary.term.commitment")}
                 </HeadCell>
               </div>
               <div className="flex">
@@ -137,14 +145,32 @@ export function PayablesGrid({
               >
                 <div className="sticky left-0 z-10 flex border-e border-border/50 bg-card shadow-sm">
                   <div className="flex h-14 w-[260px] shrink-0 flex-col justify-center px-3 py-2">
-                    <div className="truncate text-sm font-semibold text-foreground">
-                      {row.beneficiary_name}
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate text-sm font-semibold text-foreground">
+                        {row.beneficiary_name}
+                      </span>
+                      {row.contract_cancelled && (
+                        <span className="shrink-0 rounded bg-destructive/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-destructive">
+                          {t("glossary.contract.cancelled")}
+                        </span>
+                      )}
                     </div>
-                    {row.department && (
-                      <div className="truncate text-[10px] text-muted-foreground">
-                        {row.department}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {row.department && (
+                        <span className="truncate text-[10px] text-muted-foreground">
+                          {row.department}
+                        </span>
+                      )}
+                      {onCancelContract && !readOnly && !row.contract_cancelled && (
+                        <button
+                          type="button"
+                          onClick={() => onCancelContract(row.contract_id, row.beneficiary_name)}
+                          className="shrink-0 text-[10px] font-medium text-destructive hover:underline"
+                        >
+                          {t("glossary.contract.cancel")}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="flex h-14 w-[160px] shrink-0 items-center px-3 py-2">
                     <div className="truncate text-xs text-muted-foreground">
@@ -162,10 +188,13 @@ export function PayablesGrid({
                   </div>
                   <div
                     className={`flex h-14 w-[100px] shrink-0 items-center justify-end px-3 py-2 text-end font-mono text-sm font-medium tabular-nums ${
-                      row.remaining > 0 ? "text-foreground" : "text-success"
+                      row.payable > 0 ? "text-warning" : "text-muted-foreground"
                     }`}
                   >
-                    {fmt(row.remaining)}
+                    {fmt(row.payable)}
+                  </div>
+                  <div className="flex h-14 w-[100px] shrink-0 items-center justify-end px-3 py-2 text-end font-mono text-sm font-medium tabular-nums text-foreground">
+                    {fmt(row.commitment)}
                   </div>
                 </div>
 
@@ -247,8 +276,9 @@ function MobileCards({
                 {fmt(row.contract_total)} {row.currency}
               </div>
               <div className="text-[11px] text-muted-foreground">
-                {t("payables.paid")} {fmt(row.total_paid, true)} · {t("payables.left")}{" "}
-                {fmt(row.remaining, true)}
+                {t("glossary.term.paid")} {fmt(row.total_paid, true)} · {t("glossary.term.payable")}{" "}
+                {fmt(row.payable, true)} · {t("glossary.term.commitment")}{" "}
+                {fmt(row.commitment, true)}
               </div>
             </div>
           </div>
