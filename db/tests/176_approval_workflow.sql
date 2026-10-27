@@ -30,10 +30,11 @@ SELECT t.as_user(:'A');
 UPDATE people SET contract_approved_by=:'A' WHERE id=:'POK';
 SELECT t.eq('B12 approval stamp cannot be rewritten', (SELECT contract_approved_by FROM people WHERE id=:'POK'), :'D'::uuid);
 
+-- (180: every instalment has a name + due date and the schedule adds up to the contract)
 -- contracts with instalments (total 4,000: m1 1,000 flat · m2 25% = 1,000 · m3 2,000)
 INSERT INTO payroll(id,ref_id,name,kind,total_amount,budget_code,organization_id,project_id,payment_schedule) VALUES
- (:'RPEND',:'PEND','Pending Person','crew',4000,'1101',:'O1',:'P1','[{"id":"m1","label":"Signing","percent":0,"amount":1000,"status":"Pending"}]'),
- (:'ROK',:'POK','Approved Person','crew',4000,'1101',:'O1',:'P1','[{"id":"m1","label":"Signing","percent":0,"amount":1000,"status":"Pending"},{"id":"m2","label":"Mid","percent":25,"amount":null,"status":"Pending"},{"id":"m3","label":"Wrap","percent":0,"amount":2000,"status":"Pending"}]');
+ (:'RPEND',:'PEND','Pending Person','crew',4000,'1101',:'O1',:'P1','[{"id":"m1","label":"Signing","dueDate":"2026-10-01","percent":0,"amount":1000,"status":"Pending"},{"id":"m2","label":"Rest","dueDate":"2026-10-01","percent":0,"amount":3000,"status":"Pending"}]'),
+ (:'ROK',:'POK','Approved Person','crew',4000,'1101',:'O1',:'P1','[{"id":"m1","label":"Signing","dueDate":"2026-10-01","percent":0,"amount":1000,"status":"Pending"},{"id":"m2","label":"Mid","dueDate":"2026-10-01","percent":25,"amount":null,"status":"Pending"},{"id":"m3","label":"Wrap","dueDate":"2026-10-01","percent":0,"amount":2000,"status":"Pending"}]');
 SELECT t.denied('instalments cannot be inserted already Paid', $$INSERT INTO payroll(ref_id,name,kind,total_amount,organization_id,project_id,payment_schedule) VALUES ('x','X','crew',10,'10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','[{"id":"z","amount":10,"status":"Paid"}]')$$);
 
 -- ---------------------------------------------------------------- B13
@@ -48,7 +49,7 @@ SELECT t.denied('B13 one open request per instalment', $$INSERT INTO payment_req
 SELECT t.denied('X09 instalment amount frozen while requested', $$UPDATE payroll SET payment_schedule = jsonb_set(payment_schedule,'{0,amount}','1500') WHERE id='b1760000-0000-0000-0000-000000000002'$$);
 SELECT t.denied('requested instalment cannot be removed', $$UPDATE payroll SET payment_schedule = payment_schedule - 0 WHERE id='b1760000-0000-0000-0000-000000000002'$$);
 -- the contract form re-saves the schedule without statuses: Hold is kept
-UPDATE payroll SET payment_schedule = '[{"id":"m1","label":"Signing (renamed)","percent":0,"amount":1000,"status":"Pending"},{"id":"m2","label":"Mid","percent":25,"amount":null,"status":"Pending"},{"id":"m3","label":"Wrap","percent":0,"amount":2000,"status":"Pending"}]' WHERE id=:'ROK';
+UPDATE payroll SET payment_schedule = '[{"id":"m1","label":"Signing (renamed)","dueDate":"2026-10-01","percent":0,"amount":1000,"status":"Pending"},{"id":"m2","label":"Mid","dueDate":"2026-10-01","percent":25,"amount":null,"status":"Pending"},{"id":"m3","label":"Wrap","dueDate":"2026-10-01","percent":0,"amount":2000,"status":"Pending"}]' WHERE id=:'ROK';
 SELECT t.eq('form re-save keeps the request status', (SELECT payment_schedule->0->>'status'||'|'||(payment_schedule->0->>'label') FROM payroll WHERE id=:'ROK'), 'Hold|Signing (renamed)');
 -- visible to approvers on Payment Approvals
 SELECT t.as_user(:'D');

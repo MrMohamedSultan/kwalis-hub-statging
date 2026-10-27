@@ -7,6 +7,8 @@ SET session_replication_role = replica;
 UPDATE invoices SET spend_city = 'Riyadh' WHERE id = 'c1000000-0000-0000-0000-000000000001';
 UPDATE invoices SET spend_country = 'Jordan', spend_city = 'Amman' WHERE id = 'c1000000-0000-0000-0000-000000000003';
 UPDATE payroll  SET spend_country = 'KSA', spend_city = 'AlUla' WHERE id = 'd1000000-0000-0000-0000-000000000002';
+-- 180 glossary: GSR reports Actual — the fixture contracts are fully approved
+UPDATE payroll SET payment_schedule = jsonb_build_array(jsonb_build_object('id','all','label','Full','dueDate','2026-09-30','percent',100,'amount',null,'status','Approved')) WHERE project_id = :'P3';
 INSERT INTO locations(project_id, organization_id, name, city, shoot_days) VALUES (:'P3', :'O1', 'Old town', 'Riyadh', 6), (:'P3', :'O1', 'Studio', 'riyadh ', 4), (:'P3', :'O1', 'Canyon', 'AlUla', 9);
 SET session_replication_role = origin;
 SELECT t.as_user(:'A');

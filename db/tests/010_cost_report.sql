@@ -8,7 +8,9 @@ CREATE TEMP TABLE r AS SELECT * FROM get_cost_report(:'P1','2026-09-01','2026-09
 GRANT ALL ON r TO PUBLIC;
 SELECT t.eq('one row per code (4 lines of 1101 -> 1 row)', (SELECT count(*) FROM r WHERE budget_code='1101'), 1::bigint);
 SELECT t.eq('1101 estimate = active version only (draft 999,999 ignored)', (SELECT estimate FROM r WHERE budget_code='1101'), 315000.00);
-SELECT t.eq('1101 actual = payroll incurred', (SELECT actual FROM r WHERE budget_code='1101'), 243039.47);
+-- 180 glossary: a contract is a commitment; only what was approved / paid on it is actual
+SELECT t.eq('1101 actual = paid on the contracts', (SELECT actual FROM r WHERE budget_code='1101'), 2000.00);
+SELECT t.eq('1101 commitment = rest of the contracts', (SELECT committed FROM r WHERE budget_code='1101'), 241039.47);
 SELECT t.eq('1101 paid in Sep 2026 = 0', (SELECT paid_period FROM r WHERE budget_code='1101'), 0.00);
 SELECT t.eq('1101 paid to date = 2,000', (SELECT paid_to_date FROM r WHERE budget_code='1101'), 2000.00);
 SELECT t.eq('1101 default ETC = estimate-actual-committed', (SELECT etc FROM r WHERE budget_code='1101'), 71960.53);
