@@ -17,6 +17,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import i18n from "@/lib/i18n";
 
 export type FxRateSource = "project_fx_rates" | "projects.fx_rate" | "organizations.fx_rates";
 
@@ -156,4 +157,19 @@ export function useResolvedFxRate(projectId: string | null | undefined) {
 /** "3.75" from 3.750000 — trims trailing zeros, keeps up to 4 decimals. */
 export function formatRate(rate: number): string {
   return String(Number(rate.toFixed(4)));
+}
+
+/**
+ * Plain-language name of where a rate came from (G13) — never a table or
+ * column name on screen or in an export.
+ */
+export function fxSourceLabel(source: FxRateSource): string {
+  switch (source) {
+    case "project_fx_rates":
+      return i18n.t("exports.fx_source_rate_table");
+    case "projects.fx_rate":
+      return i18n.t("exports.fx_source_project");
+    default:
+      return i18n.t("exports.fx_source_company");
+  }
 }

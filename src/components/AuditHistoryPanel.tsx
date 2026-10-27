@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { useEffect, useState, useMemo } from "react";
 import { Download, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -82,7 +83,7 @@ export function AuditHistoryPanel({
     return rows.filter((r) => {
       if (r.operation.toLowerCase().includes(s)) return true;
       if ((r.actor_email || "").toLowerCase().includes(s)) return true;
-      if (new Date(r.created_at).toLocaleString().toLowerCase().includes(s)) return true;
+      if (formatDateTime(r.created_at).toLowerCase().includes(s)) return true;
       for (const [k, v] of Object.entries(r.changed_fields)) {
         if (k.toLowerCase().includes(s)) return true;
         if (
@@ -163,7 +164,7 @@ export function AuditHistoryPanel({
                   >
                     {r.operation}
                   </span>
-                  {new Date(r.created_at).toLocaleString()}
+                  {formatDateTime(r.created_at)}
                 </span>
                 <span className="text-foreground/80 truncate max-w-[45%]">
                   {r.actor_email || r.actor_id?.slice(0, 8) || "system"}

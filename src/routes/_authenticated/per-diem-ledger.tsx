@@ -1,4 +1,5 @@
 import type React from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { createFileRoute } from "@tanstack/react-router";
 import { storageAudited } from "@/lib/storage-audit";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -871,10 +872,9 @@ function PerDiemLedgerPage() {
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
                 {t("per_diem_ledger.new_batch_start")}
               </div>
-              <input
-                type="date"
+              <DateInput
                 value={defaultStart}
-                onChange={(e) => setDefaultStart(e.target.value)}
+                onChange={(v) => setDefaultStart(v)}
                 className="bg-surface-2 border border-border rounded-lg px-2 py-1.5 text-sm"
               />
             </div>
@@ -882,10 +882,9 @@ function PerDiemLedgerPage() {
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
                 {t("per_diem_ledger.new_batch_end")}
               </div>
-              <input
-                type="date"
+              <DateInput
                 value={defaultEnd}
-                onChange={(e) => setDefaultEnd(e.target.value)}
+                onChange={(v) => setDefaultEnd(v)}
                 className="bg-surface-2 border border-border rounded-lg px-2 py-1.5 text-sm"
               />
             </div>
@@ -1143,19 +1142,17 @@ function PersonBlock({
             </td>
             <td className="px-2 py-2 min-w-[210px]">
               <div className="flex items-center gap-1">
-                <input
-                  type="date"
+                <DateInput
                   disabled={locked}
                   value={r.period_start}
-                  onChange={(e) => onUpdate(person.id, r.key, { period_start: e.target.value })}
+                  onChange={(v) => onUpdate(person.id, r.key, { period_start: v })}
                   className="bg-surface-2 border border-border rounded px-1.5 py-1 text-xs disabled:opacity-60"
                 />
                 <span className="text-muted-foreground text-xs">→</span>
-                <input
-                  type="date"
+                <DateInput
                   disabled={locked}
                   value={r.period_end}
-                  onChange={(e) => onUpdate(person.id, r.key, { period_end: e.target.value })}
+                  onChange={(v) => onUpdate(person.id, r.key, { period_end: v })}
                   className="bg-surface-2 border border-border rounded px-1.5 py-1 text-xs disabled:opacity-60"
                 />
               </div>

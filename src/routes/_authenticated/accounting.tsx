@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { LockGuard } from "@/components/chrome/LockGuard";
@@ -1268,7 +1269,13 @@ function VendorLedgerModal({ vendor, onClose }: { vendor: Vendor; onClose: () =>
       XLSX.utils.json_to_sheet(payRows.length ? payRows : [{ Note: "No Payments" }]),
       "Payments",
     );
-    XLSX.writeFile(wb, `vendor-ledger-${vendor.name.replace(/\s+/g, "_")}.xlsx`);
+    const { writeBrandedSheetJs } = await import("@/lib/export/sheetjs-branding");
+    await writeBrandedSheetJs(
+      XLSX,
+      wb,
+      `Vendor Ledger ${vendor.name}`,
+      `Vendor Ledger — ${vendor.name}`,
+    );
     toast.success(t("accounting.excel_export_ready"));
   };
 
@@ -1444,19 +1451,17 @@ function VendorLedgerModal({ vendor, onClose }: { vendor: Vendor; onClose: () =>
             />
             <label className="text-[11px] text-muted-foreground flex items-center gap-1">
               From{" "}
-              <input
-                type="date"
+              <DateInput
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(v) => setStartDate(v)}
                 className="bg-transparent border border-border rounded-md px-1.5 py-1 text-xs"
               />
             </label>
             <label className="text-[11px] text-muted-foreground flex items-center gap-1">
               To{" "}
-              <input
-                type="date"
+              <DateInput
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                onChange={(v) => setEndDate(v)}
                 className="bg-transparent border border-border rounded-md px-1.5 py-1 text-xs"
               />
             </label>
@@ -1668,7 +1673,7 @@ function VendorLedgerModal({ vendor, onClose }: { vendor: Vendor; onClose: () =>
                       </div>
                     </div>
                     <time className="text-[10px] text-muted-foreground shrink-0" dir="ltr">
-                      {new Date(r.created_at).toLocaleString()}
+                      {formatDateTime(r.created_at)}
                     </time>
                   </li>
                 );

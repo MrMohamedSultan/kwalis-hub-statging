@@ -3,7 +3,7 @@ import { Calendar as CalendarIcon } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { isoToDMY } from "@/lib/date-format";
+import { datePlaceholder, formatDate, useDateFormat } from "@/lib/date-format";
 
 export interface DatePickerPillProps {
   /** ISO `YYYY-MM-DD` value stored in app state. */
@@ -25,7 +25,7 @@ export interface DatePickerPillProps {
 export function DatePickerPill({
   value,
   onChange,
-  placeholder = "DD/MM/YYYY",
+  placeholder,
   className,
   align = "end",
   disabled,
@@ -41,7 +41,9 @@ export function DatePickerPill({
     return isNaN(d.getTime()) ? undefined : d;
   }, [value]);
 
-  const display = isoToDMY(value);
+  const fmt = useDateFormat();
+  const display = formatDate(value, fmt);
+  placeholder = placeholder ?? datePlaceholder(fmt);
 
   const alignCls =
     textAlign === "center" ? "text-center" : textAlign === "start" ? "text-start" : "text-end";

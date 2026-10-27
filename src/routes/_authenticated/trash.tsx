@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
@@ -66,7 +67,7 @@ function TrashPage() {
 
   function fmtDate(iso: string) {
     try {
-      return new Date(iso).toLocaleString();
+      return formatDateTime(iso);
     } catch {
       return iso;
     }

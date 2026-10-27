@@ -6,7 +6,10 @@
 // filtered row auto-hide (declared via column defs, nothing hardcoded).
 // ═══════════════════════════════════════════════════════════════════
 
+import { inputBaseClass } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { formatDate } from "@/lib/date-format";
 import { useTranslation } from "react-i18next";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, Download, FileSpreadsheet, Loader2, Lock, Search } from "lucide-react";
@@ -26,7 +29,13 @@ import { useGlAccounts } from "@/lib/gl-accounts";
 import { usePermissions } from "@/lib/permissions/usePermissions";
 import { formatAmount } from "@/lib/format-number";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { convertAmount, formatRate, round2, useResolvedFxRate } from "@/lib/fx-resolution";
+import {
+  convertAmount,
+  formatRate,
+  fxSourceLabel,
+  round2,
+  useResolvedFxRate,
+} from "@/lib/fx-resolution";
 
 import {
   countsTowardTotals,
@@ -40,6 +49,7 @@ import {
 import {
   exportGlTransactionsExcel,
   exportGlTransactionsPdf,
+  glTotalBucket,
   type GlExportCurrencyMode,
 } from "./gl-transactions-export";
 import { GlTransactionDrawer } from "./GlTransactionDrawer";
@@ -96,7 +106,7 @@ function buildColumns(t: (k: string) => string, moneyCcy: string | null): ColDef
       label: t("reports.gltx_col_date"),
       className: txt,
       raw: (r) => r.entry_date,
-      cell: (r) => r.entry_date ?? "—",
+      cell: (r) => formatDate(r.entry_date) || "—",
     },
     {
       key: "source",
@@ -437,6 +447,9 @@ export function GlTransactionsReport() {
   const totals = useMemo(() => {
     const byCcy = new Map<string, { amount: number; vat: number; wht: number; net: number }>();
     for (const r of filtered) {
+      // G04: the footer is Total Actual (glossary) — payments and
+      // commitments are never added into it. Same rule as the exports.
+      if (glTotalBucket(r) !== "actual") continue;
       const d = displayMap.get(r);
       if (!d) continue;
       const c = d.net.ccy ?? "—";
@@ -485,12 +498,9 @@ export function GlTransactionsReport() {
       .catch((e) => toast.error(e instanceof Error ? e.message : String(e)));
   };
   const onPdf = () => {
-    try {
-      exportGlTransactionsPdf(filtered, exportMeta, { mode: exportMode, fx });
-      toast.success(t("reports.gltx_exported_pdf"));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
-    }
+    exportGlTransactionsPdf(filtered, exportMeta, { mode: exportMode, fx })
+      .then(() => toast.success(t("reports.gltx_exported_pdf")))
+      .catch((e) => toast.error(e instanceof Error ? e.message : String(e)));
   };
 
   if (isReady && !permitted) {
@@ -587,7 +597,7 @@ export function GlTransactionsReport() {
             ? t("reports.gltx_rate_effective", { date: fx.effectiveFrom })
             : t("reports.gltx_rate_no_date")}
           {" · "}
-          {t("reports.gltx_rate_source", { source: fx.source })}
+          {t("reports.gltx_rate_source", { source: fxSourceLabel(fx.source) })}
           {" · "}
           {t("reports.gltx_rate_authority", {
             base: fx.baseCurrency,
@@ -601,11 +611,15 @@ export function GlTransactionsReport() {
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-9 gap-3">
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">{t("reports.gltx_from")}</label>
-            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+            <DateInput
+              className={inputBaseClass}
+              value={dateFrom}
+              onChange={(v) => setDateFrom(v)}
+            />
           </div>
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">{t("reports.gltx_to")}</label>
-            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+            <DateInput className={inputBaseClass} value={dateTo} onChange={(v) => setDateTo(v)} />
           </div>
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">{t("reports.gltx_source")}</label>
@@ -795,7 +809,7 @@ export function GlTransactionsReport() {
                       {visibleCols.map((c, i) => (
                         <td key={c.key} className={c.className ?? txt}>
                           {i === 0
-                            ? t("reports.gltx_totals")
+                            ? t("exports.total_actual")
                             : c.key === "amount"
                               ? totalFor("amount")
                               : c.key === "vat"

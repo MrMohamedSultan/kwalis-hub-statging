@@ -6,7 +6,6 @@
 
 import type { Invoice, PayrollRow, Person } from "./store";
 import type { QfeLedgerRow } from "./qfeLedger";
-import { downloadBlob } from "@/lib/download";
 import { contractHousingTotal, activeDaysForPerson } from "./housing";
 import { projectHeaderLine } from "@/lib/project-metadata";
 
@@ -225,7 +224,7 @@ export async function exportRebateWorkbook(opts: {
 }) {
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
-  wb.creator = "KwalisHUB";
+  wb.creator = "Kwalis Hub";
   wb.created = new Date();
 
   // ── General Expenses ─────────────────────────────────────────────────────
@@ -584,9 +583,12 @@ export async function exportRebateWorkbook(opts: {
     ws4.autoFilter = { from: { row: 2, column: 1 }, to: { row: 2, column: WHT_HEADERS.length } };
   }
 
-  const buf = await wb.xlsx.writeBuffer();
-  const blob = new Blob([new Uint8Array(buf)], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  downloadBlob(opts.filename ?? "KwalisHUB_Film_Commission_Report.xlsx", blob);
+  // Shared Kwalis Hub identity (print header/footer, page X of Y) and the
+  // standard file name; the official template layout itself is untouched.
+  const { saveBrandedWorkbook } = await import("@/lib/export/xlsx-report");
+  await saveBrandedWorkbook(
+    wb,
+    opts.filename ?? "Film Commission Rebate",
+    "Saudi Film Commission Rebate",
+  );
 }

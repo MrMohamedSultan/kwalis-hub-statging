@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/date-format";
 import React, { useState, useMemo, useCallback } from "react";
 import { fmt } from "@/components/payables/payables-utils";
 
@@ -263,7 +264,7 @@ function MilestonePopover({
       {/* Paid info */}
       {milestone.milestone_status === "paid" && milestone.paid_date && (
         <div className="text-xs text-muted-foreground space-y-0.5">
-          <div>Paid on: {new Date(milestone.paid_date).toLocaleDateString("en-GB")}</div>
+          <div>Paid on: {formatDate(milestone.paid_date)}</div>
           {milestone.payment_ref && <div>Ref: {milestone.payment_ref}</div>}
         </div>
       )}

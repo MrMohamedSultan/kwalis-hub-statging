@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import i18n from "@/lib/i18n";
+import { formatDate } from "@/lib/date-format";
 
 /**
  * Localization-safe numeric primitives.
@@ -72,7 +73,8 @@ export function DateText({
   className?: string;
 }) {
   if (!value) return null;
-  const d = typeof value === "string" ? value : value.toISOString().slice(0, 10);
+  // Platform date format (G05); stored dates are never shifted by timezone.
+  const d = formatDate(value) || (typeof value === "string" ? value : "");
   return (
     <span dir="ltr" className={`${base} ${className}`.trim()}>
       {d}

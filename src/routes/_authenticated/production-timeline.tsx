@@ -7,6 +7,7 @@ import {
   phaseOfLaneId,
   type MacroPhase,
 } from "@/lib/timeline-phases";
+import { DateInput } from "@/components/ui/date-input";
 import { useTimelinePhaseSettings } from "@/lib/timeline-settings";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
@@ -1964,19 +1965,17 @@ function CreateEventModal({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs text-muted-foreground">Start</label>
-              <input
-                type="date"
+              <DateInput
                 value={start}
-                onChange={(e) => setStart(e.target.value)}
+                onChange={(v) => setStart(v)}
                 className="w-full mt-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none"
               />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">End</label>
-              <input
-                type="date"
+              <DateInput
                 value={end}
-                onChange={(e) => setEnd(e.target.value)}
+                onChange={(v) => setEnd(v)}
                 className="w-full mt-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none"
               />
             </div>

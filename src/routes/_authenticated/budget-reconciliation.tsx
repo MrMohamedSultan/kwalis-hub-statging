@@ -2,6 +2,7 @@
 // Budget Reconciliation — Master Budget vs rolled-up Committed / Actuals
 // for a selected date range, with CSV + PDF export.
 // =====================================================================
+import { DateInput } from "@/components/ui/date-input";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
@@ -267,24 +268,22 @@ function BudgetReconciliationPage() {
           </div>
           <label className="text-xs text-muted-foreground">
             <div className="mb-1">From</div>
-            <input
-              type="date"
+            <DateInput
               value={range.from ?? ""}
-              onChange={(e) => {
+              onChange={(v) => {
                 setPreset("custom");
-                setRange((r) => ({ ...r, from: e.target.value }));
+                setRange((r) => ({ ...r, from: v }));
               }}
               className="px-2 py-1.5 rounded-lg border border-border bg-surface-2 text-sm"
             />
           </label>
           <label className="text-xs text-muted-foreground">
             <div className="mb-1">To</div>
-            <input
-              type="date"
+            <DateInput
               value={range.to ?? ""}
-              onChange={(e) => {
+              onChange={(v) => {
                 setPreset("custom");
-                setRange((r) => ({ ...r, to: e.target.value }));
+                setRange((r) => ({ ...r, to: v }));
               }}
               className="px-2 py-1.5 rounded-lg border border-border bg-surface-2 text-sm"
             />

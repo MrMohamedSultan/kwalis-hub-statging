@@ -68,11 +68,12 @@ export async function exportGanttPdf(options: GanttPdfOptions): Promise<void> {
   const freezeXSel = options.freezeXSelector ?? DEFAULTS.freezeXSelector;
   const freezeYSel = options.freezeYSelector ?? DEFAULTS.freezeYSelector;
 
-  const [{ default: html2canvas }, { loadPdf }] = await Promise.all([
-    import("html2canvas-pro"),
-    import("@/lib/lazy-export-libs"),
-  ]);
-  const { jsPDF } = await loadPdf();
+  const [{ default: html2canvas }, { createBrandedPdf }, { normalizeForActiveProject }] =
+    await Promise.all([
+      import("html2canvas-pro"),
+      import("@/lib/export/pdf-core"),
+      import("@/lib/export/branding"),
+    ]);
 
   // ---- off-screen host --------------------------------------------------
   const host = document.createElement("div");
@@ -139,13 +140,16 @@ export async function exportGanttPdf(options: GanttPdfOptions): Promise<void> {
   const freezeW = Math.round(freezeXCssW * px);
   const headerH = Math.round(freezeYCssH * px);
 
-  const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
-  const margin = 24;
-  const titleH = 42;
+  // Shared Kwalis Hub header/footer (client logo, company, project, user,
+  // Saudi time, page X of Y) around the rendered chart (G02).
+  const branded = await createBrandedPdf({ title: options.title, subtitle: options.subtitle });
+  const pdf = branded.doc;
+  const pageW = branded.pageWidth;
+  const pageH = branded.pageHeight;
+  const margin = branded.margin;
+  const areaTop = branded.contentTop;
   const areaW = pageW - margin * 2;
-  const areaH = pageH - margin * 2 - titleH;
+  const areaH = pageH - areaTop - branded.contentBottom;
 
   const bodyStart = freezeW;
   const bodyTotal = Math.max(1, canvas.width - bodyStart);
@@ -184,20 +188,14 @@ export async function exportGanttPdf(options: GanttPdfOptions): Promise<void> {
       ctx.drawImage(canvas, sx, 0, sw, headerH, freezeW, 0, sw, headerH);
     }
 
-    pdf.setFontSize(13);
-    pdf.text(options.title, margin, margin + 14);
-    pdf.setFontSize(9);
-    pdf.setTextColor(110);
-    const meta = [options.subtitle, `Page ${i + 1} of ${pages}`].filter(Boolean).join("  ·  ");
-    pdf.text(meta, margin, margin + 30);
-    pdf.setTextColor(0);
+    branded.drawHeader();
 
     const scale = Math.min(areaW / pageCanvasW, areaH / canvas.height);
     pdf.addImage(
       slice.toDataURL("image/png"),
       "PNG",
       margin,
-      margin + titleH,
+      areaTop,
       pageCanvasW * scale,
       canvas.height * scale,
       undefined,
@@ -205,5 +203,5 @@ export async function exportGanttPdf(options: GanttPdfOptions): Promise<void> {
     );
   }
 
-  pdf.save(options.fileName);
+  branded.save(normalizeForActiveProject(options.fileName, "pdf"));
 }

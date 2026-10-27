@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { DateInput } from "@/components/ui/date-input";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
@@ -440,18 +441,16 @@ function CarRentalsPage() {
                       </div>
                     </td>
                     <td className="px-3 py-2">
-                      <input
-                        type="date"
+                      <DateInput
                         value={row.rental_start_date}
-                        onChange={(e) => update(idx, { rental_start_date: e.target.value })}
+                        onChange={(v) => update(idx, { rental_start_date: v })}
                         className="bg-surface-2 border border-border rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 ring-brand"
                       />
                     </td>
                     <td className="px-3 py-2">
-                      <input
-                        type="date"
+                      <DateInput
                         value={row.rental_end_date}
-                        onChange={(e) => update(idx, { rental_end_date: e.target.value })}
+                        onChange={(v) => update(idx, { rental_end_date: v })}
                         className="bg-surface-2 border border-border rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 ring-brand"
                       />
                     </td>

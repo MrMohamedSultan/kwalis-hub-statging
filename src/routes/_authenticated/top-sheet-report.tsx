@@ -8,6 +8,7 @@
 // - Validation banner surfaces rollup issues (unmapped codes, over-budget)
 // - Exports: CSV, Excel (multi-sheet), PDF (print-ready)
 // =====================================================================
+import { DateInput } from "@/components/ui/date-input";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 /** Cent-safe rounding — every currency figure passes through here so repeated
@@ -495,17 +496,15 @@ function TopSheetCostReportPage() {
             ))}
             {preset === "custom" && (
               <>
-                <input
-                  type="date"
+                <DateInput
                   value={customFrom}
-                  onChange={(e) => setCustomFrom(e.target.value)}
+                  onChange={(v) => setCustomFrom(v)}
                   className="text-[11px] px-2 py-1 rounded-md border border-border bg-surface-2"
                 />
                 <span className="text-[11px] text-muted-foreground">→</span>
-                <input
-                  type="date"
+                <DateInput
                   value={customTo}
-                  onChange={(e) => setCustomTo(e.target.value)}
+                  onChange={(v) => setCustomTo(v)}
                   className="text-[11px] px-2 py-1 rounded-md border border-border bg-surface-2"
                 />
               </>
@@ -1191,7 +1190,8 @@ async function exportExcel(report: ReturnType<typeof buildTopSheetReport>, proje
     XLSX.utils.book_append_sheet(wb, ws2, i18n.t("export.validationIssues"));
   }
 
-  XLSX.writeFile(wb, `top-sheet-report-${slug(projectName)}.xlsx`);
+  const { writeBrandedSheetJs } = await import("@/lib/export/sheetjs-branding");
+  await writeBrandedSheetJs(XLSX, wb, "Top Sheet Report");
 }
 
 async function exportPDF(

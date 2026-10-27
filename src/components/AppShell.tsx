@@ -21,6 +21,7 @@ import { PlatformHubSidebar } from "@/components/PlatformHubSidebar";
 import { LanguageToggle } from "./LanguageToggle";
 import { CurrencyToggle } from "@/components/ui/CurrencyToggle";
 import { useMoney } from "@/lib/money-display";
+import { usePlatformDateFormat } from "@/lib/use-platform-date-format";
 import { useTheme } from "@/lib/theme";
 import { useStore } from "@/lib/store";
 import { DataLoadErrorToast } from "@/components/DataLoadErrorToast";
@@ -240,6 +241,8 @@ export function AppShell({
   // Subscribe to the display-currency toggle so every page inside the shell
   // re-renders its monetary values when the user switches currency.
   useMoney();
+  // Same for the company's platform date format (G05).
+  usePlatformDateFormat();
   const shellAlreadyMounted = useContext(AppShellMountedContext);
   if (shellAlreadyMounted) {
     return <>{children ?? <Outlet />}</>;

@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -52,7 +53,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 import { useTranslation } from "react-i18next";
 export const Route = createFileRoute("/_authenticated/project-files")({
-  head: () => ({ meta: [{ title: "File Library · Trackroll" }] }),
+  head: () => ({ meta: [{ title: "File Library · Kwalis Hub" }] }),
   component: ProjectFilesPage,
 });
 
@@ -291,7 +292,7 @@ function ProjectFilesPage() {
         name: f.name,
         meta: [
           folderNameById.get(f.folderId) ?? null,
-          f.createdAt ? new Date(f.createdAt).toLocaleString() : null,
+          f.createdAt ? formatDateTime(f.createdAt) : null,
           `from ${f.sourceLabel}`,
           f.size ? `${(f.size / 1024).toFixed(1)} KB` : null,
         ]
@@ -317,7 +318,7 @@ function ProjectFilesPage() {
         id: f.id,
         name: getDisplayName(f),
         meta: [
-          new Date(f.created_at).toLocaleString(),
+          formatDateTime(f.created_at),
           f.entity_type ? `from ${f.entity_type}` : null,
           f.size_bytes ? `${(f.size_bytes / 1024).toFixed(1)} KB` : null,
         ]

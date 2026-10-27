@@ -4,6 +4,7 @@
 // and the audit trail from audit_history for that record.
 // ═══════════════════════════════════════════════════════════════════
 
+import { formatDateTime } from "@/lib/date-format";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Loader2, X } from "lucide-react";
@@ -162,7 +163,7 @@ export function GlTransactionDrawer({
                       {a.operation ?? "—"}
                     </span>
                     <span className="text-[11px] text-muted-foreground tabular-nums">
-                      {new Date(a.created_at).toLocaleString()}
+                      {formatDateTime(a.created_at)}
                     </span>
                   </div>
                   {a.changed_fields && a.changed_fields.length > 0 && (

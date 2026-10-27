@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -190,15 +191,7 @@ export function FxSettingsPanel({ projectId }: { projectId: string }) {
                   <tbody>
                     {auditLog.map((entry) => (
                       <tr key={entry.id} className="border-t">
-                        <td className="p-2 whitespace-nowrap">
-                          {new Date(entry.changedAt).toLocaleString("en-GB", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </td>
+                        <td className="p-2 whitespace-nowrap">{formatDateTime(entry.changedAt)}</td>
                         <td className="p-2 font-mono">{entry.previousRate ?? "—"}</td>
                         <td className="p-2 font-mono">{entry.newRate}</td>
                         <td className="p-2 tabular-nums">{entry.rowsRecalculated}</td>

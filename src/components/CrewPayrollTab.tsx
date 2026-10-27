@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { useMemo, useRef, useState, useCallback } from "react";
 import { loadXlsx } from "@/lib/lazy-export-libs";
 import { Modal } from "@/components/Modal";
@@ -384,7 +385,8 @@ export function CrewPayrollTab({
     XLSX.utils.book_append_sheet(wb, ws1, "Contracts");
     const ws2 = XLSX.utils.json_to_sheet(detail);
     XLSX.utils.book_append_sheet(wb, ws2, "Ledger");
-    XLSX.writeFile(wb, `${moduleLabel.replace(/\s/g, "_")}_${filterSuffix}_${stamp()}.xlsx`);
+    const { writeBrandedSheetJs } = await import("@/lib/export/sheetjs-branding");
+    await writeBrandedSheetJs(XLSX, wb, `${moduleLabel} ${filterSuffix}`, moduleLabel);
     toast.success(
       `Exported ${summary.length} contract${summary.length === 1 ? "" : "s"} · ${detail.length} ledger entr${detail.length === 1 ? "y" : "ies"} to Excel.`,
     );
@@ -402,7 +404,7 @@ export function CrewPayrollTab({
       [
         {
           title: `${moduleLabel} — Contracts`,
-          subtitle: `${scopeLabel} · Generated ${new Date().toLocaleString()}`,
+          subtitle: `${scopeLabel} · Generated ${formatDateTime(new Date())}`,
           headers: [
             "Beneficiary",
             "Kind",
@@ -449,8 +451,8 @@ export function CrewPayrollTab({
             e.Date,
             formatUSD(e.Amount),
             e.BankRef,
-            e.ApprovedAt ? new Date(e.ApprovedAt).toLocaleString() : "",
-            e.PaidAt ? new Date(e.PaidAt).toLocaleString() : "",
+            e.ApprovedAt ? formatDateTime(e.ApprovedAt) : "",
+            e.PaidAt ? formatDateTime(e.PaidAt) : "",
           ]),
           numericColumns: [4],
         },
@@ -1676,10 +1678,9 @@ function EntriesApprovalModal({ row, onClose }: { row: PayrollRow; onClose: () =
                       </label>
                       <label className="text-[11px] text-muted-foreground">
                         {t("crewpayrolltab.due_date")}
-                        <input
-                          type="date"
+                        <DateInput
                           value={draft.date}
-                          onChange={(ev) => setDraft({ ...draft, date: ev.target.value })}
+                          onChange={(v) => setDraft({ ...draft, date: v })}
                           className="mt-1 w-full bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-foreground"
                         />
                       </label>

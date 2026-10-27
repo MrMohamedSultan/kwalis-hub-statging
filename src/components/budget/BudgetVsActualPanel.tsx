@@ -13,6 +13,7 @@
 // three Executive Producers on 1201) is shown ONCE with its total — never
 // repeated on every line.
 // =====================================================================
+import { formatDate } from "@/lib/date-format";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FileSpreadsheet, Loader2, RefreshCw } from "lucide-react";
@@ -184,7 +185,7 @@ export function BudgetVsActualPanel({ isDraft }: { isDraft: boolean }) {
       { width: 9 },
     ];
     ws.getRow(1).values = [
-      `${project?.code ?? ""} ${project?.name ?? ""} — Budget vs Spend (SAR) — ${new Date().toLocaleDateString("en-GB")}`,
+      `${project?.code ?? ""} ${project?.name ?? ""} — Budget vs Spend (SAR) — ${formatDate(new Date())}`,
     ];
     ws.getRow(1).font = { bold: true, size: 13 };
     ws.getRow(3).values = [
@@ -253,15 +254,9 @@ export function BudgetVsActualPanel({ isDraft }: { isDraft: boolean }) {
       ],
       true,
     );
-    const buf = await wb.xlsx.writeBuffer();
-    const blob = new Blob([buf], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${project?.code ?? "project"}-budget-vs-spend.xlsx`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    // Shared Kwalis Hub identity + standard file name (G02).
+    const { saveBrandedWorkbook } = await import("@/lib/export/xlsx-report");
+    await saveBrandedWorkbook(wb, "Budget vs Spend");
   }
 
   const money = (n: number, tone = "") => (

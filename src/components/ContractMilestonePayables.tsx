@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { toast } from "sonner";
 import {
   CalendarClock,
@@ -17,7 +18,6 @@ import { useStore, formatUSD, type MilestoneStatus, type PayrollRow } from "@/li
 import { useCan } from "@/lib/rbac";
 import { useProjectLock } from "@/lib/project-lock";
 import { projectHeaderPairs } from "@/lib/project-metadata";
-import { downloadBlob } from "@/lib/download";
 import { Modal } from "@/components/Modal";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -135,11 +135,9 @@ async function exportMilestonesXlsx(rows: MilestoneRow[], kind: Kind) {
     to: { row: headRow.number, column: HEADERS.length },
   };
 
-  const buf = await wb.xlsx.writeBuffer();
-  const blob = new Blob([new Uint8Array(buf)], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  downloadBlob(`${kind}-payables-milestones-${todayIso()}.xlsx`, blob);
+  // Shared Kwalis Hub identity + standard file name (G02).
+  const { saveBrandedWorkbook } = await import("@/lib/export/xlsx-report");
+  await saveBrandedWorkbook(wb, `${kind} Payables Milestones`);
 }
 
 /**
@@ -592,10 +590,9 @@ function ExecutePaymentModal({
             <span className="block mb-1 text-muted-foreground">
               {t("contractmilestonepayables.payment_date")}
             </span>
-            <input
-              type="date"
+            <DateInput
               value={paidDate}
-              onChange={(e) => setPaidDate(e.target.value)}
+              onChange={(v) => setPaidDate(v)}
               required
               className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border outline-none focus:ring-2 ring-brand"
             />

@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "تراك رول",
+    "appName": "كواليس هب",
     "platformName": "كواليس هب",
     "save": "حفظ التغييرات",
     "cancel": "إلغاء",
@@ -77,7 +77,7 @@
       "submitting": "جارٍ الإرسال...",
       "success": {
         "title": "تم إرسال الطلب بنجاح",
-        "message": "شكراً لاهتمامك بتراك رول. سيقوم فريقنا بمراجعة طلبك والرد عليك خلال 1-2 يوم عمل."
+        "message": "شكراً لاهتمامك بكواليس هب. سيقوم فريقنا بمراجعة طلبك والرد عليك خلال 1-2 يوم عمل."
       }
     },
     "industries": {
@@ -3333,5 +3333,48 @@
     "nights_count_few": "{{count}} ليالٍ",
     "nights_count_many": "{{count}} ليلة",
     "nights_count_other": "{{count}} ليلة"
+  },
+  "exports": {
+    "footer_line": "صُدِّر من {{product}} · {{user}} · {{datetime}} (بتوقيت السعودية)",
+    "page_x_of_y": "صفحة {{page}} من {{total}}",
+    "project": "المشروع",
+    "no_rows": "لا توجد صفوف تطابق الفلاتر الحالية.",
+    "settings_no_company": "اختر شركة لضبط التصدير وصيغة التاريخ.",
+    "settings_date_title": "صيغة التاريخ",
+    "settings_date_help": "صيغة واحدة لكل الشاشات وحقول التاريخ والفلاتر والتصدير في هذه الشركة. السنة تظهر دائماً، والأوقات بتوقيت السعودية.",
+    "settings_date_label": "الصيغة",
+    "settings_save_format": "حفظ صيغة التاريخ",
+    "settings_format_saved": "تم حفظ صيغة التاريخ",
+    "settings_save_failed": "تعذّر حفظ الإعداد",
+    "settings_logo_title": "شعار الشركة في الملفات المصدّرة",
+    "settings_logo_help": "يظهر أعلى كل ملف Excel وPDF مُصدَّر بجانب اسم الشركة والمشروع. PNG أو JPG، ويُصغَّر تلقائياً.",
+    "settings_no_logo": "لا يوجد شعار بعد",
+    "settings_upload_logo": "رفع الشعار",
+    "settings_replace_logo": "استبدال الشعار",
+    "settings_remove_logo": "حذف",
+    "settings_logo_saved": "تم حفظ شعار الشركة",
+    "settings_logo_removed": "تم حذف شعار الشركة",
+    "settings_logo_too_large": "الصورة كبيرة جداً — استخدم شعاراً أصغر.",
+    "settings_logo_unsupported": "اختر صورة PNG أو JPG أو WEBP أو SVG.",
+    "pick_date": "اختر تاريخاً",
+    "funding_amount": "المبلغ",
+    "funding_currency": "العملة",
+    "funding_preview": "يُسجَّل بقيمة:",
+    "funding_no_rate": "لا يوجد سعر صرف مضبوط لعملة {{currency}} — اضبطه من الإعدادات ← العملات.",
+    "fx_source_rate_table": "جدول أسعار الصرف للمشروع",
+    "fx_source_project": "إعدادات المشروع",
+    "fx_source_company": "إعدادات الشركة",
+    "paid_caption": "كل المدفوعات المسجلة لهذا المشروع — بنفس أرقام بطاقة المدفوع في لوحة التحكم.",
+    "report_general_ledger": "دفتر الأستاذ العام",
+    "total_actual": "إجمالي الفعلي",
+    "total_paid": "إجمالي المدفوع",
+    "total_commitment": "إجمالي الالتزامات",
+    "nothing_to_export": "لا يوجد ما يُصدَّر في هذا التبويب بعد.",
+    "pdf_export_failed": "تعذّر تصدير ملف PDF",
+    "export_excel": "تصدير Excel",
+    "export_pdf": "تصدير PDF",
+    "compiling_pdf": "جارٍ تجهيز ملف PDF…",
+    "compiling_excel": "جارٍ تجهيز ملف Excel…",
+    "currency": "العملة"
   }
 }

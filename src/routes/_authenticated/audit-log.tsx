@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { DateInput } from "@/components/ui/date-input";
 import { useServerFn } from "@tanstack/react-start";
 import React, { useEffect, useMemo, useState } from "react";
 import { ScrollText, RefreshCw, Search, AlertTriangle, Info, AlertCircle } from "lucide-react";
@@ -212,19 +213,17 @@ export function AuditLogPage() {
           />
           <label className="text-xs text-muted-foreground flex items-center gap-1">
             From
-            <input
-              type="date"
+            <DateInput
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(v) => setStartDate(v)}
               className="px-2 py-2 rounded-lg bg-surface-2 text-foreground border border-border text-sm"
             />
           </label>
           <label className="text-xs text-muted-foreground flex items-center gap-1">
             To
-            <input
-              type="date"
+            <DateInput
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(v) => setEndDate(v)}
               className="px-2 py-2 rounded-lg bg-surface-2 text-foreground border border-border text-sm"
             />
           </label>

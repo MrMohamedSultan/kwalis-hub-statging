@@ -1,3 +1,4 @@
+import { formatDate, formatDateTime } from "@/lib/date-format";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
@@ -225,7 +226,7 @@ function SupportDeskPage() {
                         </span>
                       </td>
                       <td className="py-2 pe-3 text-muted-foreground">
-                        {new Date(r.created_at).toLocaleDateString()}
+                        {formatDate(r.created_at)}
                       </td>
                     </tr>
                   ))}
@@ -327,7 +328,7 @@ function TicketDetail({
           <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
             {t("common.created")}
           </div>
-          <div className="text-foreground">{new Date(ticket.created_at).toLocaleString()}</div>
+          <div className="text-foreground">{formatDateTime(ticket.created_at)}</div>
         </div>
       </div>
       <div>

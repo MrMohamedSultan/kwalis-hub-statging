@@ -244,10 +244,6 @@ export function BudgetMappingSelect({
                   : "— not selected —"}
               </span>
             </span>
-            <span>
-              <span className="uppercase tracking-wide">{t("budgetmappingselect.row_id")}</span>{" "}
-              <span className="font-mono text-foreground">{lineId ?? "—"}</span>
-            </span>
           </div>
         </div>
       )}

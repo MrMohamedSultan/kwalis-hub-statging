@@ -101,8 +101,9 @@ export function PayablesGrid({
         <div className="overflow-hidden rounded-xl border border-border bg-card">
           <div className="max-h-[70vh] overflow-auto">
             {/* Header */}
-            <div className="sticky top-0 z-30 flex min-w-max border-b border-border bg-muted/30">
-              <div className="sticky left-0 z-10 flex border-e border-border/50 bg-muted/30 shadow-sm">
+            {/* G17: opaque header so rows never show through while scrolling. */}
+            <div className="sticky top-0 z-30 flex min-w-max border-b border-border bg-muted shadow-sm">
+              <div className="sticky start-0 z-10 flex border-e border-border/50 bg-muted shadow-sm">
                 <HeadCell w={260}>{t("payables.beneficiary")}</HeadCell>
                 <HeadCell w={160}>{config.roleLabel}</HeadCell>
                 <HeadCell w={110} end>
@@ -135,7 +136,7 @@ export function PayablesGrid({
                 key={row.contract_id}
                 className="flex min-w-max border-b border-border/50 transition-colors hover:bg-muted/30"
               >
-                <div className="sticky left-0 z-10 flex border-e border-border/50 bg-card shadow-sm">
+                <div className="sticky start-0 z-10 flex border-e border-border/50 bg-card shadow-sm">
                   <div className="flex h-14 w-[260px] shrink-0 flex-col justify-center px-3 py-2">
                     <div className="truncate text-sm font-semibold text-foreground">
                       {row.beneficiary_name}

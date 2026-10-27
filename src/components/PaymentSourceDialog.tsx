@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { X, Wallet, Banknote, Coins } from "lucide-react";
 
 import { useTranslation } from "react-i18next";
@@ -128,10 +129,9 @@ export function PaymentSourceDialog({
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Date
               </label>
-              <input
-                type="date"
+              <DateInput
                 value={paidAt}
-                onChange={(e) => setPaidAt(e.target.value)}
+                onChange={(v) => setPaidAt(v)}
                 className="mt-1 w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 ring-brand"
               />
             </div>

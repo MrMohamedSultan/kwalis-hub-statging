@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -178,7 +179,7 @@ export function AttachmentsModal({
                     {getDisplayName(f)}
                   </div>
                   <div className="text-[11px] text-muted-foreground">
-                    {new Date(f.created_at).toLocaleString()}
+                    {formatDateTime(f.created_at)}
                     {f.size_bytes ? ` · ${(f.size_bytes / 1024).toFixed(1)} KB` : ""}
                   </div>
                 </div>

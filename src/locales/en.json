@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "TrackRoll",
+    "appName": "Kwalis Hub",
     "platformName": "Kwalis HUB",
     "save": "Save Changes",
     "cancel": "Cancel",
@@ -77,7 +77,7 @@
       "submitting": "Submitting...",
       "success": {
         "title": "Request Submitted Successfully",
-        "message": "Thank you for your interest in TrackRoll. Our team will review your request and get back to you within 1-2 business days."
+        "message": "Thank you for your interest in Kwalis Hub. Our team will review your request and get back to you within 1-2 business days."
       }
     },
     "industries": {
@@ -3329,5 +3329,48 @@
     "not_invoiced": "— Not invoiced —",
     "nights_count_one": "{{count}} night",
     "nights_count_other": "{{count}} nights"
+  },
+  "exports": {
+    "footer_line": "Exported from {{product}} · {{user}} · {{datetime}} (Saudi time)",
+    "page_x_of_y": "Page {{page}} of {{total}}",
+    "project": "Project",
+    "no_rows": "No rows match the current filters.",
+    "settings_no_company": "Select a company to configure its exports and date format.",
+    "settings_date_title": "Date format",
+    "settings_date_help": "One format for every screen, date field, filter and export in this company. The year is always shown; times are in Saudi time.",
+    "settings_date_label": "Format",
+    "settings_save_format": "Save date format",
+    "settings_format_saved": "Date format saved",
+    "settings_save_failed": "Could not save the setting",
+    "settings_logo_title": "Company logo on exports",
+    "settings_logo_help": "Shown at the top of every Excel and PDF export, next to the company and project name. PNG or JPG, resized automatically.",
+    "settings_no_logo": "No logo yet",
+    "settings_upload_logo": "Upload logo",
+    "settings_replace_logo": "Replace logo",
+    "settings_remove_logo": "Remove",
+    "settings_logo_saved": "Company logo saved",
+    "settings_logo_removed": "Company logo removed",
+    "settings_logo_too_large": "This image is too large — please use a smaller logo.",
+    "settings_logo_unsupported": "Please choose a PNG, JPG, WEBP or SVG image.",
+    "pick_date": "Pick a date",
+    "funding_amount": "Amount",
+    "funding_currency": "Currency",
+    "funding_preview": "Booked as:",
+    "funding_no_rate": "No exchange rate is configured for {{currency}} — set it in Settings → Currency.",
+    "fx_source_rate_table": "project exchange-rate schedule",
+    "fx_source_project": "project settings",
+    "fx_source_company": "company settings",
+    "paid_caption": "Every payment recorded for this project — the same figures as the dashboard Paid card.",
+    "report_general_ledger": "General Ledger",
+    "total_actual": "Total Actual",
+    "total_paid": "Total Paid",
+    "total_commitment": "Total Commitment",
+    "nothing_to_export": "Nothing to export on this tab yet.",
+    "pdf_export_failed": "PDF export failed",
+    "export_excel": "Export Excel",
+    "export_pdf": "Export PDF",
+    "compiling_pdf": "Preparing the PDF…",
+    "compiling_excel": "Preparing the Excel file…",
+    "currency": "Currency"
   }
 }

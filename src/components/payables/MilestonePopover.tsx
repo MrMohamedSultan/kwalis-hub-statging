@@ -4,6 +4,8 @@
 //   - Reveals a compact Payment Execution Form (date, ref, notes)
 //   - "Confirm & Pay" submits the full payload
 // ═══════════════════════════════════════════════════════════════════
+import { formatDate } from "@/lib/date-format";
+import { DateInput } from "@/components/ui/date-input";
 import { storageAudited } from "@/lib/storage-audit";
 import { useState, type ReactNode } from "react";
 import { Paperclip } from "lucide-react";
@@ -277,10 +279,9 @@ function PaymentExecutionForm({
             <label className="mb-1 block text-[11px] font-medium text-foreground">
               {t("payables.formExtra.date")} <span className="text-destructive">*</span>
             </label>
-            <input
-              type="date"
+            <DateInput
               value={formData.paid_date}
-              onChange={(e) => set("paid_date", e.target.value)}
+              onChange={(v) => set("paid_date", v)}
               className={errors.paid_date ? INPUT_ERR : INPUT_OK}
             />
             {errors.paid_date && (
@@ -617,11 +618,7 @@ export function MilestonePopover({
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-muted-foreground">{t("payables.paidOn")}</span>
                 <span className="text-xs font-medium text-foreground">
-                  {new Date(milestone.paid_date).toLocaleDateString("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  })}
+                  {formatDate(milestone.paid_date)}
                 </span>
               </div>
             )}

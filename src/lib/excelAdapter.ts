@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════
-// excelAdapter.ts — TrackRoll Budget Excel Parser & Exporter
+// excelAdapter.ts — Kwalis Hub Budget Excel Parser & Exporter
 // ═══════════════════════════════════════════════════════════════════
 //
 // Two pure functions:
@@ -14,6 +14,7 @@
 //   the flat BudgetLine[] payload the backend expects.
 // ═══════════════════════════════════════════════════════════════════
 
+import { formatDate } from "@/lib/date-format";
 import type ExcelJS from "exceljs";
 import { loadExcelJs } from "@/lib/lazy-export-libs";
 import { downloadBlob } from "@/lib/download";
@@ -507,7 +508,7 @@ export async function buildBudgetWorkbook(
 ): Promise<ExcelJS.Workbook> {
   const ExcelJSLib = await loadExcelJs();
   const workbook = new ExcelJSLib.Workbook();
-  workbook.creator = "TrackRoll";
+  workbook.creator = "Kwalis Hub";
   workbook.created = new Date();
 
   // ────────────────────────────────────────────────
@@ -536,7 +537,7 @@ export async function buildBudgetWorkbook(
     ["Project Title", projectDetails.projectTitle],
     ["Budget Version", projectDetails.budgetVersion],
     ["Version Date", projectDetails.versionDate],
-    ["Exported On", projectDetails.exportedOn || new Date().toLocaleDateString("en-GB")],
+    ["Exported On", projectDetails.exportedOn || formatDate(new Date())],
     ["Production Company", projectDetails.productionCompany],
     ["Line Producer", projectDetails.lineProducer],
     ["Shoot Days", projectDetails.shootDays],
@@ -865,7 +866,7 @@ export async function debugParse(file: File): Promise<void> {
   const lines = await parseBudgetExcel(file);
   const details = await parseProjectDetails(file);
 
-  console.group("TrackRoll Excel Parser — Debug Report");
+  console.group("Kwalis Hub Excel Parser — Debug Report");
   console.log("Project:", details.projectTitle);
   console.log("Version:", details.budgetVersion);
   console.log("Total lines parsed:", lines.length);

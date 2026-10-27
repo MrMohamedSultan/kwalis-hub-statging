@@ -64,7 +64,7 @@ const ANON = {
     `Vendor ${String.fromCharCode(64 + ((n - 1) % 26) + 1)}${n > 26 ? Math.ceil(n / 26) : ""}`.trim(),
 };
 
-export async function parseTrackrollWorkbook(file: File): Promise<ImportResult> {
+export async function parseKwalisWorkbook(file: File): Promise<ImportResult> {
   const buf = await file.arrayBuffer();
   const XLSX = await loadXlsx();
   const wb = XLSX.read(buf, { type: "array" });

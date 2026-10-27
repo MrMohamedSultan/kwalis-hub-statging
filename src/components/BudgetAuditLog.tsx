@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -224,7 +225,7 @@ export function BudgetAuditLog({
                         )}
                     </div>
                     <time className="text-xs text-muted-foreground shrink-0" dir="ltr">
-                      {new Date(r.created_at).toLocaleString()}
+                      {formatDateTime(r.created_at)}
                     </time>
                   </div>
                 </li>

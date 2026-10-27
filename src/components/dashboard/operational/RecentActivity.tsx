@@ -69,7 +69,7 @@ export function RecentActivity({ events, loading, fetching }: RecentActivityProp
               </div>
               {event.amount != null && (
                 <span className="shrink-0 text-sm font-medium tabular-nums text-ink-primary">
-                  {formatCurrency(convert(event.amount), { currency: code, compact: true })}
+                  {formatCurrency(convert(event.amount), { currency: code })}
                 </span>
               )}
             </li>

@@ -51,7 +51,8 @@ export function HeroBudget({
   const overAmount = spent - budget;
   const overPct = (safeDivide(spent, budget) - 1) * 100;
 
-  const money = (v: number) => formatCurrency(convert(v), { currency: code, compact: true });
+  // G16: financial figures are shown in full (no 1.8K abbreviations).
+  const money = (v: number) => formatCurrency(convert(v), { currency: code });
 
   return (
     <section

@@ -2,10 +2,10 @@
 // Produces the exact same hierarchy the on-screen grid shows:
 // group → header section → detail lines → totals.
 
+import { formatDateTime } from "@/lib/date-format";
 import type ExcelJSTypes from "exceljs";
 import { loadExcelJs } from "@/lib/lazy-export-libs";
 import { exportPdfReport } from "@/lib/export-pdf";
-import { downloadBlob } from "@/lib/download";
 
 export type BoardExportLine = {
   code: string;
@@ -116,7 +116,7 @@ export async function exportBoardBudgetExcel(payload: BoardExportPayload): Promi
   title.font = { bold: true, size: 14, color: { argb: NAVY } };
 
   const meta = ws.addRow([
-    `Project code: ${payload.projectCode || "—"}   |   Status: ${payload.status}   |   Generated: ${new Date().toLocaleString()}`,
+    `Project code: ${payload.projectCode || "—"}   |   Status: ${payload.status}   |   Generated: ${formatDateTime(new Date())}`,
   ]);
   ws.mergeCells(meta.number, 1, meta.number, COLUMNS.length);
   meta.font = { size: 9, color: { argb: "FF666666" } };
@@ -149,11 +149,9 @@ export async function exportBoardBudgetExcel(payload: BoardExportPayload): Promi
     }
   }
 
-  const buffer = await wb.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  downloadBlob(`${safeName(payload)}.xlsx`, blob);
+  // Shared Kwalis Hub identity + standard file name (G02).
+  const { saveBrandedWorkbook } = await import("@/lib/export/xlsx-report");
+  await saveBrandedWorkbook(wb, "Board Budget", "Board Budget Review");
 }
 
 export function exportBoardBudgetPdf(payload: BoardExportPayload): void {

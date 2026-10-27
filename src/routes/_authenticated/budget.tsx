@@ -50,7 +50,7 @@ import { LazyMount, useAfterPaint } from "@/components/LazyMount";
 import { BudgetAuditLog } from "@/components/BudgetAuditLog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
-import { parseTrackrollWorkbook } from "@/lib/excelImport";
+import { parseKwalisWorkbook } from "@/lib/excelImport";
 import { fetchMasterCodes, normalizeBudgetCode } from "@/lib/budget-mapping-check";
 import { parseBudgetExcel, parseProjectDetails, exportBudgetExcel } from "@/lib/excelAdapter";
 import { adapterLineToStoreLine, storeLineToAdapterLine } from "@/lib/excelAdapterBridge";
@@ -64,7 +64,7 @@ import {
   type TemplateMismatch,
 } from "@/lib/excelTemplate";
 import { supabase } from "@/integrations/supabase/client";
-import { formatDateDMY } from "@/lib/date-format";
+import { formatDate, formatDateDMY, formatDateTime } from "@/lib/date-format";
 import { toast } from "sonner";
 import { recordAudit } from "@/lib/audit-log";
 import { useCan } from "@/lib/rbac";
@@ -1614,7 +1614,7 @@ export function UploadBudget() {
   };
 
   const applyResult = async (
-    r: Awaited<ReturnType<typeof parseTrackrollWorkbook>>,
+    r: Awaited<ReturnType<typeof parseKwalisWorkbook>>,
     via: string,
     fileName?: string,
     replacedSnapshot?: unknown[],
@@ -1787,7 +1787,7 @@ export function UploadBudget() {
             toast.message("Template not detected — falling back to legacy auto-detect.", {
               description: e.message,
             });
-            const r = await parseTrackrollWorkbook(f);
+            const r = await parseKwalisWorkbook(f);
             const legacyPreview: TemplatePreview = {
               result: r,
               mismatches: [],
@@ -1805,7 +1805,7 @@ export function UploadBudget() {
           throw e;
         }
       } else {
-        const r = await parseTrackrollWorkbook(f);
+        const r = await parseKwalisWorkbook(f);
         const legacyPreview: TemplatePreview = {
           result: r,
           mismatches: [],
@@ -4090,11 +4090,8 @@ export function ViewEditBudget() {
                   }));
 
                   ws.views = [{ state: "frozen", ySplit: 2 }];
-                  const buf = await wb.xlsx.writeBuffer();
-                  const blob = new Blob([buf], {
-                    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                  });
-                  downloadBlob(`budget-${filterSuffix}-${dateStr}.xlsx`, blob);
+                  const { saveBrandedWorkbook } = await import("@/lib/export/xlsx-report");
+                  await saveBrandedWorkbook(wb, `Budget ${filterSuffix}`, "Budget");
                   toast.success(
                     `Exported ${rows.length} row${rows.length === 1 ? "" : "s"} · ${filterLabel}`,
                   );
@@ -4118,7 +4115,7 @@ export function ViewEditBudget() {
                       projectTitle: proj?.name ?? "Budget",
                       budgetVersion: proj?.budgetStatus ?? "v1",
                       versionDate: dateStr,
-                      exportedOn: new Date().toLocaleDateString("en-GB"),
+                      exportedOn: formatDate(new Date()),
                     },
                   );
                   toast.success(
@@ -4356,11 +4353,8 @@ export function ViewEditBudget() {
 
                     rows.forEach((r) => ws.addRow(Object.values(r)));
                     ws.views = [{ state: "frozen", ySplit: 2 }];
-                    const buf = await wb.xlsx.writeBuffer();
-                    const blob = new Blob([buf], {
-                      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    });
-                    downloadBlob(`budget-snapshot-${dateStr}.xlsx`, blob);
+                    const { saveBrandedWorkbook } = await import("@/lib/export/xlsx-report");
+                    await saveBrandedWorkbook(wb, "Budget Snapshot");
                   } catch (e) {
                     console.warn("[snapshot] Excel export failed, CSV was still saved", e);
                   }
@@ -6501,12 +6495,9 @@ async function exportTopSheetExcel(a: TopSheetExportArgs) {
     autoFit(ws, [10, 30, 22, 9, 11, 9, 10, 10, 11, 12, 10, 28, 18]);
   }
 
-  const buf = await wb.xlsx.writeBuffer();
-  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf as ArrayBuffer);
-  const blob = new Blob([bytes], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  downloadBlob(`${safeName(a.projectName)}_Budget.xlsx`, blob);
+  // Shared Kwalis Hub identity + standard file name (G02).
+  const { saveBrandedWorkbook } = await import("@/lib/export/xlsx-report");
+  await saveBrandedWorkbook(wb, "Budget", "Budget — Top Sheet");
 }
 
 function exportTopSheetPDF(a: TopSheetExportArgs) {
@@ -6601,7 +6592,7 @@ function exportTopSheetPDF(a: TopSheetExportArgs) {
       <tr class="grand"><td></td><td>${esc(t("export.grandTotalExVat"))}</td><td class="num">${fmt(a.grandSAR)}</td></tr>
     </tbody>
   </table>
-  <div class="meta">${esc(t("export.generated", { stamp: new Date().toLocaleString(rtl ? "ar-SA-u-nu-latn" : undefined) }))} · Kwalis HUB</div>
+  <div class="meta">${esc(t("export.generated", { stamp: formatDateTime(new Date()) }))} · Kwalis HUB</div>
   <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
   </body></html>`;
 

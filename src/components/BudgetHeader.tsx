@@ -1,4 +1,6 @@
+import { formatDateTime } from "@/lib/date-format";
 import { useState, KeyboardEvent } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import {
   CalendarClock,
   GitBranch,
@@ -163,7 +165,7 @@ function BudgetHeaderHistoryModal({ onClose }: { onClose: () => void }) {
                   </div>
                   <div className="text-right text-xs text-muted-foreground shrink-0">
                     <div>{h.versionDate}</div>
-                    <div className="opacity-70">{new Date(h.savedAt).toLocaleString()}</div>
+                    <div className="opacity-70">{formatDateTime(h.savedAt)}</div>
                   </div>
                 </li>
               ))}
@@ -346,10 +348,9 @@ function BudgetHeaderSettingsModal({ onClose }: { onClose: () => void }) {
               <span className="text-xs uppercase tracking-widest text-muted-foreground">
                 Version Date *
               </span>
-              <input
-                type="date"
+              <DateInput
                 value={versionDate}
-                onChange={(e) => setVersionDate(e.target.value)}
+                onChange={(v) => setVersionDate(v)}
                 className="mt-1 w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-foreground outline-none focus:ring-2 ring-brand"
               />
             </label>

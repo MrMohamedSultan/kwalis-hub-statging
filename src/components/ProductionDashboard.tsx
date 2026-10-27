@@ -1,4 +1,6 @@
+import { formatDate } from "@/lib/date-format";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import {
   Wallet,
   TrendingDown,
@@ -316,17 +318,15 @@ export function ProductionDashboard() {
           ))}
           {preset === "custom" && (
             <div className="inline-flex items-center gap-2 ml-1">
-              <input
-                type="date"
+              <DateInput
                 value={customFrom}
-                onChange={(e) => setCustomFrom(e.target.value)}
+                onChange={(v) => setCustomFrom(v)}
                 className="px-2 py-1 rounded-md text-xs bg-surface border border-border text-foreground"
               />
               <span className="text-xs text-muted-foreground">→</span>
-              <input
-                type="date"
+              <DateInput
                 value={customTo}
-                onChange={(e) => setCustomTo(e.target.value)}
+                onChange={(v) => setCustomTo(v)}
                 className="px-2 py-1 rounded-md text-xs bg-surface border border-border text-foreground"
               />
             </div>
@@ -606,7 +606,7 @@ export function ProductionDashboard() {
                       <div className="text-sm font-medium truncate">{r.title}</div>
                       <div className="text-xs text-muted-foreground truncate">
                         {r.subtitle || (r.kind === "invoice" ? "Invoice" : "Petty cash")}
-                        {r.date ? ` · ${new Date(r.date).toLocaleDateString()}` : ""}
+                        {r.date ? ` · ${formatDate(r.date)}` : ""}
                       </div>
                     </div>
                     <div className="tabular-nums text-sm font-semibold whitespace-nowrap">
@@ -791,7 +791,7 @@ function DrillModal({
                     <div className="text-sm font-medium truncate">{t.title}</div>
                     <div className="text-xs text-muted-foreground truncate">
                       {t.subtitle || (t.kind === "invoice" ? "Invoice" : "Petty cash")}
-                      {t.date ? ` · ${new Date(t.date).toLocaleDateString()}` : ""}
+                      {t.date ? ` · ${formatDate(t.date)}` : ""}
                       {` · ${t.category}`}
                     </div>
                   </div>

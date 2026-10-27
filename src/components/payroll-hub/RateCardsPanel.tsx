@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { DateInput } from "@/components/ui/date-input";
 import { toast } from "sonner";
 import { Plus, Save, Trash2, Users, Drama } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -348,20 +349,14 @@ function RateCardForm({
           />
         </Field>
         <Field label="Effective from">
-          <input
-            type="date"
+          <DateInput
             value={effectiveFrom}
-            onChange={(e) => setEffectiveFrom(e.target.value)}
+            onChange={(v) => setEffectiveFrom(v)}
             className={inputCls}
           />
         </Field>
         <Field label="Effective to">
-          <input
-            type="date"
-            value={effectiveTo}
-            onChange={(e) => setEffectiveTo(e.target.value)}
-            className={inputCls}
-          />
+          <DateInput value={effectiveTo} onChange={(v) => setEffectiveTo(v)} className={inputCls} />
         </Field>
       </div>
       <div className="flex justify-end gap-2 pt-1">

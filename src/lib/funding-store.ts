@@ -12,7 +12,13 @@ export type FundingEntry = {
   date: string; // ISO yyyy-mm-dd
   source: string;
   kind: FundingKind;
-  amount: number; // SAR
+  amount: number; // SAR (booked amount)
+  /** B28 — currency the inflow was received in; absent/SAR for SAR inflows. */
+  currency?: string;
+  /** Amount in `currency` when it is not SAR. */
+  originalAmount?: number;
+  /** SAR per 1 unit of `currency` applied when booking. */
+  fxRate?: number;
   reference?: string;
   note?: string;
   createdAt: string;

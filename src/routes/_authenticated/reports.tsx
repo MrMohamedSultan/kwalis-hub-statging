@@ -1,12 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { useMoney } from "@/lib/money-display";
+import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { convertForDisplay, displayCurrencyCode, useMoney } from "@/lib/money-display";
+import {
+  exportReportPdf,
+  exportReportXlsx,
+  type ReportColumn,
+  type ReportDoc,
+} from "@/lib/export/xlsx-report";
+import { formatDate } from "@/lib/date-format";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
 import { useStore, lineTotal, formatUSD } from "@/lib/store";
 import { HEADER_ACCOUNTS } from "@/lib/data";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  Download,
   FileSpreadsheet,
   FileText,
   Loader2,
@@ -23,15 +29,12 @@ import {
 } from "@/features/reports/gl-transactions/gl-transactions-data";
 import { SOURCE_TABLE_BY_TYPE } from "@/components/BudgetLineActualsModal";
 import { SarAmount } from "@/components/ui/currency";
-import { exportPdfReport } from "@/lib/export-pdf";
 import { exportRebateWorkbook } from "@/lib/exportRebate";
 import { getSupportingDocUrl } from "@/lib/supporting-docs";
 import { buildQfeLedger, type QfeLedgerRow } from "@/lib/qfeLedger";
 import { useSearchHotkey } from "@/hooks/use-search-hotkey";
 import { AuditHistoryPanel } from "@/components/AuditHistoryPanel";
 import { useSeriesBudget } from "@/lib/series-budget";
-
-import { downloadBlob } from "@/lib/download";
 
 import { useTranslation } from "react-i18next";
 import i18n from "@/lib/i18n";
@@ -54,15 +57,36 @@ function slotAmount(total: number, percents: number[] | undefined, idx: number, 
   return total * (pct / 100);
 }
 
-function csvEscape(v: unknown) {
-  const s = v === null || v === undefined ? "" : String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+// ── Report export plumbing (G03) ─────────────────────────────────────────
+type ReportExport = {
+  doc: ReportDoc;
+  /** Optional Excel override (e.g. the official Film Commission template). */
+  excel?: () => Promise<void>;
+};
+type ExportBuilder = () => ReportExport | null;
+const ReportExportContext = createContext<{ current: ExportBuilder | null } | null>(null);
+
+/** Register the visible tab's export: it must describe exactly what is on screen. */
+function useReportExport(builder: ExportBuilder) {
+  const ref = useContext(ReportExportContext);
+  useEffect(() => {
+    if (ref) ref.current = builder;
+  });
+  useEffect(
+    () => () => {
+      if (ref) ref.current = null;
+    },
+    [ref],
+  );
 }
-function downloadCsv(filename: string, rows: (string | number)[][]) {
-  const csv = rows.map((r) => r.map(csvEscape).join(",")).join("\n");
-  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
-  downloadBlob(filename, blob);
-}
+
+/** Stored SAR figure in the display currency (what the screen shows), to the halala. */
+const dm = (n: number) => convertForDisplay(Number(n) || 0, 2);
+const moneyCol = (label: string): ReportColumn => ({
+  header: `${label} (${displayCurrencyCode()})`,
+  type: "money",
+});
+const currencyNote = () => `${i18n.t("exports.currency")}: ${displayCurrencyCode()}`;
 
 function ReportsPage() {
   useMoney(); // re-render report tables when the currency toggle changes
@@ -72,20 +96,9 @@ function ReportsPage() {
     "gl" | "glacct" | "gltx" | "paid" | "final" | "rebate" | "qfe" | "tracking" | "vat" | "gosi"
   >("final");
   const [exporting, setExporting] = useState<null | "excel" | "pdf">(null);
+  const exportRef = useRef<ExportBuilder | null>(null);
   const [seasonFilter, setSeasonFilterState] = useState<string>("all");
-  const {
-    budget,
-    payroll,
-    invoices,
-    people,
-    receipts,
-    payments,
-    purchaseOrders,
-    projectName,
-    activeProjectId,
-    projects,
-    vendors,
-  } = useStore();
+  const activeProjectId = useStore((s) => s.activeProjectId);
   const seasonFilterKey = activeProjectId ? `kwalis.seasonFilter.${activeProjectId}` : null;
   useEffect(() => {
     if (!seasonFilterKey) return;
@@ -105,401 +118,34 @@ function ReportsPage() {
       /* ignore */
     }
   };
-  const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
-  const projectCode = activeProject?.code ?? null;
-  const projectTag = projectCode ? `${projectCode} — ${projectName}` : projectName;
-  const projectSlug =
-    (projectCode ?? projectName ?? "project")
-      .toString()
-      .replace(/[^A-Za-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .toLowerCase() || "project";
-  const { rows: finalRows, totals: finalTotals } = useSummary();
-  const series = useSeriesBudget();
-  const filteredBySeason =
-    seasonFilter === "all"
-      ? series.bySeason
-      : series.bySeason.filter((s) => s.season.id === seasonFilter);
-  const filteredEpisodeCount = filteredBySeason.reduce((a, s) => a + s.episodes.length, 0);
-  const filteredAllocated = filteredBySeason.reduce((a, s) => a + s.allocated, 0);
-  const [glActuals, setGlActuals] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase
-        .from("master_budget" as any)
-        .select("budget_code, actual_amount");
-      if (error || cancelled || !data) return;
-      const map: Record<string, number> = {};
-      for (const row of data as unknown as Array<{
-        budget_code: string;
-        actual_amount: number | null;
-      }>) {
-        map[row.budget_code] = Number(row.actual_amount ?? 0);
-      }
-      setGlActuals(map);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [payroll, invoices]);
-
-  type ReportBundle = {
-    filename: string;
-    title: string;
-    headers: string[];
-    rows: (string | number)[][];
-    numericColumns: number[];
-  };
-
-  const buildReportForTab = (): ReportBundle => {
-    if (tab === "gl") {
-      const rows: (string | number)[][] = [];
-      budget.forEach((b) => {
-        const planned = lineTotal(b);
-        const actual = glActuals[b.mainCode] ?? 0;
-        rows.push([
-          b.headerCode,
-          b.mainCode,
-          b.description ?? "",
-          b.group ?? "",
-          planned,
-          actual,
-          planned - actual,
-        ]);
-      });
-      return {
-        filename: "trackroll-gl-report",
-        title: "General Ledger",
-        headers: ["Header", "Main", "Description", "Group", "Budget", "Actual", "Variance"],
-        rows,
-        numericColumns: [4, 5, 6],
-      };
-    }
-    if (tab === "paid") {
-      const rows: (string | number)[][] = [];
-      payroll.forEach((p) =>
-        p.payments.forEach((st, i) => {
-          if (st === "Paid")
-            rows.push([
-              `Payroll · ${p.kind}`,
-              p.name,
-              `Payment ${i + 1}`,
-              slotAmount(p.totalAmount, p.percents, i, p.payments.length),
-            ]);
-        }),
-      );
-      invoices.forEach((i) => rows.push(["Invoice", i.vendorName, i.description ?? "", i.price]));
-      return {
-        filename: "trackroll-actual-paid",
-        title: "Actual Paid",
-        headers: ["Source", "Name", "Detail", "Amount"],
-        rows,
-        numericColumns: [3],
-      };
-    }
-    if (tab === "final") {
-      // Matrix layout: metric rows × group columns (ATL, BTL, Post, VFX, Music, Other, TOTAL).
-      const groupCols = ["ATL", "BTL", "Post", "VFX", "Music", "Other"] as const;
-      const byGroup: Record<string, (typeof finalRows)[number] | undefined> = Object.fromEntries(
-        finalRows.map((r) => [r.group, r]),
-      );
-      const cell = (g: string, key: "actualPaid" | "commitments" | "budget" | "efc" | "variance") =>
-        Number(byGroup[g]?.[key] ?? 0);
-      const metricRows: Array<
-        [string, "budget" | "actualPaid" | "commitments" | "efc" | "variance"]
-      > = [
-        ["Budget", "budget"],
-        ["Actual Paid", "actualPaid"],
-        ["Commitments", "commitments"],
-        ["Estimated Final Cost", "efc"],
-        ["Variance", "variance"],
-      ];
-      const rows: (string | number)[][] = metricRows.map(([label, key]) => [
-        label,
-        ...groupCols.map((g) => cell(g, key)),
-        Number(finalTotals[key] ?? 0),
-      ]);
-      if (series.isSeries) {
-        rows.push(["", "", "", "", "", "", "", ""]);
-        const label =
-          seasonFilter === "all"
-            ? "SERIES EPISODE ALLOCATIONS (All Seasons)"
-            : `SERIES EPISODE ALLOCATIONS (${filteredBySeason[0]?.season ? `S${filteredBySeason[0].season.season_number} — ${filteredBySeason[0].season.title}` : "Filtered"})`;
-        rows.push([label, "", "", "", "", "", "", ""]);
-        rows.push([
-          "Season / Episode",
-          "Episodes",
-          "Shoot Date",
-          "Allocated",
-          "% of Budget",
-          "Avg/Episode",
-          "",
-          "",
-        ]);
-        filteredBySeason.forEach(({ season, episodes, allocated }) => {
-          rows.push([
-            `S${season.season_number} — ${season.title}`,
-            episodes.length,
-            "",
-            allocated,
-            finalTotals.budget > 0
-              ? Number(((allocated / finalTotals.budget) * 100).toFixed(2))
-              : 0,
-            episodes.length > 0 ? allocated / episodes.length : 0,
-            "",
-            "",
-          ]);
-          episodes.forEach((ep) => {
-            const alloc = Number(ep.budget_allocation || 0);
-            rows.push([
-              `   S${season.season_number}E${ep.episode_number} — ${ep.title}`,
-              1,
-              ep.shooting_date ?? "",
-              alloc > 0 ? alloc : "Unallocated",
-              "",
-              "",
-              "",
-              "",
-            ]);
-          });
-        });
-        rows.push([
-          "TOTAL ALLOCATED",
-          filteredEpisodeCount,
-          "",
-          filteredAllocated,
-          finalTotals.budget > 0
-            ? Number(((filteredAllocated / finalTotals.budget) * 100).toFixed(2))
-            : 0,
-          filteredEpisodeCount > 0 ? filteredAllocated / filteredEpisodeCount : 0,
-          "",
-          "",
-        ]);
-      }
-      return {
-        filename: "trackroll-cost-report",
-        title: "Cost Report — Estimated Final Cost",
-        headers: ["Metric", "ATL", "BTL", "Post", "VFX", "Music", "Other", "TOTAL"],
-        rows,
-        numericColumns: [1, 2, 3, 4, 5, 6, 7],
-      };
-    }
-    if (tab === "rebate") {
-      // Only qualifying (QFE) transactions belong in the Film Commission report —
-      // same rules engine as the on-screen ledger and the Excel workbook.
-      const qualifying = buildQfeLedger({
-        invoices,
-        payroll,
-        receipts,
-        people,
-        payments,
-        purchaseOrders,
-        vendors,
-      }).filter((l) => l.qfe);
-      const rows: (string | number)[][] = qualifying.map((l) => [
-        l.ref,
-        l.party,
-        l.category,
-        l.invoiceDate,
-        l.supplierNationality,
-        l.amountExVat,
-        l.vatAmount,
-        l.amount,
-      ]);
-      const totalExVat = qualifying.reduce((a, l) => a + l.amountExVat, 0);
-      rows.push(["", "TOTAL QFE (excl. VAT)", "", "", "", totalExVat, "", ""]);
-      rows.push(["", "Projected 40% rebate", "", "", "", totalExVat * 0.4, "", ""]);
-      return {
-        filename: "trackroll-rebate-report",
-        title: "Saudi Film Commission Rebate — Qualifying Expenditure",
-        headers: [
-          "Ref",
-          "Party",
-          "Category",
-          "Date",
-          "Nationality",
-          "Amount excl. VAT",
-          "VAT",
-          "Total",
-        ],
-        rows,
-        numericColumns: [5, 6, 7],
-      };
-    }
-    if (tab === "qfe") {
-      const vendorByName = new Map(vendors.map((v) => [v.name.toLowerCase(), v] as const));
-      const rows: (string | number)[][] = [];
-      invoices.forEach((i) => {
-        const vendor = i.vendorName ? vendorByName.get(i.vendorName.toLowerCase()) : undefined;
-        const nationality = (vendor?.companyNationality ?? "").trim();
-        const foreign = nationality
-          ? nationality.toLowerCase() !== "saudi arabia" && nationality.toLowerCase() !== "saudi"
-          : /international|travel|import|foreign|abroad/i.test(
-              `${i.description ?? ""} ${i.department ?? ""}`,
-            );
-        if (foreign) return;
-        rows.push([
-          i.date ?? "",
-          i.vendorName ?? "",
-          vendor?.crNo ?? "",
-          i.invoiceNo ?? "",
-          i.description ?? "",
-          i.budgetCode ?? "",
-          Number(i.price ?? 0),
-        ]);
-      });
-      return {
-        filename: "qfe-rebate-report",
-        title: "QFE Rebate Report (Saudi Film Commission)",
-        headers: [
-          "Invoice Date",
-          "Vendor Name",
-          "Vendor C.R NO",
-          "Invoice #",
-          "Description",
-          "Budget Code",
-          "Net Amount (Excl. VAT)",
-        ],
-        rows,
-        numericColumns: [6],
-      };
-    }
-    if (tab === "vat") {
-      // Transactional export: flagged non-Saudi invoices (WHT) + vatable invoices (VAT input).
-      const rows: (string | number)[][] = [];
-      invoices
-        .filter((i) => i.isNonSaudiVendor)
-        .forEach((i) =>
-          rows.push([
-            "WHT",
-            i.vendorName || "—",
-            i.invoiceNo || i.id.slice(0, 6),
-            Number(i.price) || 0,
-            `${Number(i.whtPercent) || 5}%`,
-            Number(i.whtAmount) || +((Number(i.price) || 0) * 0.05).toFixed(2),
-          ]),
-        );
-      invoices
-        .filter((i) => i.vatable)
-        .forEach((i) =>
-          rows.push([
-            "VAT Input",
-            i.vendorName || "—",
-            i.invoiceNo || i.id.slice(0, 6),
-            Number(i.price) || 0,
-            "15%",
-            +((Number(i.price) || 0) * 0.15).toFixed(2),
-          ]),
-        );
-      return {
-        filename: "trackroll-vat-report",
-        title: "Tax & VAT Compliance",
-        headers: ["Type", "Party", "Reference", "Base Amount", "Rate", "Tax Amount"],
-        rows,
-        numericColumns: [3, 5],
-      };
-    }
-
-    const rows: (string | number)[][] = [];
-    people.forEach((p) => {
-      const saudi = (p.nationality ?? "").toLowerCase() === "saudi arabia";
-      rows.push([p.fullName, p.nationality ?? "", p.kind, saudi ? "GOSI Active" : "Work Permit"]);
-    });
-    return {
-      filename: "trackroll-gosi-report",
-      title: "GOSI & Localization",
-      headers: ["Name", "Nationality", "Kind", "Compliance"],
-      rows,
-      numericColumns: [],
-    };
-  };
-
-  const handleExportExcel = async () => {
+  // ── Export (G03 / D12): ONE Excel + PDF button pair for the whole page.
+  // The visible tab registers a builder that returns exactly what is on
+  // screen (after its filters, in the display currency).
+  const runExport = async (kind: "excel" | "pdf") => {
     if (exporting) return;
-    setExporting("excel");
+    const built = exportRef.current?.();
+    if (!built) {
+      toast.error(t("exports.nothing_to_export"));
+      return;
+    }
+    setExporting(kind);
     try {
-      if (tab === "rebate") {
-        const invoiceDocs: Record<string, string> = {};
-        invoices.forEach((i) => {
-          const u = getSupportingDocUrl("invoice", i.id);
-          if (u) invoiceDocs[i.id] = u;
-        });
-        const payrollDocs: Record<string, string> = {};
-        payroll.forEach((p) => {
-          const u = getSupportingDocUrl("payroll", p.id);
-          if (u) payrollDocs[p.id] = u;
-        });
-        // Build the full auditor ledger so the workbook mirrors the on-screen table
-        // (dates, VAT breakdowns, supplier status, PO refs, payment status, docs).
-        // Only qualifying (QFE) transactions are reported to the Film Commission:
-        // non-qualifying crew, cast, vendors and invoices are left out of every sheet.
-        const ledger = buildQfeLedger({
-          invoices,
-          payroll,
-          receipts,
-          people,
-          payments,
-          purchaseOrders,
-          vendors,
-        }).filter((l) => l.qfe);
-        const qualifyingInvoiceIds = new Set(
-          ledger.filter((l) => l.kind === "Invoice").map((l) => l.sourceId),
-        );
-        const qualifyingPayrollIds = new Set(
-          ledger.filter((l) => l.kind === "Payroll").map((l) => l.sourceId),
-        );
-        // Official Saudi Film Commission bilingual template — three sheets.
-        await exportRebateWorkbook({
-          filename: `SaudiFilmCommission_Rebate_Report-${projectSlug}.xlsx`,
-          projectName: projectTag,
-          invoices: invoices.filter((i) => qualifyingInvoiceIds.has(i.id)),
-          payroll: payroll.filter((p) => qualifyingPayrollIds.has(p.id)),
-          people,
-          docUrls: { invoice: invoiceDocs, payroll: payrollDocs },
-          ledger,
-        });
+      if (kind === "excel") {
+        if (built.excel) await built.excel();
+        else await exportReportXlsx(built.doc);
+        toast.success(t("reports.report_exported_to_excel"));
       } else {
-        const r = buildReportForTab();
-        const meta: (string | number)[][] = [
-          [`Project Code: ${projectCode ?? "—"}`],
-          [`Project Name: ${projectName ?? "—"}`],
-          [`Generated: ${new Date().toLocaleString()}`],
-          [],
-        ];
-        downloadCsv(`${r.filename}-${projectSlug}.csv`, [...meta, r.headers, ...r.rows]);
+        await exportReportPdf(built.doc);
+        toast.success(t("reports.report_exported_to_pdf"));
       }
-      toast.success(t("reports.report_exported_to_excel"));
     } catch (e) {
       console.error(e);
-      toast.error(t("reports.excel_export_failed"));
+      toast.error(
+        kind === "excel" ? t("reports.excel_export_failed") : t("exports.pdf_export_failed"),
+      );
     } finally {
       setExporting(null);
     }
-  };
-
-  const handleExportPdf = () => {
-    if (exporting) return;
-    setExporting("pdf");
-    setTimeout(() => {
-      const r = buildReportForTab();
-      exportPdfReport(
-        `${r.filename}-${projectSlug}.pdf`,
-        [
-          {
-            title: r.title,
-            subtitle: `Project ${projectTag} · ${r.rows.length} rows · Generated ${new Date().toLocaleDateString()}`,
-            headers: r.headers,
-            rows: r.rows,
-            numericColumns: r.numericColumns,
-          },
-        ],
-        { documentTitle: `TrackRoll — ${r.title} — ${projectTag}` },
-      );
-      setExporting(null);
-      toast.success(t("reports.report_exported_to_pdf"));
-    }, 300);
   };
 
   const tabs = [
@@ -525,7 +171,7 @@ function ReportsPage() {
           tab === "gltx" ? null : (
             <div className="flex items-center gap-2">
               <button
-                onClick={handleExportExcel}
+                onClick={() => runExport("excel")}
                 disabled={exporting !== null}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-success/20 text-success border border-success/30 hover:bg-success/30 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -534,10 +180,10 @@ function ReportsPage() {
                 ) : (
                   <FileSpreadsheet className="size-4" />
                 )}
-                Export Excel
+                {t("exports.export_excel")}
               </button>
               <button
-                onClick={handleExportPdf}
+                onClick={() => runExport("pdf")}
                 disabled={exporting !== null}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-destructive/20 text-destructive border border-destructive/30 hover:bg-destructive/30 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -546,7 +192,7 @@ function ReportsPage() {
                 ) : (
                   <FileText className="size-4" />
                 )}
-                Export PDF
+                {t("exports.export_pdf")}
               </button>
             </div>
           )
@@ -557,7 +203,7 @@ function ReportsPage() {
           <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-surface p-8 shadow-xl">
             <Loader2 className="size-10 animate-spin text-brand" />
             <p className="text-sm font-semibold text-foreground">
-              Compiling report to {exporting === "pdf" ? "PDF" : "Excel"}…
+              {exporting === "pdf" ? t("exports.compiling_pdf") : t("exports.compiling_excel")}
             </p>
           </div>
         </div>
@@ -573,18 +219,20 @@ function ReportsPage() {
           </button>
         ))}
       </div>
-      {tab === "gl" && <GLReport />}
-      {tab === "glacct" && <GlAccountReport />}
-      {tab === "gltx" && <GlTransactionsReport />}
-      {tab === "paid" && <PaidReport />}
-      {tab === "final" && (
-        <FinalReport seasonFilter={seasonFilter} setSeasonFilter={setSeasonFilter} />
-      )}
-      {tab === "rebate" && <RebateReport />}
-      {tab === "qfe" && <QfeRebateAuditReport />}
-      {tab === "tracking" && <RebateTrackingReport />}
-      {tab === "vat" && <VatReport />}
-      {tab === "gosi" && <GosiReport />}
+      <ReportExportContext.Provider value={exportRef}>
+        {tab === "gl" && <GLReport />}
+        {tab === "glacct" && <GlAccountReport />}
+        {tab === "gltx" && <GlTransactionsReport />}
+        {tab === "paid" && <PaidReport />}
+        {tab === "final" && (
+          <FinalReport seasonFilter={seasonFilter} setSeasonFilter={setSeasonFilter} />
+        )}
+        {tab === "rebate" && <RebateReport />}
+        {tab === "qfe" && <QfeRebateAuditReport />}
+        {tab === "tracking" && <RebateTrackingReport />}
+        {tab === "vat" && <VatReport />}
+        {tab === "gosi" && <GosiReport />}
+      </ReportExportContext.Provider>
     </>
   );
 }
@@ -703,6 +351,68 @@ function FinalReport({
     { label: "Estimated Final Cost", key: "efc" },
     { label: "Variance", key: "variance", tone: "variance" },
   ];
+
+  useReportExport(() => ({
+    doc: {
+      report: "Cost Report",
+      title: "Cost Report — Estimated Final Cost",
+      subtitle: currencyNote(),
+      sections: [
+        {
+          title: "Cost Report — Estimated Final Cost",
+          columns: [{ header: "Metric" }, ...groupCols.map((g) => moneyCol(g)), moneyCol("TOTAL")],
+          rows: metricRows.map(({ label, key }) => [
+            label,
+            ...groupCols.map((g) => dm(cell(g, key))),
+            dm(Number(totals[key] ?? 0)),
+          ]),
+        },
+        ...(series.isSeries
+          ? [
+              {
+                title: `Series Episode Allocations · ${
+                  seasonFilter === "all"
+                    ? i18n.t("reports.all_seasons")
+                    : filteredBySeason
+                        .map(({ season }) => `S${season.season_number} — ${season.title}`)
+                        .join(", ")
+                }`,
+                columns: [
+                  { header: "Season" },
+                  { header: "Episodes", type: "integer" as const },
+                  moneyCol("Allocated"),
+                  { header: "% of Budget", type: "percent" as const },
+                  moneyCol("Avg / Episode"),
+                ],
+                rows: filteredBySeason.map(({ season, episodes, allocated }) => [
+                  `S${season.season_number} — ${season.title}`,
+                  episodes.length,
+                  dm(allocated),
+                  totals.budget > 0 ? (allocated / totals.budget) * 100 : 0,
+                  dm(episodes.length > 0 ? allocated / episodes.length : 0),
+                ]),
+                totals: [
+                  [
+                    i18n.t("reports.total_allocated"),
+                    filteredEpisodeCount,
+                    dm(filteredAllocated),
+                    totals.budget > 0 ? (filteredAllocated / totals.budget) * 100 : 0,
+                    dm(filteredEpisodeCount > 0 ? filteredAllocated / filteredEpisodeCount : 0),
+                  ],
+                  [
+                    "Allocation Variance (Budget − Allocated)",
+                    null,
+                    null,
+                    null,
+                    dm(seriesVariance),
+                  ],
+                ],
+              },
+            ]
+          : []),
+      ],
+    },
+  }));
 
   return (
     <Panel>
@@ -901,6 +611,45 @@ function GLReport() {
     };
   }, [payroll]);
 
+  useReportExport(() => {
+    const rows = budget.map((b) => {
+      const planned = lineTotal(b);
+      const actual = actuals[b.mainCode] ?? 0;
+      return [
+        b.headerCode,
+        b.mainCode,
+        b.description ?? "",
+        b.group ?? "",
+        dm(planned),
+        dm(actual),
+        dm(planned - actual),
+      ];
+    });
+    const sum = (i: number) => rows.reduce((a, r) => a + Number(r[i] || 0), 0);
+    return {
+      doc: {
+        report: "GL Report",
+        title: t("reports.general_ledger"),
+        subtitle: currencyNote(),
+        sections: [
+          {
+            columns: [
+              { header: "Header" },
+              { header: "Main" },
+              { header: "Description" },
+              { header: "Group" },
+              moneyCol("Budget"),
+              moneyCol("Actual"),
+              moneyCol("Variance"),
+            ],
+            rows,
+            totals: [[i18n.t("common.total"), "", "", "", sum(4), sum(5), sum(6)]],
+          },
+        ],
+      },
+    };
+  });
+
   return (
     <Panel>
       <h3 className="text-lg font-semibold mb-4">{t("reports.general_ledger")}</h3>
@@ -1073,10 +822,45 @@ function PaidReport() {
 
   const total = useMemo(() => rows.reduce((s, r) => s + r.amount, 0), [rows]);
 
+  // G03: export the payments ledger shown here (it was empty before because
+  // the old exporter read a different, client-side list).
+  useReportExport(() =>
+    loading
+      ? null
+      : {
+          doc: {
+            report: "Payments Register",
+            title: t("reports.actual_paid"),
+            subtitle: `${i18n.t("exports.currency")}: SAR`,
+            sections: [
+              {
+                columns: [
+                  { header: "Date", type: "date" },
+                  { header: t("reports.paid_col_source") },
+                  { header: t("reports.paid_col_name") },
+                  { header: "Method" },
+                  { header: "Budget Code" },
+                  { header: `${t("reports.paid_col_amount")} (SAR)`, type: "money" },
+                ],
+                rows: rows.map((r) => [
+                  r.date,
+                  SOURCE_LABELS[r.sourceType as GlTransactionSource] ?? r.sourceType,
+                  r.counterparty ?? "",
+                  r.method ?? "",
+                  r.budgetCode ?? "",
+                  r.amount,
+                ]),
+                totals: [[t("reports.paid_total"), "", "", "", "", total]],
+              },
+            ],
+          },
+        },
+  );
+
   return (
     <Panel>
       <h3 className="text-lg font-semibold mb-1">{t("reports.actual_paid")}</h3>
-      <p className="text-xs text-muted-foreground mb-4">{t("reports.paid_ledger_caption")}</p>
+      <p className="text-xs text-muted-foreground mb-4">{t("exports.paid_caption")}</p>
       <div className="overflow-x-auto">
         <table className="app-table w-full">
           <thead className="text-muted-foreground">
@@ -1117,7 +901,8 @@ function PaidReport() {
                   </td>
                   <td className="px-4 py-3 font-medium">{r.counterparty ?? "—"}</td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {[r.method, r.date, r.budgetCode].filter(Boolean).join(" · ") || "—"}
+                    {[r.method, formatDate(r.date), r.budgetCode].filter(Boolean).join(" · ") ||
+                      "—"}
                   </td>
                   <td className="px-4 py-3 font-semibold">
                     <SarAmount amount={r.amount} />
@@ -1153,16 +938,7 @@ function PaidReport() {
 function GlAccountReport() {
   const { t } = useTranslation();
 
-  const { invoices, payroll, receipts, projectName, activeProjectId, projects } = useStore();
-  const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
-  const projectCode = activeProject?.code ?? null;
-  const projectTag = projectCode ? `${projectCode} — ${projectName}` : projectName;
-  const projectSlug =
-    (projectCode ?? projectName ?? "project")
-      .toString()
-      .replace(/[^A-Za-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .toLowerCase() || "project";
+  const { invoices, payroll, receipts } = useStore();
   const { rows: accounts, loading } = useGlAccounts();
   const [cat, setCat] = useState<GlAccountCategory | "all">("all");
   const [acctId, setAcctId] = useState<string>("all");
@@ -1331,85 +1107,72 @@ function GlAccountReport() {
     [filteredRows, currentPage],
   );
 
-  const exportCsv = () => {
-    const rows: (string | number)[][] = [
-      [`Project Code: ${projectCode ?? "—"}`],
-      [`Project Name: ${projectName ?? "—"}`],
-      [`Generated: ${new Date().toLocaleString()}`],
-      [],
-      ["Code", "Name", "Category", "Invoices", "Payroll", "Receipts", "Committed", "Actual Paid"],
-    ];
-    filteredRows.forEach((r) =>
-      rows.push([
-        r.code,
-        r.name,
-        r.category,
-        r.invoiceCount,
-        r.payrollCount,
-        r.receiptCount,
-        r.committed,
-        r.paid,
-      ]),
-    );
-    rows.push([
-      "TOTAL",
-      "",
-      "",
-      summary.totals.invoiceCount,
-      summary.totals.payrollCount,
-      summary.totals.receiptCount,
-      summary.totals.committed,
-      summary.totals.paid,
-    ]);
-    downloadCsv(`trackroll-gl-account-report-${projectSlug}.csv`, rows);
-    toast.success(t("reports.gl_account_report_exported_to_excel"));
-  };
+  // Totals follow the rows actually listed (category / account / search).
+  const filteredTotals = useMemo(
+    () =>
+      filteredRows.reduce(
+        (a, r) => ({
+          committed: a.committed + r.committed,
+          paid: a.paid + r.paid,
+          invoiceCount: a.invoiceCount + r.invoiceCount,
+          payrollCount: a.payrollCount + r.payrollCount,
+          receiptCount: a.receiptCount + r.receiptCount,
+        }),
+        { committed: 0, paid: 0, invoiceCount: 0, payrollCount: 0, receiptCount: 0 },
+      ),
+    [filteredRows],
+  );
 
-  const exportPdf = () => {
-    const rows: (string | number)[][] = filteredRows.map((r) => [
-      r.code,
-      r.name,
-      r.category,
-      r.invoiceCount,
-      r.payrollCount,
-      r.receiptCount,
-      formatUSD(r.committed),
-      formatUSD(r.paid),
-    ]);
-    rows.push([
-      "TOTAL",
-      "",
-      "",
-      summary.totals.invoiceCount,
-      summary.totals.payrollCount,
-      summary.totals.receiptCount,
-      formatUSD(summary.totals.committed),
-      formatUSD(summary.totals.paid),
-    ]);
-    exportPdfReport(
-      `trackroll-gl-account-report-${projectSlug}.pdf`,
-      [
+  useReportExport(() => ({
+    doc: {
+      report: "By GL Account",
+      title: t("reports.cost_by_gl_account"),
+      subtitle: [
+        currencyNote(),
+        cat === "all" ? t("reports.all_categories") : cat,
+        acctId !== "all" ? (acctById.get(acctId)?.code ?? "") : "",
+        q.trim() ? `“${q.trim()}”` : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      sections: [
         {
-          title: "Cost by GL Account",
-          subtitle: `Project ${projectTag} · ${filteredRows.length} accounts · ${cat === "all" ? "All categories" : cat}`,
-          headers: [
-            "Code",
-            "Name",
-            "Category",
-            "Invoices",
-            "Payroll",
-            "Receipts",
-            "Committed",
-            "Actual Paid",
+          columns: [
+            { header: "Code" },
+            { header: "Name" },
+            { header: "Category" },
+            { header: "Invoices", type: "integer" },
+            { header: "Payroll", type: "integer" },
+            { header: "Receipts", type: "integer" },
+            moneyCol("Committed"),
+            moneyCol("Actual Paid"),
           ],
-          rows,
-          numericColumns: [3, 4, 5, 6, 7],
+          rows: filteredRows.map((r) => [
+            r.code,
+            r.name,
+            r.category,
+            r.invoiceCount,
+            r.payrollCount,
+            r.receiptCount,
+            dm(r.committed),
+            dm(r.paid),
+          ]),
+          totals: [
+            [
+              i18n.t("common.total"),
+              "",
+              "",
+              filteredTotals.invoiceCount,
+              filteredTotals.payrollCount,
+              filteredTotals.receiptCount,
+              dm(filteredTotals.committed),
+              dm(filteredTotals.paid),
+            ],
+          ],
         },
       ],
-      { documentTitle: `TrackRoll — GL Account Report — ${projectTag}` },
-    );
-    toast.success(t("reports.gl_account_report_exported_to_pdf"));
-  };
+    },
+  }));
 
   return (
     <div className="space-y-4">
@@ -1477,20 +1240,6 @@ function GlAccountReport() {
                 ? "Loading GL accounts…"
                 : `${filteredRows.length} of ${summary.rows.length} accounts`}
             </div>
-            <button
-              onClick={exportCsv}
-              disabled={filteredRows.length === 0}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-success/20 text-success border border-success/30 hover:bg-success/30 text-sm font-semibold disabled:opacity-40"
-            >
-              <FileSpreadsheet className="size-4" /> Excel
-            </button>
-            <button
-              onClick={exportPdf}
-              disabled={filteredRows.length === 0}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-destructive/20 text-destructive border border-destructive/30 hover:bg-destructive/30 text-sm font-semibold disabled:opacity-40"
-            >
-              <FileText className="size-4" /> PDF
-            </button>
           </div>
         </div>
 
@@ -1547,11 +1296,11 @@ function GlAccountReport() {
                   <td className="px-4 py-3" colSpan={3}>
                     TOTAL
                   </td>
-                  <td className="px-4 py-3 tabular-nums">{summary.totals.invoiceCount}</td>
-                  <td className="px-4 py-3 tabular-nums">{summary.totals.payrollCount}</td>
-                  <td className="px-4 py-3 tabular-nums">{summary.totals.receiptCount}</td>
-                  <td className="px-4 py-3">{formatUSD(summary.totals.committed)}</td>
-                  <td className="px-4 py-3 text-success">{formatUSD(summary.totals.paid)}</td>
+                  <td className="px-4 py-3 tabular-nums">{filteredTotals.invoiceCount}</td>
+                  <td className="px-4 py-3 tabular-nums">{filteredTotals.payrollCount}</td>
+                  <td className="px-4 py-3 tabular-nums">{filteredTotals.receiptCount}</td>
+                  <td className="px-4 py-3">{formatUSD(filteredTotals.committed)}</td>
+                  <td className="px-4 py-3 text-success">{formatUSD(filteredTotals.paid)}</td>
                 </tr>
               )}
             </tbody>
@@ -1632,6 +1381,7 @@ function RebateReport() {
 
   const { budget, payroll, invoices, receipts, people, vendors, payments, purchaseOrders } =
     useStore();
+  const activeProject = useStore((s) => s.projects.find((p) => p.id === s.activeProjectId)) ?? null;
   const totalBudget = useMemo(() => budget.reduce((a, l) => a + lineTotal(l), 0), [budget]);
 
   type LedgerRow = QfeLedgerRow;
@@ -1739,6 +1489,108 @@ function RebateReport() {
   );
 
   const COL_COUNT = 13;
+
+  // Film Commission rebate: the PDF lists the ledger as shown (search +
+  // sort); Excel keeps the official bilingual SFC template, limited to the
+  // same filtered transactions.
+  useReportExport(() => ({
+    doc: {
+      report: "Saudi Film Commission Rebate",
+      title: "Saudi Film Commission Rebate — Qualifying Expenditure",
+      subtitle: [currencyNote(), query.trim() ? `“${query.trim()}”` : ""]
+        .filter(Boolean)
+        .join(" · "),
+      sections: [
+        {
+          columns: [
+            { header: "Source" },
+            { header: "Reference" },
+            { header: "Party / Vendor" },
+            { header: "Official ID / CR" },
+            { header: "Category" },
+            { header: "Invoice Date", type: "date" },
+            { header: "Official QPE Type" },
+            { header: "Supplier Nationality" },
+            moneyCol("Amount Excl. VAT"),
+            moneyCol("VAT"),
+            moneyCol("Total"),
+            { header: "Status" },
+          ],
+          rows: sorted.map((l) => [
+            l.kind,
+            l.ref,
+            l.party,
+            l.officialId || "",
+            l.category || "",
+            l.invoiceDate || null,
+            l.qpeType,
+            l.supplierNationality,
+            dm(l.amountExVat),
+            dm(l.vatAmount),
+            dm(l.amount),
+            l.qfe ? t("reports.qfe_eligible") : "Non-QPE",
+          ]),
+          totals: [
+            [
+              "QFE TOTAL (Excl. VAT)",
+              "",
+              "",
+              "",
+              "",
+              null,
+              "",
+              "",
+              dm(filteredQfeTotal),
+              null,
+              null,
+              "",
+            ],
+            [
+              "Projected 40% Cash Rebate",
+              "",
+              "",
+              "",
+              "",
+              null,
+              "",
+              "",
+              dm(filteredQfeTotal * 0.4),
+              null,
+              null,
+              "",
+            ],
+          ],
+        },
+      ],
+    },
+    excel: async () => {
+      const invoiceIds = new Set(
+        filtered.filter((l) => l.kind === "Invoice").map((l) => l.sourceId),
+      );
+      const payrollIds = new Set(
+        filtered.filter((l) => l.kind === "Payroll").map((l) => l.sourceId),
+      );
+      const invoiceDocs: Record<string, string> = {};
+      invoices.forEach((i) => {
+        const u = getSupportingDocUrl("invoice", i.id);
+        if (u) invoiceDocs[i.id] = u;
+      });
+      const payrollDocs: Record<string, string> = {};
+      payroll.forEach((p) => {
+        const u = getSupportingDocUrl("payroll", p.id);
+        if (u) payrollDocs[p.id] = u;
+      });
+      await exportRebateWorkbook({
+        filename: "Saudi Film Commission Rebate",
+        projectName: [activeProject?.code, activeProject?.name].filter(Boolean).join(" — "),
+        invoices: invoices.filter((i) => invoiceIds.has(i.id)),
+        payroll: payroll.filter((p) => payrollIds.has(p.id)),
+        people,
+        docUrls: { invoice: invoiceDocs, payroll: payrollDocs },
+        ledger: sorted,
+      });
+    },
+  }));
 
   return (
     <div className="space-y-5">
@@ -1857,7 +1709,7 @@ function RebateReport() {
                       </td>
                       <td className="px-3 py-3 text-xs whitespace-nowrap">{l.category || "—"}</td>
                       <td className="px-3 py-3 text-xs tabular-nums text-muted-foreground">
-                        {l.invoiceDate || "—"}
+                        {formatDate(l.invoiceDate) || l.invoiceDate || "—"}
                       </td>
                       <td className="px-3 py-3">
                         <span className="text-xs px-2 py-1 rounded-md bg-info/10 text-info border border-info/30 whitespace-nowrap">
@@ -1997,7 +1849,7 @@ function RebateReport() {
                                       className="text-xs flex items-center justify-between gap-2 border-b border-border pb-1 last:border-b-0"
                                     >
                                       <span className="text-muted-foreground truncate">
-                                        {p.date ? `${p.date} · ` : ""}
+                                        {p.date ? `${formatDate(p.date) || p.date} · ` : ""}
                                         {p.method || p.label}
                                         {p.reference ? ` · ${p.reference}` : ""}
                                       </span>
@@ -2214,6 +2066,51 @@ function VatReport() {
     [whtInvoiceRows, whtContractRows],
   );
 
+  // G03: both tables on screen (invoice AND contract withholding, VAT input).
+  useReportExport(() => {
+    const whtRows = [...whtInvoiceRows, ...whtContractRows];
+    return {
+      doc: {
+        report: "Tax and VAT",
+        title: "Tax & VAT Compliance",
+        subtitle: currencyNote(),
+        sections: [
+          {
+            title: "Withholding Tax — Flagged International Vendors & Contracts",
+            columns: [
+              { header: "Party" },
+              { header: "Type" },
+              { header: "Reference" },
+              moneyCol("Base Amount"),
+              { header: "WHT Rate", type: "percent" },
+              moneyCol("WHT Amount"),
+            ],
+            rows: whtRows.map((r) => [r.party, r.kind, r.ref, dm(r.base), r.pct, dm(r.wht)]),
+            totals: [[i18n.t("common.total"), "", "", null, null, dm(wht)]],
+          },
+          {
+            title: t("reports.vat_input_tracking_zatca"),
+            columns: [
+              { header: "Date", type: "date" },
+              { header: "Invoice #" },
+              { header: "Vendor" },
+              moneyCol("Net (Excl. VAT)"),
+              moneyCol("VAT (15%)"),
+            ],
+            rows: vatRows.map((r) => [
+              r.date || null,
+              r.invoiceNo || "",
+              r.vendorName || "",
+              dm(r.net),
+              dm(r.vat),
+            ]),
+            totals: [[i18n.t("common.total"), "", "", null, dm(vatInput)]],
+          },
+        ],
+      },
+    };
+  });
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -2319,7 +2216,7 @@ function VatReport() {
               )}
               {vatRows.map((r) => (
                 <tr key={r.id} className="border-b border-border">
-                  <td className="px-4 py-3">{r.date || "—"}</td>
+                  <td className="px-4 py-3 tabular-nums">{formatDate(r.date) || "—"}</td>
                   <td className="px-4 py-3 font-mono">{r.invoiceNo || "—"}</td>
                   <td className="px-4 py-3">{r.vendorName || "—"}</td>
                   <td className="px-4 py-3 font-mono tabular-nums">{formatUSD(r.net)}</td>
@@ -2344,6 +2241,36 @@ function GosiReport() {
   const saudis = people.filter((p) => (p.nationality ?? "").toLowerCase() === "saudi arabia");
   const foreign = people.filter((p) => (p.nationality ?? "").toLowerCase() !== "saudi arabia");
   const saudization = people.length > 0 ? (saudis.length / people.length) * 100 : 0;
+
+  useReportExport(() => ({
+    doc: {
+      report: "GOSI and Localization",
+      title: "GOSI & Localization",
+      subtitle: `Saudization ${saudization.toFixed(1)}% · ${saudis.length} / ${people.length}`,
+      sections: [
+        {
+          title: "Saudi Nationals — GOSI Enrolled",
+          columns: [{ header: "Name" }, { header: "Position" }, { header: "Status" }],
+          rows: saudis.map((p) => [p.fullName, p.position || p.kind, t("reports.gosi_active")]),
+        },
+        {
+          title: "Foreign Crew & Cast — Iqama Tracked",
+          columns: [
+            { header: "Name" },
+            { header: "Nationality" },
+            { header: "Position" },
+            { header: "Status" },
+          ],
+          rows: foreign.map((p) => [
+            p.fullName,
+            p.nationality || "",
+            p.position || p.kind,
+            t("reports.work_permit"),
+          ]),
+        },
+      ],
+    },
+  }));
 
   return (
     <div className="space-y-5">
@@ -2444,11 +2371,20 @@ function SummaryCard({
   }[tone];
   return (
     <div className={`rounded-2xl bg-surface border ${toneCls} p-5`}>
-      <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+      <div
+        dir="auto"
+        className="text-xs uppercase tracking-wider text-muted-foreground font-medium"
+      >
         {label}
       </div>
-      <div className={`mt-2 text-3xl font-bold ${valueCls}`}>{value}</div>
-      {hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>}
+      <div className={`mt-2 text-3xl font-bold ${valueCls}`}>
+        <bdi>{value}</bdi>
+      </div>
+      {hint && (
+        <div dir="auto" className="mt-1 text-xs text-muted-foreground">
+          {hint}
+        </div>
+      )}
     </div>
   );
 }
@@ -2521,6 +2457,39 @@ function QfeRebateAuditReport() {
   const totalNet = useMemo(() => rows.reduce((a, r) => a + r.netAmount, 0), [rows]);
   const filteredNet = useMemo(() => filtered.reduce((a, r) => a + r.netAmount, 0), [filtered]);
 
+  useReportExport(() => ({
+    doc: {
+      report: "QFE Rebate Report",
+      title: "QFE Rebate Report (Saudi Film Commission)",
+      subtitle: [currencyNote(), query.trim() ? `“${query.trim()}”` : ""]
+        .filter(Boolean)
+        .join(" · "),
+      sections: [
+        {
+          columns: [
+            { header: t("reports.invoice_date"), type: "date" },
+            { header: "Vendor Name" },
+            { header: t("reports.vendor_cr_no") },
+            { header: "Invoice #" },
+            { header: "Description" },
+            { header: t("reports.budget_code_gl") },
+            moneyCol(t("reports.net_amount_excl_vat")),
+          ],
+          rows: filtered.map((r) => [
+            r.date || null,
+            r.vendorName,
+            r.crNo,
+            r.invoiceNo,
+            r.description,
+            r.budgetCode,
+            dm(r.netAmount),
+          ]),
+          totals: [[t("reports.total_filtered"), "", "", "", "", "", dm(filteredNet)]],
+        },
+      ],
+    },
+  }));
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -2583,7 +2552,9 @@ function QfeRebateAuditReport() {
               ) : (
                 filtered.map((r) => (
                   <tr key={r.id} className="border-t border-border/60">
-                    <td className="px-4 py-3 whitespace-nowrap">{r.date || "—"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap tabular-nums">
+                      {formatDate(r.date) || "—"}
+                    </td>
                     <td className="px-4 py-3">{r.vendorName}</td>
                     <td className="px-4 py-3 font-mono text-xs">
                       {r.crNo || <span className="text-muted-foreground">—</span>}
@@ -2639,15 +2610,7 @@ function QfeRebateAuditReport() {
 function RebateTrackingReport() {
   const { t } = useTranslation();
 
-  const { budget, invoices, projectName, activeProjectId, projects } = useStore();
-  const projectCode = activeProjectId
-    ? (projects.find((p) => p.id === activeProjectId)?.code ?? null)
-    : null;
-  const projectSlug =
-    (projectName ?? "project")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "project";
+  const { budget, invoices } = useStore();
 
   const eligibleBudget = useMemo(() => budget.filter((b) => b.rebateEligible), [budget]);
   const eligibleInvoices = useMemo(() => invoices.filter((i) => i.rebateEligible), [invoices]);
@@ -2684,53 +2647,73 @@ function RebateTrackingReport() {
     }));
   }, [eligibleBudget, eligibleInvoices]);
 
-  const exportCsv = () => {
-    const rows: (string | number)[][] = [
-      [`Project Code: ${projectCode ?? "—"}`],
-      [`Project Name: ${projectName ?? "—"}`],
-      [`Generated: ${new Date().toLocaleString()}`],
-      [],
-      ["Summary"],
-      ["Metric", "Amount (USD)"],
-      ["Estimated Rebate-Eligible Budget", estimatedTotal.toFixed(2)],
-      ["Actual Rebate-Eligible Spend", actualTotal.toFixed(2)],
-      ["Variance", variance.toFixed(2)],
-      [],
-      ["By Group"],
-      ["Group", "Estimated", "Actual", "Variance"],
-      ...byGroup.map((g) => [
-        g.group,
-        g.estimated.toFixed(2),
-        g.actual.toFixed(2),
-        g.variance.toFixed(2),
-      ]),
-      [],
-      ["Budget Lines (Rebate Eligible)"],
-      ["Code", "Description", "Group", "Planned"],
-      ...eligibleBudget.map((b) => [
-        b.mainCode,
-        b.description ?? "",
-        b.group ?? "",
-        lineTotal(b).toFixed(2),
-      ]),
-      [],
-      ["Invoices (Rebate Eligible)"],
-      ["Date", "Invoice #", "Vendor", "Budget Code", "Amount (Excl. VAT)"],
-      ...eligibleInvoices.map((i) => [
-        i.date ?? "",
-        i.invoiceNo ?? "",
-        i.vendorName ?? "",
-        i.budgetCode ?? "",
-        Number(i.price || 0).toFixed(2),
-      ]),
-    ];
-    downloadCsv(`rebate-tracking-${projectSlug}.csv`, rows);
-    toast.success(t("reports.rebate_tracking_exported"));
-  };
+  // G03: same currency as the screen (was always labelled USD before).
+  useReportExport(() => ({
+    doc: {
+      report: "Rebate Tracking",
+      title: "Rebate Tracking — Estimated vs Actual",
+      subtitle: currencyNote(),
+      sections: [
+        {
+          title: "Summary",
+          columns: [{ header: "Metric" }, moneyCol("Amount")],
+          rows: [
+            ["Estimated Rebate-Eligible Budget", dm(estimatedTotal)],
+            ["Actual Rebate-Eligible Spend", dm(actualTotal)],
+            ["Variance (Actual − Estimated)", dm(variance)],
+          ],
+        },
+        {
+          title: t("reports.rebateeligible_by_group"),
+          columns: [
+            { header: "Group" },
+            moneyCol("Estimated"),
+            moneyCol("Actual"),
+            moneyCol("Variance"),
+          ],
+          rows: byGroup.map((g) => [g.group, dm(g.estimated), dm(g.actual), dm(g.variance)]),
+        },
+        {
+          title: `Rebate-Eligible Budget Lines (${eligibleBudget.length})`,
+          columns: [
+            { header: "Code" },
+            { header: "Description" },
+            { header: "Group" },
+            moneyCol("Planned"),
+          ],
+          rows: eligibleBudget.map((b) => [
+            b.mainCode,
+            b.description ?? "",
+            b.group ?? "",
+            dm(lineTotal(b)),
+          ]),
+          totals: [[i18n.t("common.total"), "", "", dm(estimatedTotal)]],
+        },
+        {
+          title: `Rebate-Eligible Invoices (${eligibleInvoices.length})`,
+          columns: [
+            { header: "Date", type: "date" },
+            { header: "Invoice #" },
+            { header: "Vendor" },
+            { header: t("reports.budget_code") },
+            moneyCol(t("reports.amount_excl_vat")),
+          ],
+          rows: eligibleInvoices.map((i) => [
+            i.date || null,
+            i.invoiceNo ?? "",
+            i.vendorName ?? "",
+            i.budgetCode ?? "",
+            dm(Number(i.price || 0)),
+          ]),
+          totals: [[i18n.t("common.total"), "", "", "", dm(actualTotal)]],
+        },
+      ],
+    },
+  }));
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="rounded-2xl border border-success/30 bg-success/10 p-5">
           <div className="text-xs uppercase text-success">
             {t("reports.estimated_rebateeligible_budget")}
@@ -2755,15 +2738,6 @@ function RebateTrackingReport() {
           <div className="text-xs opacity-70 mt-1">
             {pctSpent.toFixed(1)}% of estimated budget spent
           </div>
-        </div>
-        <div className="rounded-2xl border border-border bg-surface p-5 flex flex-col justify-between">
-          <div className="text-xs uppercase text-muted-foreground">Export</div>
-          <button
-            onClick={exportCsv}
-            className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-success/20 text-success border border-success/30 hover:bg-success/30 text-sm font-semibold"
-          >
-            <FileSpreadsheet className="size-4" /> Export CSV
-          </button>
         </div>
       </div>
 
@@ -2811,7 +2785,7 @@ function RebateTrackingReport() {
         </h3>
         <div className="overflow-x-auto max-h-[360px]">
           <table className="w-full text-sm">
-            <thead className="bg-surface/60 text-left text-xs uppercase tracking-wide text-muted-foreground sticky top-0">
+            <thead className="bg-surface text-left text-xs uppercase tracking-wide text-muted-foreground sticky top-0">
               <tr>
                 <th className="px-3 py-2">Code</th>
                 <th className="px-3 py-2">Description</th>
@@ -2839,7 +2813,7 @@ function RebateTrackingReport() {
         </h3>
         <div className="overflow-x-auto max-h-[360px]">
           <table className="w-full text-sm">
-            <thead className="bg-surface/60 text-left text-xs uppercase tracking-wide text-muted-foreground sticky top-0">
+            <thead className="bg-surface text-left text-xs uppercase tracking-wide text-muted-foreground sticky top-0">
               <tr>
                 <th className="px-3 py-2">Date</th>
                 <th className="px-3 py-2">Invoice #</th>
@@ -2851,7 +2825,7 @@ function RebateTrackingReport() {
             <tbody>
               {eligibleInvoices.map((i) => (
                 <tr key={i.id} className="border-t border-border">
-                  <td className="px-3 py-2">{i.date}</td>
+                  <td className="px-3 py-2 tabular-nums">{formatDate(i.date) || "—"}</td>
                   <td className="px-3 py-2">{i.invoiceNo}</td>
                   <td className="px-3 py-2">{i.vendorName}</td>
                   <td className="px-3 py-2 font-mono">{i.budgetCode}</td>

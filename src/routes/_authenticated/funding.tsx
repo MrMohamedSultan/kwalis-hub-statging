@@ -1,5 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { DateInput } from "@/components/ui/date-input";
+import { useEffect, useMemo, useState } from "react";
+import { formatDate, riyadhToday } from "@/lib/date-format";
+import { fetchProjectFxSettings, type FxSettings } from "@/lib/fx-settings";
+import { LEDGER_CURRENCY, fundingCurrencies, toLedgerAmount } from "@/lib/funding-currency";
 import { toast } from "sonner";
 import {
   Banknote,
@@ -50,8 +54,41 @@ function fmt(n: number) {
 function fmtSAR(n: number) {
   return `SAR ${fmt(n)}`;
 }
+function fmt2(n: number) {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n || 0);
+}
+/** Today in Saudi time (a UTC "today" is yesterday before 03:00 KSA). */
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return riyadhToday();
+}
+
+/** Original currency fields stored beside the SAR amount (B28). */
+function currencyFields(f: { amount: string; currency: string }, rate: number) {
+  return f.currency === LEDGER_CURRENCY
+    ? { currency: LEDGER_CURRENCY, originalAmount: undefined, fxRate: undefined }
+    : { currency: f.currency, originalAmount: Number(f.amount), fxRate: rate };
+}
+
+/** Effective FX settings of the active project (inherits the company's). */
+function useFundingFx(): FxSettings | null {
+  const pid = useStore((s) => s.activeProjectId);
+  const [fx, setFx] = useState<FxSettings | null>(null);
+  useEffect(() => {
+    if (!pid) return;
+    let cancelled = false;
+    void fetchProjectFxSettings(pid)
+      .then((s) => {
+        if (!cancelled) setFx(s.effective);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [pid]);
+  return fx;
 }
 
 /** Validate an amount input. Returns error message or null. */
@@ -354,10 +391,9 @@ function CashFlowDashboard() {
         <div className="grid gap-2 md:grid-cols-5">
           <div className="md:col-span-1">
             <label className="text-xs text-muted-foreground">{tr("funding.asOfDate")}</label>
-            <input
-              type="date"
+            <DateInput
               value={asOf}
-              onChange={(e) => setAsOf(e.target.value)}
+              onChange={(v) => setAsOf(v)}
               className="w-full mt-1 rounded-lg border border-border bg-[hsl(var(--surface-2))] px-3 py-2 text-sm text-foreground"
             />
           </div>
@@ -555,6 +591,8 @@ type FormState = {
   source: string;
   kind: FundingKind;
   amount: string;
+  /** B28 — currency the money was received in (booked in SAR). */
+  currency: string;
   reference: string;
   note: string;
 };
@@ -563,6 +601,7 @@ const emptyForm = (): FormState => ({
   source: "",
   kind: "Investor Tranche",
   amount: "",
+  currency: LEDGER_CURRENCY,
   reference: "",
   note: "",
 });
@@ -571,6 +610,8 @@ function FundingInflowsTab() {
   const { t } = useTranslation();
 
   const { items, add, remove, update } = useFundingEntries();
+  const fx = useFundingFx();
+  const currencies = fundingCurrencies(fx);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [errors, setErrors] = useState<{ source?: string; amount?: string }>({});
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -584,6 +625,8 @@ function FundingInflowsTab() {
     if (!f.source.trim()) e.source = "Source/Entity is required";
     const a = validateAmount(f.amount);
     if (a) e.amount = a;
+    else if (!toLedgerAmount(fx, Number(f.amount), f.currency))
+      e.amount = t("exports.funding_no_rate", { currency: f.currency });
     return e;
   };
 
@@ -594,11 +637,13 @@ function FundingInflowsTab() {
       toast.error(t("funding.please_fix_the_highlighted_fields"));
       return;
     }
+    const booked = toLedgerAmount(fx, Number(form.amount), form.currency)!;
     add({
       date: form.date,
       source: form.source.trim(),
       kind: form.kind,
-      amount: Number(form.amount),
+      amount: booked.amount,
+      ...currencyFields(form, booked.rate),
       reference: form.reference.trim() || undefined,
       note: form.note.trim() || undefined,
     });
@@ -613,7 +658,8 @@ function FundingInflowsTab() {
       date: e.date,
       source: e.source,
       kind: e.kind,
-      amount: String(e.amount),
+      amount: String(e.originalAmount ?? e.amount),
+      currency: e.currency ?? LEDGER_CURRENCY,
       reference: e.reference ?? "",
       note: e.note ?? "",
     });
@@ -631,11 +677,13 @@ function FundingInflowsTab() {
       return;
     }
     if (!editingId) return;
+    const booked = toLedgerAmount(fx, Number(editForm.amount), editForm.currency)!;
     update(editingId, {
       date: editForm.date,
       source: editForm.source.trim(),
       kind: editForm.kind,
-      amount: Number(editForm.amount),
+      amount: booked.amount,
+      ...currencyFields(editForm, booked.rate),
       reference: editForm.reference.trim() || undefined,
       note: editForm.note.trim() || undefined,
     });
@@ -647,10 +695,13 @@ function FundingInflowsTab() {
     downloadCSV(
       `funding-inflows-${todayIso()}`,
       items.map((e) => ({
-        Date: e.date,
+        Date: formatDate(e.date),
         Source: e.source,
         Kind: e.kind,
-        "Amount (SAR)": e.amount,
+        "Amount (SAR)": e.amount.toFixed(2),
+        Currency: e.currency ?? LEDGER_CURRENCY,
+        "Original Amount": (e.originalAmount ?? e.amount).toFixed(2),
+        "FX Rate": e.fxRate ?? 1,
         Reference: e.reference ?? "",
         Note: e.note ?? "",
       })),
@@ -661,13 +712,16 @@ function FundingInflowsTab() {
       {
         title: "Funding Inflows Ledger",
         subtitle: `Total: ${fmtSAR(total)}`,
-        headers: ["Date", "Source", "Kind", "Amount (SAR)", "Reference", "Note"],
+        headers: ["Date", "Source", "Kind", "Amount (SAR)", "Original", "Reference", "Note"],
         numericColumns: [3],
         rows: items.map((e) => [
-          e.date,
+          formatDate(e.date),
           e.source,
           e.kind,
-          fmt(e.amount),
+          e.amount,
+          e.currency && e.currency !== LEDGER_CURRENCY
+            ? `${fmt2(e.originalAmount ?? 0)} ${e.currency} × ${e.fxRate ?? "—"}`
+            : "—",
           e.reference ?? "—",
           e.note ?? "—",
         ]),
@@ -685,10 +739,9 @@ function FundingInflowsTab() {
           {t("funding.log_new_inflow")}
         </h3>
         <div className="grid gap-2 md:grid-cols-6">
-          <input
-            type="date"
+          <DateInput
             value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
+            onChange={(v) => setForm({ ...form, date: v })}
             className={inputCls()}
           />
           <div className="md:col-span-2">
@@ -715,18 +768,35 @@ function FundingInflowsTab() {
             ))}
           </select>
           <div>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder={t("funding.amount_sar_2")}
-              value={form.amount}
-              onChange={(e) => {
-                setForm({ ...form, amount: e.target.value });
-                if (errors.amount) setErrors({ ...errors, amount: undefined });
-              }}
-              className={`${inputCls(errors.amount)} w-full`}
-            />
+            <div className="flex gap-1">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder={t("exports.funding_amount")}
+                value={form.amount}
+                onChange={(e) => {
+                  setForm({ ...form, amount: e.target.value });
+                  if (errors.amount) setErrors({ ...errors, amount: undefined });
+                }}
+                className={`${inputCls(errors.amount)} w-full min-w-0`}
+              />
+              <select
+                aria-label={t("exports.funding_currency")}
+                value={form.currency}
+                onChange={(e) => {
+                  setForm({ ...form, currency: e.target.value });
+                  if (errors.amount) setErrors({ ...errors, amount: undefined });
+                }}
+                className={`${inputCls()} w-20 px-1`}
+              >
+                {currencies.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
             {errors.amount && <p className="text-xs text-destructive mt-1">{errors.amount}</p>}
           </div>
           <button
@@ -752,7 +822,16 @@ function FundingInflowsTab() {
         </div>
         {form.amount && !errors.amount && Number(form.amount) > 0 && (
           <p className="text-xs text-muted-foreground mt-2">
-            Preview: <span className="text-success font-medium">{fmtSAR(Number(form.amount))}</span>
+            {t("exports.funding_preview")}{" "}
+            <span className="text-success font-medium">
+              {fmtSAR(toLedgerAmount(fx, Number(form.amount), form.currency)?.amount ?? 0)}
+            </span>
+            {form.currency !== LEDGER_CURRENCY && (
+              <span dir="ltr" className="ms-1">
+                ({fmt2(Number(form.amount))} {form.currency} ×{" "}
+                {toLedgerAmount(fx, 1, form.currency)?.rate ?? "—"})
+              </span>
+            )}
           </p>
         )}
       </div>
@@ -801,10 +880,9 @@ function FundingInflowsTab() {
                   editingId === e.id ? (
                     <tr key={e.id} className="border-t border-border bg-primary/5">
                       <td className="px-2 py-2">
-                        <input
-                          type="date"
+                        <DateInput
                           value={editForm.date}
-                          onChange={(x) => setEditForm({ ...editForm, date: x.target.value })}
+                          onChange={(v) => setEditForm({ ...editForm, date: v })}
                           className={`${inputCls()} w-full`}
                         />
                       </td>
@@ -835,18 +913,35 @@ function FundingInflowsTab() {
                         </select>
                       </td>
                       <td className="px-2 py-2">
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={editForm.amount}
-                          onChange={(x) => {
-                            setEditForm({ ...editForm, amount: x.target.value });
-                            if (editErrors.amount)
-                              setEditErrors({ ...editErrors, amount: undefined });
-                          }}
-                          className={`${inputCls(editErrors.amount)} w-full text-right`}
-                        />
+                        <div className="flex gap-1">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={editForm.amount}
+                            onChange={(x) => {
+                              setEditForm({ ...editForm, amount: x.target.value });
+                              if (editErrors.amount)
+                                setEditErrors({ ...editErrors, amount: undefined });
+                            }}
+                            className={`${inputCls(editErrors.amount)} w-full min-w-0 text-right`}
+                          />
+                          <select
+                            aria-label={t("exports.funding_currency")}
+                            value={editForm.currency}
+                            onChange={(x) => setEditForm({ ...editForm, currency: x.target.value })}
+                            className={`${inputCls()} w-20 px-1`}
+                          >
+                            {currencies.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        {editErrors.amount && (
+                          <p className="text-xs text-destructive mt-1">{editErrors.amount}</p>
+                        )}
                       </td>
                       <td className="px-2 py-2">
                         <input
@@ -883,11 +978,16 @@ function FundingInflowsTab() {
                     </tr>
                   ) : (
                     <tr key={e.id} className="border-t border-border text-foreground">
-                      <td className="px-4 py-2">{e.date}</td>
+                      <td className="px-4 py-2 tabular-nums">{formatDate(e.date)}</td>
                       <td className="px-4 py-2">{e.source}</td>
                       <td className="px-4 py-2">{e.kind}</td>
                       <td className="px-4 py-2 text-right tabular-nums font-medium text-success">
                         {fmt(e.amount)}
+                        {e.currency && e.currency !== LEDGER_CURRENCY && (
+                          <div dir="ltr" className="text-[11px] font-normal text-muted-foreground">
+                            {fmt2(e.originalAmount ?? 0)} {e.currency} × {e.fxRate ?? "—"}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-2 text-muted-foreground">{e.reference || "—"}</td>
                       <td className="px-4 py-2 text-muted-foreground">{e.note || "—"}</td>
@@ -952,7 +1052,7 @@ function VatPaymentsTab() {
     downloadCSV(
       `vat-payments-${todayIso()}`,
       items.map((e) => ({
-        Date: e.date,
+        Date: formatDate(e.date),
         "Amount (SAR)": e.amount,
         Reference: e.reference ?? "",
         Note: e.note ?? "",
@@ -966,7 +1066,7 @@ function VatPaymentsTab() {
         subtitle: `Total: ${fmtSAR(total)}`,
         headers: ["Date", "Amount (SAR)", "Reference", "Note"],
         numericColumns: [1],
-        rows: items.map((e) => [e.date, fmt(e.amount), e.reference ?? "—", e.note ?? "—"]),
+        rows: items.map((e) => [formatDate(e.date), e.amount, e.reference ?? "—", e.note ?? "—"]),
       },
     ]);
   };
@@ -981,10 +1081,9 @@ function VatPaymentsTab() {
           {t("funding.track_vat_paid_directly_to_tax_authorities_outside")}
         </p>
         <div className="grid gap-2 md:grid-cols-5">
-          <input
-            type="date"
+          <DateInput
             value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
+            onChange={(v) => setForm({ ...form, date: v })}
             className="rounded-lg border border-border bg-[hsl(var(--surface-2))] px-3 py-2 text-sm text-foreground"
           />
           <div>
@@ -1069,7 +1168,7 @@ function VatPaymentsTab() {
               <tbody>
                 {items.map((e) => (
                   <tr key={e.id} className="border-t border-border text-foreground">
-                    <td className="px-4 py-2">{e.date}</td>
+                    <td className="px-4 py-2 tabular-nums">{formatDate(e.date)}</td>
                     <td className="px-4 py-2 text-right tabular-nums font-medium text-destructive">
                       {fmt(e.amount)}
                     </td>

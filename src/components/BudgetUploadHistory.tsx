@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { History, Trash2, FileSpreadsheet, User, RefreshCw, Undo2 } from "lucide-react";
@@ -125,7 +126,7 @@ export function BudgetUploadHistory() {
                       </div>
                     </td>
                     <td className="py-2 pr-3 text-muted-foreground whitespace-nowrap">
-                      {new Date(b.created_at).toLocaleString()}
+                      {formatDateTime(b.created_at)}
                     </td>
                     <td className="py-2 pr-3 text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
