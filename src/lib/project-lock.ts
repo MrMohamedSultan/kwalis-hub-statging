@@ -1,97 +1,130 @@
 /**
- * Per-project "Lock" mode.
- * When a project is locked, payroll actions (Pay / Structure / Bulk Approve /
- * Bulk Mark Paid) and budget adjustments are disabled at the UI layer.
- * Stored in localStorage — a lightweight version-lock, not a security boundary.
+ * Per-project "Lock" (X15).
+ *
+ * The lock lives in the database: projects.locked_at, set through the
+ * set_project_lock() RPC (db/pending/184). While a project is locked or
+ * archived the database refuses new or changed invoices, contracts, POs,
+ * petty cash, per diem, overtime, payments, funding and payment requests
+ * unless the user holds the "Project Lock Override" permission. The UI lock
+ * below only mirrors that rule so screens are read-only up front.
+ *
+ * `dbLocked` is the approved-budget lock (`budget_status = Locked/Approved`,
+ * enforced by is_budget_editable() in RLS) — unchanged.
  */
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { useStore } from "@/lib/store";
-import { recordAudit } from "@/lib/audit-log";
 import { supabase } from "@/integrations/supabase/client";
+import i18n from "@/lib/i18n";
 
-const KEY = "kwalis.project-locks.v1";
+export const PROJECT_LOCK_EVENT = "kwalis:project-lock-change";
 
-type LockMap = Record<string, { locked: boolean; at: string }>;
+type LockRow = {
+  budget_status?: string | null;
+  status?: string | null;
+  locked_at?: string | null;
+  lock_reason?: string | null;
+};
 
-function read(): LockMap {
-  try {
-    return JSON.parse(localStorage.getItem(KEY) || "{}") as LockMap;
-  } catch {
-    return {};
-  }
+export interface ProjectLockState {
+  /** Project locked (or archived) in the database. */
+  projectLocked: boolean;
+  archived: boolean;
+  lockedAt: string | null;
+  reason: string | null;
+  /** Approved-budget lock. */
+  budgetLocked: boolean;
 }
-function write(map: LockMap) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(map));
-  } catch {}
-  window.dispatchEvent(new CustomEvent("kwalis:project-lock-change"));
-}
 
-export function isProjectLocked(projectId: string | null | undefined): boolean {
-  if (!projectId) return false;
-  return read()[projectId]?.locked === true;
+export function lockStateFromRow(row: LockRow | null): ProjectLockState {
+  const archived = row?.status === "Archived";
+  return {
+    projectLocked: !!row?.locked_at || archived,
+    archived,
+    lockedAt: row?.locked_at ?? null,
+    reason: row?.lock_reason ?? null,
+    budgetLocked: row?.budget_status === "Locked/Approved",
+  };
 }
 
 export function useProjectLock() {
   const pid = useStore((s) => s.activeProjectId);
-  const [locked, setLocked] = useState<boolean>(() => isProjectLocked(pid));
-  // The database is authoritative: `projects.budget_status = "Locked/Approved"`
-  // is what `is_budget_editable()` enforces in RLS. The local flag can only
-  // add a lock on top of it, never remove one.
-  const [dbLocked, setDbLocked] = useState(false);
+  const [state, setState] = useState<ProjectLockState>(() => lockStateFromRow(null));
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!pid) {
+      setState(lockStateFromRow(null));
+      return;
+    }
+    // locked_at / lock_reason come from db/pending/184; before it is applied
+    // the select fails and only the budget lock is known.
+    const full = await supabase
+      .from("projects")
+      .select("budget_status, status, locked_at, lock_reason" as never)
+      .eq("id", pid)
+      .maybeSingle();
+    if (!full.error) {
+      setState(lockStateFromRow(full.data as LockRow | null));
+      return;
+    }
+    const { data } = await supabase
+      .from("projects")
+      .select("budget_status, status" as never)
+      .eq("id", pid)
+      .maybeSingle();
+    setState(lockStateFromRow(data as LockRow | null));
+  }, [pid]);
 
   useEffect(() => {
     let cancelled = false;
-    if (!pid) {
-      setDbLocked(false);
-      return;
-    }
-    const refresh = async () => {
-      const { data } = await supabase
-        .from("projects")
-        .select("budget_status" as any)
-        .eq("id", pid)
-        .maybeSingle();
-      if (!cancelled) setDbLocked((data as any)?.budget_status === "Locked/Approved");
+    const run = () => {
+      if (!cancelled) void refresh();
     };
-    void refresh();
-    const onChange = () => void refresh();
-    window.addEventListener("kwalis:budget-status-change", onChange);
+    run();
+    window.addEventListener("kwalis:budget-status-change", run);
+    window.addEventListener(PROJECT_LOCK_EVENT, run);
     return () => {
       cancelled = true;
-      window.removeEventListener("kwalis:budget-status-change", onChange);
+      window.removeEventListener("kwalis:budget-status-change", run);
+      window.removeEventListener(PROJECT_LOCK_EVENT, run);
     };
-  }, [pid]);
+  }, [refresh]);
 
-  useEffect(() => {
-    const sync = () => setLocked(isProjectLocked(pid));
-    sync();
-    window.addEventListener("kwalis:project-lock-change", sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      window.removeEventListener("kwalis:project-lock-change", sync);
-      window.removeEventListener("storage", sync);
-    };
-  }, [pid]);
+  const setLocked = useCallback(
+    async (next: boolean, reason?: string) => {
+      if (!pid || busy) return;
+      setBusy(true);
+      const { error } = await supabase.rpc(
+        "set_project_lock" as never,
+        { p_project_id: pid, p_locked: next, p_reason: reason ?? null } as never,
+      );
+      setBusy(false);
+      if (error) {
+        toast.error(i18n.t("refs.lock_failed"));
+        return;
+      }
+      toast.success(i18n.t(next ? "refs.lock_done" : "refs.unlock_done"));
+      window.dispatchEvent(new CustomEvent(PROJECT_LOCK_EVENT));
+    },
+    [pid, busy],
+  );
 
   const toggle = useCallback(() => {
-    if (!pid) return;
-    const map = read();
-    const next = !map[pid]?.locked;
-    map[pid] = { locked: next, at: new Date().toISOString() };
-    write(map);
-    recordAudit({
-      category: "other",
-      action: next ? "project.locked" : "project.unlocked",
-      severity: "info",
-      summary: next
-        ? "Project version locked — payroll and budget edits disabled"
-        : "Project version unlocked",
-      entity: "Project",
-      project_id: pid,
-      details: { projectId: pid, at: map[pid].at },
-    });
-  }, [pid]);
+    void setLocked(!(state.projectLocked && !state.archived));
+  }, [setLocked, state.projectLocked, state.archived]);
 
-  return { locked: locked || dbLocked, localLocked: locked, dbLocked, toggle, projectId: pid };
+  return {
+    locked: state.projectLocked || state.budgetLocked,
+    /** The project lock itself (kept under its old name for callers). */
+    localLocked: state.projectLocked,
+    projectLocked: state.projectLocked,
+    archived: state.archived,
+    lockReason: state.reason,
+    dbLocked: state.budgetLocked,
+    busy,
+    toggle,
+    setLocked,
+    projectId: pid,
+  };
 }

@@ -30,6 +30,7 @@ import { useLockBodyScroll } from "@/hooks/use-lock-body-scroll";
 import { useSidebarCollapse } from "@/hooks/useSidebarCollapse";
 
 import { useGlobalSearch } from "@/lib/global-search";
+import { RefSearchResults } from "@/components/RefSearchResults";
 import { ProjectStatusBadge } from "@/components/ProjectBadges";
 import { NotificationBell } from "@/components/NotificationBell";
 import { InstallAppButton } from "@/components/InstallAppButton";
@@ -438,6 +439,7 @@ function AppShellChrome({
                     <X className="size-3.5" />
                   </button>
                 )}
+                {tenantShell && <RefSearchResults query={searchQuery} onPick={clearSearch} />}
               </div>
 
               <InstallAppButton />

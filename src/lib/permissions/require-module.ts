@@ -27,9 +27,11 @@
 
 import { redirect } from "@tanstack/react-router";
 import type { QueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import i18n from "@/lib/i18n";
 import { myPermissionsQueryOptions } from "./queries";
 import { buildPermissionState, can, type PermissionAction } from "./types";
-import { firstViewableModulePath, NO_ACCESS_PATH } from "./landing";
+import { firstViewableModulePath, NO_ACCESS_PATH, OPERATIONAL_FALLBACK } from "./landing";
 
 interface GuardContext {
   queryClient: QueryClient;
@@ -66,6 +68,10 @@ export function requireModule(moduleKey: string, action: PermissionAction = "vie
 
     const target = firstViewableModulePath(state) ?? NO_ACCESS_PATH;
     if (location.pathname === target) return; // never redirect onto ourselves
+    // X22: say why the page did not open instead of switching screens silently.
+    // (not for the default landing pages a fresh sign-in passes through)
+    if (target !== NO_ACCESS_PATH && !["/", OPERATIONAL_FALLBACK].includes(location.pathname))
+      toast.warning(i18n.t("refs.err_denied_toast"));
     throw redirect({ to: target as "/" });
   };
 }

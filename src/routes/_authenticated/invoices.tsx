@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell, PageTitle } from "@/components/AppShell";
 import { LockGuard } from "@/components/chrome/LockGuard";
+import { parseOpenParam } from "@/lib/document-refs";
 import { FinancialSummary, InvoiceTab } from "./accounting";
 
 import { useTranslation } from "react-i18next";
@@ -8,9 +9,13 @@ import { useTranslation } from "react-i18next";
  * Procurement → Invoices.
  */
 export const Route = createFileRoute("/_authenticated/invoices")({
-  validateSearch: (search: Record<string, unknown>): { focus?: string } => {
+  validateSearch: (search: Record<string, unknown>): { focus?: string; open?: string } => {
     const f = search.focus;
-    return typeof f === "string" && f ? { focus: f } : {};
+    const open = parseOpenParam(search.open);
+    return {
+      ...(typeof f === "string" && f ? { focus: f } : {}),
+      ...(open ? { open } : {}),
+    };
   },
   component: InvoicesRoute,
 });
@@ -18,7 +23,7 @@ export const Route = createFileRoute("/_authenticated/invoices")({
 function InvoicesRoute() {
   const { t } = useTranslation();
 
-  const { focus } = Route.useSearch();
+  const { focus, open } = Route.useSearch();
   return (
     <>
       <AppShell>
@@ -28,7 +33,7 @@ function InvoicesRoute() {
         </div>
         <FinancialSummary />
         <LockGuard scopeLabel="Invoices">
-          <InvoiceTab focus={focus} />
+          <InvoiceTab focus={open ?? focus} />
         </LockGuard>
       </AppShell>
     </>

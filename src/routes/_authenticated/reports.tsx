@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { useGlAccounts, GL_CATEGORIES, type GlAccountCategory } from "@/lib/gl-accounts";
 import { GlTransactionsReport } from "@/features/reports/gl-transactions/GlTransactionsReport";
 import { LEDGER_TABS, LedgerTab, isLedgerTab } from "@/features/reports/ledger/LedgerTabs";
+import { BudgetChangeLogReport } from "@/features/reports/budget-change-log/BudgetChangeLogReport";
 import {
   SOURCE_LABELS,
   type GlTransactionSource,
@@ -105,6 +106,7 @@ function ReportsPage() {
     | "vat"
     | "gosi"
     | (typeof LEDGER_TABS)[number]
+    | "budgetlog"
   >("final");
   const [exporting, setExporting] = useState<null | "excel" | "pdf">(null);
   const exportRef = useRef<ExportBuilder | null>(null);
@@ -171,6 +173,7 @@ function ReportsPage() {
     ["vat", "Tax & VAT Compliance"],
     ["gosi", "GOSI & Localization"],
     ...LEDGER_TABS.map((k) => [k, t(`journal.tab.${k}`)] as const),
+    ["budgetlog", t("refs.bcl_title")],
   ] as const;
   return (
     <>
@@ -180,7 +183,7 @@ function ReportsPage() {
           // The GL Transactions tab has its own export buttons gated on the
           // gl_transactions/export permission — the page-level exporter would
           // fall through to the GOSI dataset for this tab, so hide it there.
-          tab === "gltx" || isLedgerTab(tab) ? null : (
+          tab === "gltx" || isLedgerTab(tab) || tab === "budgetlog" ? null : (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => runExport("excel")}
@@ -245,6 +248,7 @@ function ReportsPage() {
         {tab === "vat" && <VatReport />}
         {tab === "gosi" && <GosiReport />}
         {isLedgerTab(tab) && <LedgerTab tab={tab} />}
+        {tab === "budgetlog" && <BudgetChangeLogReport />}
       </ReportExportContext.Provider>
     </>
   );

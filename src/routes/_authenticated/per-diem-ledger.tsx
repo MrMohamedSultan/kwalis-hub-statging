@@ -3,6 +3,8 @@ import { DateInput } from "@/components/ui/date-input";
 import { createFileRoute } from "@tanstack/react-router";
 import { storageAudited } from "@/lib/storage-audit";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { parseOpenParam } from "@/lib/document-refs";
+import { useOpenRowFocus } from "@/lib/use-open-focus";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
 import { useStore, formatUSD, formatSAR, useActiveFxRate } from "@/lib/store";
@@ -34,6 +36,10 @@ import {
 } from "@/lib/project-budget-lines";
 
 export const Route = createFileRoute("/_authenticated/per-diem-ledger")({
+  validateSearch: (s: Record<string, unknown>): { open?: string } => {
+    const open = parseOpenParam(s.open);
+    return open ? { open } : {};
+  },
   component: () => (
     <AppShell>
       <PerDiemLedgerPage />
@@ -135,6 +141,9 @@ function PerDiemLedgerPage() {
   const [codeByPerson, setCodeByPerson] = useState<Record<string, string>>({});
   const [lineIdByPerson, setLineIdByPerson] = useState<Record<string, string>>({});
   const [projectBudgetLines, setProjectBudgetLines] = useState<ProjectBudgetLine[]>([]);
+  // G11: ?open=<id> scrolls to that per-diem row and highlights it.
+  const { open: openId } = Route.useSearch();
+  useOpenRowFocus(openId, "perdiem-row-", !loading);
 
   const eligible = useMemo(
     () =>
@@ -1108,6 +1117,7 @@ function PersonBlock({
         return (
           <tr
             key={r.key}
+            id={r.id ? `perdiem-row-${r.id}` : undefined}
             className={`border-b border-border align-middle ${isSelected ? "bg-success/5" : ""} ${locked ? "opacity-90" : ""}`}
           >
             <td className="px-2 py-2">

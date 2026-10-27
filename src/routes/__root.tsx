@@ -9,6 +9,7 @@ import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { useEffect, type ReactNode } from "react";
 import { installTransientSessionGuard } from "@/lib/session-persistence";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
+import { NotFoundPage, UnexpectedErrorPage } from "@/components/ErrorPages";
 import appCss from "../styles.css?url";
 import { ThemeProvider } from "@/lib/theme";
 import { Toaster } from "@/components/ui/sonner";
@@ -17,8 +18,6 @@ import { registerServiceWorker } from "@/lib/pwa/register-sw";
 import { registerProjectQueryClient } from "@/lib/project-query-cache";
 import "@/lib/i18n";
 
-import { useTranslation } from "react-i18next";
-import i18n from "@/lib/i18n";
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
@@ -78,31 +77,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   component: RootComponent,
   // Without this, any thrown non-Error (e.g. `undefined`) unmounts the whole
   // tree and the app renders a blank screen instead of a recoverable state.
-  errorComponent: ({ error }) => (
-    <div className="min-h-screen grid place-items-center bg-background text-foreground p-6">
-      <div className="text-center max-w-md">
-        <h1 className="text-2xl font-bold">{i18n.t("root.scene_not_found")}</h1>
-        <p className="text-sm text-muted-foreground mt-2 break-words">
-          {(error as Error)?.message ?? "Unexpected error"}
-        </p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="mt-4 px-4 py-2 rounded-xl border border-border hover:bg-muted text-sm font-medium"
-        >
-          Reload
-        </button>
-      </div>
-    </div>
-  ),
-  notFoundComponent: () => (
-    <div className="min-h-screen grid place-items-center bg-background text-foreground">
-      <div className="text-center">
-        <h1 className="text-6xl font-bold">404</h1>
-        <p className="text-muted-foreground mt-2">{i18n.t("root.scene_not_found")}</p>
-      </div>
-    </div>
-  ),
+  errorComponent: ({ error, reset }) => <UnexpectedErrorPage error={error} reset={reset} />,
+  notFoundComponent: () => <NotFoundPage />,
 });
 
 function RootComponent() {

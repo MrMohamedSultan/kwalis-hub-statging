@@ -382,7 +382,16 @@ type ContractExtras = {
   whtTreatment: WhtTreatment;
 };
 
-export function PeoplePage({ kind, title }: { kind: "crew" | "cast"; title: string }) {
+export function PeoplePage({
+  kind,
+  title,
+  openId,
+}: {
+  kind: "crew" | "cast";
+  title: string;
+  /** G11 deep link: a contract (payroll row) id or a person id to open. */
+  openId?: string;
+}) {
   const { t } = useTranslation();
   const {
     people,
@@ -457,6 +466,17 @@ export function PeoplePage({ kind, title }: { kind: "crew" | "cast"; title: stri
     setEditing(p);
     setOpen(true);
   };
+  // G11: ?open=<id> opens that contract once the store has loaded.
+  const openedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openId || !storeReady || openedRef.current === openId) return;
+    const personId = payroll.find((r) => r.id === openId)?.refId ?? openId;
+    const person = people.find((p) => p.id === personId);
+    if (!person) return;
+    openedRef.current = openId;
+    openEdit(person);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, storeReady, people, payroll]);
   const close = () => {
     setOpen(false);
     setEditing(null);

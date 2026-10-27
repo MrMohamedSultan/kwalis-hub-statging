@@ -18,6 +18,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchRefMap } from "@/lib/document-refs";
 
 export type GlTransactionSource =
   "invoice" | "payroll" | "purchase_order" | "petty_cash" | "overtime" | "per_diem" | "payment";
@@ -31,6 +32,11 @@ export interface GlTransaction {
   entry_kind: GlEntryKind;
   entry_date: string | null;
   reference: string | null;
+  /** Kwalis reference number (db/pending/184), merged in from v_document_refs. */
+  ref_no?: string | null;
+  /** Payments / receipts: the document they belong to. */
+  parent_type?: string | null;
+  parent_id?: string | null;
   description: string | null;
   counterparty: string | null;
   budget_code: string | null;
@@ -74,10 +80,21 @@ export const SOURCE_TABLE: Record<GlTransactionSource, string> = {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** A reference is only shown when it is a human reference, never a raw UUID. */
+/**
+ * The reference shown in reports: the Kwalis ref_no (G06) when the document
+ * has one, else the document's own human number — never a raw UUID.
+ */
 export function humanRef(r: GlTransaction): string | null {
+  if (r.ref_no) return r.ref_no;
+  return externalRef(r);
+}
+
+/** The other party's number (vendor invoice no., PO no.), never a raw UUID. */
+export function externalRef(r: GlTransaction): string | null {
   if (!r.reference) return null;
-  return UUID_RE.test(r.reference.trim()) ? null : r.reference;
+  const v = r.reference.trim();
+  if (!v || UUID_RE.test(v) || v === r.ref_no) return null;
+  return v;
 }
 
 /**
@@ -134,6 +151,21 @@ async function fetchGlTransactions(projectId: string): Promise<GlTransaction[]> 
     baseCurrency = (data?.base_currency as string | null) ?? null;
   }
   for (const r of out) r.resolvedCurrency = r.currency ?? baseCurrency;
+
+  // G06: readable reference numbers live on the base tables; the ledger view
+  // is shared with other work, so they are merged in here by record id.
+  try {
+    const refs = await fetchRefMap(projectId);
+    for (const r of out) {
+      const ref = refs.get(r.id);
+      if (!ref) continue;
+      r.ref_no = ref.ref_no;
+      r.parent_type = ref.parent_type;
+      r.parent_id = ref.parent_id;
+    }
+  } catch {
+    // before db/pending/184 is applied the view does not exist: keep the old references
+  }
   return out;
 }
 
