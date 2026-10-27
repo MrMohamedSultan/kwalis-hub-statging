@@ -2929,5 +2929,11 @@
       "Other": "أخرى",
       "Adjustments": "تسويات"
     }
+  },
+  "exports": {
+    "footer_line": "صُدِّر من {{product}} · {{user}} · {{datetime}} (بتوقيت السعودية)",
+    "page_x_of_y": "صفحة {{page}} من {{total}}",
+    "project": "المشروع",
+    "no_rows": "لا توجد صفوف تطابق الفلاتر الحالية."
   }
 }

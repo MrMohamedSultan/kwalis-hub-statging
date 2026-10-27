@@ -2929,5 +2929,11 @@
       "Other": "Other",
       "Adjustments": "Adjustments"
     }
+  },
+  "exports": {
+    "footer_line": "Exported from {{product}} · {{user}} · {{datetime}} (Saudi time)",
+    "page_x_of_y": "Page {{page}} of {{total}}",
+    "project": "Project",
+    "no_rows": "No rows match the current filters."
   }
 }

@@ -1,126 +1,112 @@
 import { toast } from "sonner";
 import i18n from "i18next";
-import { loadPdf } from "@/lib/lazy-export-libs";
 import { projectHeaderLine } from "@/lib/project-metadata";
+import { createBrandedPdf } from "@/lib/export/pdf-core";
+import { normalizeForActiveProject } from "@/lib/export/branding";
+import { formatExportNumber } from "@/lib/export/number-format";
 
 export type PdfTable = {
   title: string;
   subtitle?: string;
   headers: string[];
   rows: (string | number)[][];
-  /** Columns rendered as currency (right-aligned, tabular). */
+  /** Columns rendered as currency (right-aligned, tabular, 2 decimals). */
   numericColumns?: number[];
+  /** Rows (by index) drawn bold — totals / subtotals. */
+  boldRows?: number[];
 };
 
 export type PdfMeta = {
   documentTitle?: string;
+  /** Small line under the title in the page header (filters, currency…). */
+  subtitle?: string;
   author?: string;
   /**
    * Language direction of the export. When "rtl" (Arabic), the document is
-   * flipped so headers/labels align to the right, timestamps align to the
-   * left, and column order is reversed so numeric columns stay at the reading
-   * end. Numeric column indexes are auto-remapped after reversal.
+   * flipped so headers/labels align to the right and column order is
+   * reversed so the reading flow matches the UI. Numeric column indexes are
+   * auto-remapped after reversal.
    */
   direction?: "ltr" | "rtl";
 };
 
+/** Render a cell for the PDF: money columns get grouping + 2 decimals. */
+export function pdfCell(value: string | number | null | undefined, numeric: boolean): string {
+  if (value == null) return "";
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return "";
+    if (numeric || !Number.isInteger(value)) return formatExportNumber(value, 2);
+    return String(value);
+  }
+  return String(value);
+}
+
 /**
- * Export one or more tables to a print-ready PDF.
- * - A4 landscape, page numbers, timestamp footer.
- * - Uses jspdf-autotable for clean typography and column layout.
- * - RTL-safe: pass `meta.direction: "rtl"` when exporting from the Arabic UI.
+ * Export one or more tables to a print-ready, branded PDF.
+ * - A4 landscape; shared Kwalis Hub header and footer on every page
+ *   (client logo, company, project / exported-by, Saudi time, page X of Y).
+ * - Arabic-capable embedded font (joined letters, correct direction).
+ * - File name normalised to KwalisHub_{ProjectCode}_{Report}_{YYYY-MM-DD}.pdf
  */
 export async function exportPdfReport(
   filename: string,
   tables: PdfTable[],
   meta?: PdfMeta,
 ): Promise<void> {
-  // jspdf + autotable are pulled on demand so they stay out of the entry bundle.
-  const { jsPDF, autoTable } = await loadPdf();
-  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const autoDir: "ltr" | "rtl" =
-    typeof document !== "undefined" &&
-    (document.documentElement.dir === "rtl" ||
-      document.documentElement.lang?.toLowerCase().startsWith("ar"))
-      ? "rtl"
-      : "ltr";
-  const rtl = (meta?.direction ?? autoDir) === "rtl";
-
-  const stamp = new Date().toLocaleString(rtl ? "ar-SA" : undefined);
-  doc.setProperties({
-    title: meta?.documentTitle ?? filename,
-    author: meta?.author ?? "TrackRoll",
-    creator: "TrackRoll",
+  const title = meta?.documentTitle ?? tables[0]?.title ?? i18n.t("export.report");
+  const pdf = await createBrandedPdf({
+    title,
+    subtitle: meta?.subtitle,
+    detail: projectHeaderLine() || undefined,
+    rtl: meta?.direction ? meta.direction === "rtl" : undefined,
   });
+  const { doc, autoTable, font, rtl } = pdf;
 
   tables.forEach((tbl, idx) => {
+    // The shared header is drawn by didDrawPage on every page of the table.
     if (idx > 0) doc.addPage();
 
     // Reverse column order in RTL so the reading flow matches the UI.
+    const colCount = tbl.headers.length;
+    const numericOrig = new Set(tbl.numericColumns ?? []);
+    const bodyRows = tbl.rows.map((r) => r.map((c, i) => pdfCell(c, numericOrig.has(i))));
     const headers = rtl ? [...tbl.headers].reverse() : tbl.headers;
-    const rows = rtl ? tbl.rows.map((r) => [...r].reverse()) : tbl.rows;
-    const colCount = headers.length;
-    const numericSet = new Set((tbl.numericColumns ?? []).map((i) => (rtl ? colCount - 1 - i : i)));
+    const rows = rtl ? bodyRows.map((r) => [...r].reverse()) : bodyRows;
+    const numericSet = new Set([...numericOrig].map((i) => (rtl ? colCount - 1 - i : i)));
+    const boldRows = new Set(tbl.boldRows ?? []);
 
-    // Header band
-    doc.setFillColor(15, 23, 42); // slate-900
-    doc.rect(0, 0, pageWidth, 56, "F");
-    doc.setTextColor(255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    const titleText = meta?.documentTitle ?? `TrackRoll ${i18n.t("export.report")}`;
-    if (rtl) {
-      doc.text(titleText, pageWidth - 32, 24, { align: "right" });
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.text(stamp, 32, 24, { align: "left" });
-    } else {
-      doc.text(titleText, 32, 24);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.text(stamp, pageWidth - 32, 24, { align: "right" });
+    let y = pdf.contentTop;
+    const showTableTitle = tables.length > 1 || tbl.title !== title;
+    if (showTableTitle) {
+      doc.setFont(font, "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42);
+      doc.text(tbl.title, pdf.startX, y, { align: pdf.startAlign });
+      y += 14;
     }
-
-    // Live production header (Project Settings) — always the latest saved values.
-    const headerLine = projectHeaderLine();
-    if (headerLine) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(203, 213, 225);
-      doc.text(headerLine, rtl ? pageWidth - 32 : 32, 44, {
-        align: rtl ? "right" : "left",
-      });
-    }
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text(tbl.title, rtl ? pageWidth - 32 : 32, 78, {
-      align: rtl ? "right" : "left",
-    });
     if (tbl.subtitle) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
+      doc.setFont(font, "normal");
+      doc.setFontSize(8.5);
       doc.setTextColor(100, 116, 139);
-      doc.text(tbl.subtitle, rtl ? pageWidth - 32 : 32, 94, {
-        align: rtl ? "right" : "left",
-      });
+      doc.text(tbl.subtitle, pdf.startX, y, { align: pdf.startAlign });
+      y += 12;
       doc.setTextColor(15, 23, 42);
     }
 
     autoTable(doc, {
-      startY: tbl.subtitle ? 104 : 90,
+      startY: y + 2,
       head: [headers],
-      body: rows.map((r) => r.map((c) => (c == null ? "" : String(c)))),
+      body: rows,
+      showHead: "everyPage",
       styles: {
-        fontSize: 9,
-        cellPadding: 5,
+        font,
+        fontSize: 8.5,
+        cellPadding: 4,
         overflow: "linebreak",
         halign: rtl ? "right" : "left",
       },
       headStyles: {
+        font,
         fillColor: [30, 41, 59],
         textColor: 255,
         fontStyle: "bold",
@@ -130,26 +116,32 @@ export async function exportPdfReport(
       columnStyles: Object.fromEntries(
         headers.map((_, i) => [
           i,
-          numericSet.has(i) ? { halign: "right" } : rtl ? { halign: "right" } : {},
+          numericSet.has(i)
+            ? { halign: "right" as const }
+            : rtl
+              ? { halign: "right" as const }
+              : {},
         ]),
       ),
-      margin: { left: 32, right: 32, bottom: 40 },
-      didDrawPage: () => {
-        const page = doc.getNumberOfPages();
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        doc.setTextColor(100, 116, 139);
-        doc.text(`${i18n.t("export.page")} ${page}`, rtl ? 32 : pageWidth - 32, pageHeight - 20, {
-          align: rtl ? "left" : "right",
-        });
-        doc.setTextColor(15, 23, 42);
+      didParseCell: (data) => {
+        if (data.section === "body" && boldRows.has(data.row.index)) {
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.fillColor = [226, 232, 240];
+        }
       },
+      margin: {
+        top: pdf.contentTop,
+        left: pdf.margin,
+        right: pdf.margin,
+        bottom: pdf.contentBottom,
+      },
+      didDrawPage: () => pdf.drawHeader(),
     });
   });
 
-  const outName = filename.endsWith(".pdf") ? filename : `${filename}.pdf`;
+  const outName = normalizeForActiveProject(filename, "pdf");
   try {
-    doc.save(outName);
+    pdf.save(outName);
     toast.success(i18n.t("export.pdfReady"), { description: outName });
   } catch (err) {
     toast.error(i18n.t("export.pdfFailed"), {
