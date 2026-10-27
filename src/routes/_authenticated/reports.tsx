@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { useGlAccounts, GL_CATEGORIES, type GlAccountCategory } from "@/lib/gl-accounts";
 import { GlTransactionsReport } from "@/features/reports/gl-transactions/GlTransactionsReport";
+import { BudgetChangeLogReport } from "@/features/reports/budget-change-log/BudgetChangeLogReport";
 import {
   SOURCE_LABELS,
   type GlTransactionSource,
@@ -69,7 +70,17 @@ function ReportsPage() {
   const { t } = useTranslation();
 
   const [tab, setTab] = useState<
-    "gl" | "glacct" | "gltx" | "paid" | "final" | "rebate" | "qfe" | "tracking" | "vat" | "gosi"
+    | "gl"
+    | "glacct"
+    | "gltx"
+    | "paid"
+    | "final"
+    | "rebate"
+    | "qfe"
+    | "tracking"
+    | "vat"
+    | "gosi"
+    | "budgetlog"
   >("final");
   const [exporting, setExporting] = useState<null | "excel" | "pdf">(null);
   const [seasonFilter, setSeasonFilterState] = useState<string>("all");
@@ -513,6 +524,7 @@ function ReportsPage() {
     ["tracking", "Rebate Tracking"],
     ["vat", "Tax & VAT Compliance"],
     ["gosi", "GOSI & Localization"],
+    ["budgetlog", t("refs.bcl_title")],
   ] as const;
   return (
     <>
@@ -522,7 +534,7 @@ function ReportsPage() {
           // The GL Transactions tab has its own export buttons gated on the
           // gl_transactions/export permission — the page-level exporter would
           // fall through to the GOSI dataset for this tab, so hide it there.
-          tab === "gltx" ? null : (
+          tab === "gltx" || tab === "budgetlog" ? null : (
             <div className="flex items-center gap-2">
               <button
                 onClick={handleExportExcel}
@@ -585,6 +597,7 @@ function ReportsPage() {
       {tab === "tracking" && <RebateTrackingReport />}
       {tab === "vat" && <VatReport />}
       {tab === "gosi" && <GosiReport />}
+      {tab === "budgetlog" && <BudgetChangeLogReport />}
     </>
   );
 }
