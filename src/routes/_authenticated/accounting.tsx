@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { LockGuard } from "@/components/chrome/LockGuard";
@@ -1620,7 +1621,7 @@ function VendorLedgerModal({ vendor, onClose }: { vendor: Vendor; onClose: () =>
                       </div>
                     </div>
                     <time className="text-[10px] text-muted-foreground shrink-0" dir="ltr">
-                      {new Date(r.created_at).toLocaleString()}
+                      {formatDateTime(r.created_at)}
                     </time>
                   </li>
                 );

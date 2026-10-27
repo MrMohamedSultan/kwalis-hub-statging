@@ -1,14 +1,13 @@
+import { formatDate } from "@/lib/date-format";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { STATUS_CONFIG, fmt, useStatusLabel } from "./payables-utils";
 import type { PayableMilestone } from "./payables-types";
 
-/** Short, locale-stable due-date label: "12 Mar". */
+/** Due-date label in the platform format — always with the year (G05). */
 function formatDue(due?: string): string | null {
   if (!due) return null;
-  const d = new Date(due);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+  return formatDate(due) || null;
 }
 
 /** Unpaid milestone whose due date has already passed. */

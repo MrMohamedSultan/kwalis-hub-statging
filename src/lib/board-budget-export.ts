@@ -2,6 +2,7 @@
 // Produces the exact same hierarchy the on-screen grid shows:
 // group → header section → detail lines → totals.
 
+import { formatDateTime } from "@/lib/date-format";
 import type ExcelJSTypes from "exceljs";
 import { loadExcelJs } from "@/lib/lazy-export-libs";
 import { exportPdfReport } from "@/lib/export-pdf";
@@ -116,7 +117,7 @@ export async function exportBoardBudgetExcel(payload: BoardExportPayload): Promi
   title.font = { bold: true, size: 14, color: { argb: NAVY } };
 
   const meta = ws.addRow([
-    `Project code: ${payload.projectCode || "—"}   |   Status: ${payload.status}   |   Generated: ${new Date().toLocaleString()}`,
+    `Project code: ${payload.projectCode || "—"}   |   Status: ${payload.status}   |   Generated: ${formatDateTime(new Date())}`,
   ]);
   ws.mergeCells(meta.number, 1, meta.number, COLUMNS.length);
   meta.font = { size: 9, color: { argb: "FF666666" } };

@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DateInput } from "@/components/ui/date-input";
 import { toast } from "sonner";
@@ -592,7 +593,7 @@ function RunRow({
                         </div>
                       </div>
                       <time className="text-muted-foreground shrink-0">
-                        {new Date(ev.created_at).toLocaleString()}
+                        {formatDateTime(ev.created_at)}
                       </time>
                     </li>
                   ))}

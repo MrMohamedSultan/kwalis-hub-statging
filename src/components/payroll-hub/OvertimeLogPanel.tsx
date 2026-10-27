@@ -1,6 +1,7 @@
 // Overtime tracking log.
 // Actual overtime is calculated from the overtime_rate / overtime_unit saved on
 // each contract (public.people) — the contract total itself is never touched.
+import { formatDate } from "@/lib/date-format";
 import { DateInput } from "@/components/ui/date-input";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -630,7 +631,7 @@ export function OvertimeLogPanel() {
                         {r.approved_by
                           ? (approverNames[r.approved_by] ?? r.approved_by.slice(0, 8))
                           : "—"}{" "}
-                        · {new Date(r.approved_at).toLocaleDateString()}
+                        · {formatDate(r.approved_at)}
                       </div>
                     )}
                   </td>

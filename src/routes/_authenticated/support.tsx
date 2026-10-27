@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
@@ -292,7 +293,7 @@ function SupportPage() {
                       <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
                         <span>{t(`support.category.${ticket.category}`)}</span>
                         <span>·</span>
-                        <span>{new Date(ticket.created_at).toLocaleString()}</span>
+                        <span>{formatDateTime(ticket.created_at)}</span>
                       </div>
                     </div>
                     <span
@@ -336,7 +337,7 @@ function SupportPage() {
                             {ticket.admin_reply}
                             {ticket.admin_replied_at && (
                               <div className="text-[11px] text-muted-foreground mt-1">
-                                {new Date(ticket.admin_replied_at).toLocaleString()}
+                                {formatDateTime(ticket.admin_replied_at)}
                               </div>
                             )}
                           </div>

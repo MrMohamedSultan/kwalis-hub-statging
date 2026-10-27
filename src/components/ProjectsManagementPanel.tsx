@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/date-format";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Panel } from "@/components/AppShell";
 import { Modal } from "@/components/Modal";
@@ -443,7 +444,7 @@ export function ProjectsManagementPanel() {
                       <ProjectStatusBadge value={p.status} />
                     </td>
                     <td className="py-2 pr-3 text-muted-foreground">
-                      {p.start_date ? new Date(p.start_date).toLocaleDateString("en-GB") : "—"}
+                      {p.start_date ? formatDate(p.start_date) : "—"}
                     </td>
                     <td className="py-2 pr-3">
                       <div className="flex justify-end gap-2">

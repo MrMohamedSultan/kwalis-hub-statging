@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
 import { supabase } from "@/integrations/supabase/client";
@@ -126,7 +127,7 @@ export function PettyCashHistoryModal({
                     </div>
                   </div>
                   <time className="text-[11px] text-muted-foreground shrink-0" dir="ltr">
-                    {new Date(r.created_at).toLocaleString()}
+                    {formatDateTime(r.created_at)}
                   </time>
                 </div>
               </li>

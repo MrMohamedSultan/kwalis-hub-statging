@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { useMemo, useRef, useState, useCallback } from "react";
 import { loadXlsx } from "@/lib/lazy-export-libs";
 import { Modal } from "@/components/Modal";
@@ -402,7 +403,7 @@ export function CrewPayrollTab({
       [
         {
           title: `${moduleLabel} — Contracts`,
-          subtitle: `${scopeLabel} · Generated ${new Date().toLocaleString()}`,
+          subtitle: `${scopeLabel} · Generated ${formatDateTime(new Date())}`,
           headers: [
             "Beneficiary",
             "Kind",
@@ -449,8 +450,8 @@ export function CrewPayrollTab({
             e.Date,
             formatUSD(e.Amount),
             e.BankRef,
-            e.ApprovedAt ? new Date(e.ApprovedAt).toLocaleString() : "",
-            e.PaidAt ? new Date(e.PaidAt).toLocaleString() : "",
+            e.ApprovedAt ? formatDateTime(e.ApprovedAt) : "",
+            e.PaidAt ? formatDateTime(e.PaidAt) : "",
           ]),
           numericColumns: [4],
         },

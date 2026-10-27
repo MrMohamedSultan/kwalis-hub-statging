@@ -14,6 +14,7 @@
 //   the flat BudgetLine[] payload the backend expects.
 // ═══════════════════════════════════════════════════════════════════
 
+import { formatDate } from "@/lib/date-format";
 import type ExcelJS from "exceljs";
 import { loadExcelJs } from "@/lib/lazy-export-libs";
 import { downloadBlob } from "@/lib/download";
@@ -536,7 +537,7 @@ export async function buildBudgetWorkbook(
     ["Project Title", projectDetails.projectTitle],
     ["Budget Version", projectDetails.budgetVersion],
     ["Version Date", projectDetails.versionDate],
-    ["Exported On", projectDetails.exportedOn || new Date().toLocaleDateString("en-GB")],
+    ["Exported On", projectDetails.exportedOn || formatDate(new Date())],
     ["Production Company", projectDetails.productionCompany],
     ["Line Producer", projectDetails.lineProducer],
     ["Shoot Days", projectDetails.shootDays],

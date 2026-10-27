@@ -1,3 +1,4 @@
+import { formatDate, formatDateTime } from "@/lib/date-format";
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -111,9 +112,7 @@ export function BudgetGovernancePanel({
       .select("user_id")
       .eq("project_id", projectId)
       .in("user_id", memberIds);
-    const projectMemberIds = Array.from(
-      new Set((pms ?? []).map((r: any) => r.user_id as string)),
-    );
+    const projectMemberIds = Array.from(new Set((pms ?? []).map((r: any) => r.user_id as string)));
     if (projectMemberIds.length) {
       const { data: allProfs } = await supabase
         .from("profiles")
@@ -205,7 +204,6 @@ export function BudgetGovernancePanel({
       setBusy(false);
     }
   }
-
 
   const style = STATUS_STYLE[status];
   const myApprover = approvers.find((a) => a.userId === roles.userId);
@@ -406,7 +404,7 @@ export function BudgetGovernancePanel({
                   </span>
                   {a.decidedAt && (
                     <span className="text-[10px] text-muted-foreground dark:text-muted-foreground hidden sm:inline">
-                      {new Date(a.decidedAt).toLocaleDateString()}
+                      {formatDate(a.decidedAt)}
                     </span>
                   )}
                   {canManage && !isExecutive && (
@@ -577,12 +575,7 @@ function ApprovalActivityLog({ projectId, refreshKey }: { projectId: string; ref
             className="grid grid-cols-1 sm:grid-cols-[110px_auto_1fr_auto] items-start gap-x-2 gap-y-0.5 text-[11px] bg-surface-2 dark:bg-black/20 rounded-md px-2 py-1.5"
           >
             <span className="text-muted-foreground dark:text-muted-foreground tabular-nums shrink-0 whitespace-nowrap">
-              {new Date(e.created_at).toLocaleString(undefined, {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+              {formatDateTime(e.created_at)}
             </span>
             <span className="font-semibold text-foreground dark:text-foreground shrink-0">
               {labelFor(e.action)}

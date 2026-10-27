@@ -64,7 +64,7 @@ import {
   type TemplateMismatch,
 } from "@/lib/excelTemplate";
 import { supabase } from "@/integrations/supabase/client";
-import { formatDateDMY } from "@/lib/date-format";
+import { formatDate, formatDateDMY, formatDateTime } from "@/lib/date-format";
 import { toast } from "sonner";
 import { recordAudit } from "@/lib/audit-log";
 import { useCan } from "@/lib/rbac";
@@ -4114,7 +4114,7 @@ export function ViewEditBudget() {
                       projectTitle: proj?.name ?? "Budget",
                       budgetVersion: proj?.budgetStatus ?? "v1",
                       versionDate: dateStr,
-                      exportedOn: new Date().toLocaleDateString("en-GB"),
+                      exportedOn: formatDate(new Date()),
                     },
                   );
                   toast.success(
@@ -6597,7 +6597,7 @@ function exportTopSheetPDF(a: TopSheetExportArgs) {
       <tr class="grand"><td></td><td>${esc(t("export.grandTotalExVat"))}</td><td class="num">${fmt(a.grandSAR)}</td></tr>
     </tbody>
   </table>
-  <div class="meta">${esc(t("export.generated", { stamp: new Date().toLocaleString(rtl ? "ar-SA-u-nu-latn" : undefined) }))} · Kwalis HUB</div>
+  <div class="meta">${esc(t("export.generated", { stamp: formatDateTime(new Date()) }))} · Kwalis HUB</div>
   <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
   </body></html>`;
 

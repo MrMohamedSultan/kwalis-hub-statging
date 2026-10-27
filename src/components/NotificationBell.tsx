@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -188,7 +189,7 @@ export function NotificationBell() {
                           <div className="text-muted-foreground line-clamp-2">{n.body}</div>
                         )}
                         <div className="text-[10px] text-muted-foreground/70 mt-0.5">
-                          {new Date(n.created_at).toLocaleString()}
+                          {formatDateTime(n.created_at)}
                         </div>
                       </div>
                     </div>

@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { useState, KeyboardEvent } from "react";
 import { DateInput } from "@/components/ui/date-input";
 import {
@@ -164,7 +165,7 @@ function BudgetHeaderHistoryModal({ onClose }: { onClose: () => void }) {
                   </div>
                   <div className="text-right text-xs text-muted-foreground shrink-0">
                     <div>{h.versionDate}</div>
-                    <div className="opacity-70">{new Date(h.savedAt).toLocaleString()}</div>
+                    <div className="opacity-70">{formatDateTime(h.savedAt)}</div>
                   </div>
                 </li>
               ))}

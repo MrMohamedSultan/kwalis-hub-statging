@@ -1,6 +1,7 @@
 // Quick Mapping Assistant — inline fixer for unmapped budget lines and
 // transactions that break the Top Sheet rollup. Reachable from the
 // validation banner on the Top Sheet Cost Report.
+import { formatDateTime } from "@/lib/date-format";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { History, Wand2 } from "lucide-react";
@@ -385,7 +386,7 @@ export function TopSheetQuickMapModal({
                             {desc}
                           </span>
                           <span className="text-muted-foreground whitespace-nowrap">
-                            {new Date(e.created_at).toLocaleString()}
+                            {formatDateTime(e.created_at)}
                           </span>
                         </div>
                         {fields.map((f) => {

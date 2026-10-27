@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/date-format";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DateInput } from "@/components/ui/date-input";
 import {
@@ -604,7 +605,7 @@ export function ProductionDashboard() {
                       <div className="text-sm font-medium truncate">{r.title}</div>
                       <div className="text-xs text-muted-foreground truncate">
                         {r.subtitle || (r.kind === "invoice" ? "Invoice" : "Petty cash")}
-                        {r.date ? ` · ${new Date(r.date).toLocaleDateString()}` : ""}
+                        {r.date ? ` · ${formatDate(r.date)}` : ""}
                       </div>
                     </div>
                     <div className="tabular-nums text-sm font-semibold whitespace-nowrap">
@@ -789,7 +790,7 @@ function DrillModal({
                     <div className="text-sm font-medium truncate">{t.title}</div>
                     <div className="text-xs text-muted-foreground truncate">
                       {t.subtitle || (t.kind === "invoice" ? "Invoice" : "Petty cash")}
-                      {t.date ? ` · ${new Date(t.date).toLocaleDateString()}` : ""}
+                      {t.date ? ` · ${formatDate(t.date)}` : ""}
                       {` · ${t.category}`}
                     </div>
                   </div>

@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/date-format";
 import { createFileRoute } from "@tanstack/react-router";
 import { DateInput } from "@/components/ui/date-input";
 import { storageAudited } from "@/lib/storage-audit";
@@ -438,9 +439,7 @@ function PettyCashPage() {
                       key={a.id}
                       className={`border-t border-border ${isChild ? "bg-info/[0.04]" : ""}`}
                     >
-                      <td className="p-3 text-muted-foreground">
-                        {new Date(a.created_at).toLocaleDateString()}
-                      </td>
+                      <td className="p-3 text-muted-foreground">{formatDate(a.created_at)}</td>
                       <td className="p-3">
                         <div
                           className="flex items-center gap-2"
@@ -723,7 +722,7 @@ function PettyCashPage() {
                 return (
                   <tr key={r.id} className="border-t border-border">
                     <td className="p-3 text-muted-foreground">
-                      {r.date ?? new Date(r.created_at).toLocaleDateString()}
+                      {r.date ?? formatDate(r.created_at)}
                     </td>
                     <td className="p-3">{holder ?? "—"}</td>
                     <td className="p-3">{r.vendor ?? r.received_from ?? "—"}</td>
@@ -811,7 +810,7 @@ function PettyCashPage() {
                 return (
                   <tr key={`pd-${p.id}`} className="border-t border-border bg-info/[0.03]">
                     <td className="p-3 text-muted-foreground">
-                      {p.date ? new Date(p.date).toLocaleDateString() : "—"}
+                      {p.date ? formatDate(p.date) : "—"}
                     </td>
                     <td className="p-3">{holder ?? "—"}</td>
                     <td className="p-3">{p.person_name}</td>
@@ -1367,8 +1366,7 @@ function PickAdvanceModal({
               <div className="font-medium">{holder}</div>
               <div className="text-xs text-muted-foreground">
                 {fmtAmount(Number(a.total_advance) || 0, a.currency)} ·{" "}
-                {FLOAT_TYPE_LABELS[a.float_type]} · issued{" "}
-                {new Date(a.created_at).toLocaleDateString()}
+                {FLOAT_TYPE_LABELS[a.float_type]} · issued {formatDate(a.created_at)}
               </div>
             </button>
           );

@@ -4,6 +4,7 @@
 // owners; these components render cross-company aggregates.
 // ═══════════════════════════════════════════════════════════════════
 
+import { formatDate } from "@/lib/date-format";
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
@@ -219,7 +220,7 @@ export function PlatformProjectsOverview() {
                     </span>
                   </td>
                   <td className="px-2 py-2 tabular-nums text-muted-foreground">
-                    {new Date(p.created_at).toLocaleDateString()}
+                    {formatDate(p.created_at)}
                   </td>
                 </tr>
               ))}
@@ -300,7 +301,7 @@ export function OrgTable() {
                     {c.projectCount}
                   </td>
                   <td className="px-2 py-2 tabular-nums text-muted-foreground">
-                    {c.onboarded_at ? new Date(c.onboarded_at).toLocaleDateString() : "—"}
+                    {c.onboarded_at ? formatDate(c.onboarded_at) : "—"}
                   </td>
                 </tr>
               ))}

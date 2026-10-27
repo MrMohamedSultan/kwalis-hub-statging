@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/date-format";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { PaymentRequest } from "@/lib/payment-requests";
@@ -15,13 +16,7 @@ type Step = {
 function fmt(at: string | null) {
   if (!at) return "";
   try {
-    return new Date(at).toLocaleString("ar-SA", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return formatDateTime(at);
   } catch {
     return at;
   }
