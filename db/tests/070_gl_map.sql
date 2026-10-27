@@ -50,4 +50,5 @@ RESET ROLE;
 SET session_replication_role = replica;
 UPDATE invoices SET gl_account_id = NULL WHERE id='60000000-0000-0000-0000-000000000001';
 SET session_replication_role = origin;
-SELECT t.eq('gl_accounts catalogue untouched', (SELECT count(*) FROM gl_accounts), 26::bigint);
+-- 174 adds balance-sheet accounts (category 'Balance Sheet'); 070 itself adds none
+SELECT t.eq('gl_accounts catalogue untouched', (SELECT count(*) FROM gl_accounts WHERE category <> 'Balance Sheet'), 26::bigint);
