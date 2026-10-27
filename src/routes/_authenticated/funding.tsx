@@ -16,17 +16,21 @@ import {
   Save,
   X,
   Scale,
+  AlertTriangle,
+  Upload,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { useStore } from "@/lib/store";
-import { useLedgerSync, ledgerPaidTotal } from "@/lib/ledger-sync";
 import {
   useFundingEntries,
+  useFundingPosition,
   useVatPayments,
   useReconciliation,
   type FundingKind,
   type FundingEntry,
+  type TaxPaymentKind,
 } from "@/lib/funding-store";
+import { cashPosition } from "@/lib/budget-position";
 import { downloadCSV } from "@/lib/export-csv";
 import { exportPdfReport } from "@/lib/export-pdf";
 import { useTranslation } from "react-i18next";
@@ -118,86 +122,36 @@ function FundingPage() {
   );
 }
 
+/**
+ * A12: the cash figures come from the database (get_funding_position), the
+ * same definitions as the reports and the ledger:
+ *   Cash Balance = Funding − Paid − VAT paid + VAT recovered − WHT remitted
+ *   Upcoming     = approved, not paid yet; Expected balance = Cash − Upcoming
+ */
 function useTotals() {
-  const invoices = useStore((s) => s.invoices);
-  const payroll = useStore((s) => s.payroll);
-  const receipts = useStore((s) => s.receipts);
-  const { items: funding } = useFundingEntries();
-  const { items: vat } = useVatPayments();
-  const ledgerPaid = useLedgerSync(ledgerPaidTotal);
-  const ledgerScheduled = useLedgerSync(
-    (s) => s.scheduled.cast + s.scheduled.crew + s.scheduled.vendor,
-  );
-
+  const { data } = useFundingPosition();
   return useMemo(() => {
-    const inflows = funding.reduce((s, e) => s + Number(e.amount || 0), 0);
-
-    let invoiceTotal = 0;
-    let invoiceVat = 0;
-    for (const i of invoices) {
-      const p = Number(i.price || 0);
-      invoiceTotal += p;
-      if (i.vatable) invoiceVat += p - p / 1.15;
-    }
-    // Live payroll: sum ledger entries by status. Approved+Paid feed Approved Expenditures
-    // so each Pay/Approve/MarkPaid click in Cast/Crew Payroll instantly moves KPIs.
-    let payrollPaid = 0;
-    let payrollApproved = 0; // approved (not yet paid)
-    let payrollPending = 0;
-    let payrollCommitted = 0;
-    for (const p of payroll) {
-      payrollCommitted += Number(p.totalAmount || 0);
-      const schedule = Array.isArray(p.paymentSchedule) ? p.paymentSchedule : [];
-      if (schedule.length > 0) {
-        // Contract milestones (Crew & Cast payables) are the source of truth when
-        // a schedule exists — the legacy ledger JSON is only used for old rows.
-        const base = Number(p.netPayable ?? p.totalAmount) || 0;
-        for (const m of schedule) {
-          const amt =
-            m.amount !== null && m.amount !== undefined
-              ? Number(m.amount)
-              : (base * Number(m.percent ?? 0)) / 100;
-          if (m.status === "Paid") payrollPaid += amt;
-          else if (m.status === "Approved") payrollApproved += amt;
-          else if (m.status === "Hold") payrollPending += amt;
-          // "Committed (contracts)" shows what is still owed, not the full contract.
-          if (m.status === "Paid" || m.status === "Approved") payrollCommitted -= amt;
-        }
-        continue;
-      }
-      for (const e of p.ledger ?? []) {
-        const amt = Number(e.amount || 0);
-        if (e.status === "Paid") payrollPaid += amt;
-        else if (e.status === "Approved") payrollApproved += amt;
-        else if (e.status === "Pending Approval") payrollPending += amt;
-      }
-    }
-    // Fold ledger-table paid totals (payroll_payments) into the same KPIs so
-    // add/edit/delete on the Payroll Hub instantly moves Net Cash Available.
-    payrollPaid += ledgerPaid;
-    payrollCommitted += Math.max(0, ledgerScheduled - ledgerPaid);
-    const payrollTotal = payrollPaid + payrollApproved;
-    const receiptsTotal = receipts.reduce((s, r) => s + Number(r.amount || 0), 0);
-
-    const approvedExpenditures = invoiceTotal + payrollTotal + receiptsTotal;
-    const directVat = vat.reduce((s, v) => s + Number(v.amount || 0), 0);
-    const netCash = inflows - (approvedExpenditures + directVat);
-
+    const d = data;
+    const pos = cashPosition({
+      funding: d?.funding ?? 0,
+      paid: d?.paid ?? 0,
+      vatPaid: d?.vat_paid ?? 0,
+      vatRecovered: d?.vat_recovered ?? 0,
+      whtRemitted: d?.wht_remitted ?? 0,
+      upcoming: d?.upcoming ?? 0,
+    });
     return {
-      inflows,
-      approvedExpenditures,
-      invoiceVat,
-      directVat,
-      netCash,
-      invoiceTotal,
-      payrollTotal,
-      payrollPaid,
-      payrollApproved,
-      payrollPending,
-      payrollCommitted,
-      receiptsTotal,
+      ...pos,
+      loaded: !!d,
+      fundingExpected: d?.funding_expected ?? 0,
+      upcomingInvoices: d?.upcoming_invoices ?? 0,
+      upcomingInstalments: d?.upcoming_instalments ?? 0,
+      actual: d?.actual ?? 0,
+      commitment: d?.commitment ?? 0,
+      payable: d?.payable ?? 0,
+      taxNet: pos.vatPaid - pos.vatRecovered + pos.whtRemitted,
     };
-  }, [invoices, payroll, receipts, funding, vat, ledgerPaid, ledgerScheduled]);
+  }, [data]);
 }
 
 function CashFlowDashboard() {
@@ -205,37 +159,42 @@ function CashFlowDashboard() {
   const { t: tr, i18n } = useTranslation();
   const dir = (i18n.language || "en").startsWith("ar") ? "rtl" : "ltr";
   const { snap, save, clear } = useReconciliation();
-  const { items: funding } = useFundingEntries();
-  const { items: vat } = useVatPayments();
 
   const [bank, setBank] = useState(snap?.bankBalance != null ? String(snap.bankBalance) : "");
   const [asOf, setAsOf] = useState(snap?.asOfDate ?? todayIso());
   const [reconNote, setReconNote] = useState(snap?.note ?? "");
   const [bankErr, setBankErr] = useState<string | null>(null);
 
-  const burnPct =
-    t.inflows > 0 ? Math.min(100, ((t.approvedExpenditures + t.directVat) / t.inflows) * 100) : 0;
+  const burnPct = t.utilisationPct == null ? null : Math.min(100, t.utilisationPct);
   const bankBalance = snap?.bankBalance ?? null;
-  const variance = bankBalance != null ? bankBalance - t.netCash : null;
+  const variance = bankBalance != null ? bankBalance - t.cashBalance : null;
+
+  const metricRows = (): [string, number][] => [
+    [tr("glossary.term.funding"), t.funding],
+    [tr("glossary.cash.fundingExpected"), t.fundingExpected],
+    [tr("glossary.term.paid"), t.paid],
+    [tr("glossary.cash.vatPaid"), t.vatPaid],
+    [tr("glossary.cash.vatRecovered"), t.vatRecovered],
+    [tr("glossary.cash.whtRemitted"), t.whtRemitted],
+    [tr("glossary.term.cashBalance"), t.cashBalance],
+    [tr("glossary.cash.upcoming"), t.upcoming],
+    [tr("glossary.cash.expectedBalance"), t.expectedBalance],
+    [tr("glossary.term.actual"), t.actual],
+    [tr("glossary.term.payable"), t.payable],
+    [tr("glossary.term.commitment"), t.commitment],
+    ...(bankBalance != null
+      ? ([
+          [tr("funding.tileBank"), bankBalance],
+          [tr("funding.tileVariance"), variance ?? 0],
+        ] as [string, number][])
+      : []),
+  ];
 
   const exportCsv = () => {
-    const rows = [
-      { Metric: "Total Funding Inflows", "Amount (SAR)": t.inflows },
-      { Metric: "Vendor Invoices (incl. VAT)", "Amount (SAR)": t.invoiceTotal },
-      { Metric: "Payroll", "Amount (SAR)": t.payrollTotal },
-      { Metric: "Petty Cash Receipts", "Amount (SAR)": t.receiptsTotal },
-      { Metric: "Approved Expenditures (total)", "Amount (SAR)": t.approvedExpenditures },
-      { Metric: "Direct VAT Payments", "Amount (SAR)": t.directVat },
-      { Metric: "Embedded VAT in Invoices", "Amount (SAR)": Math.round(t.invoiceVat) },
-      { Metric: "Net Cash Available", "Amount (SAR)": t.netCash },
-      ...(bankBalance != null
-        ? [
-            { Metric: "Bank Balance (Reconciled)", "Amount (SAR)": bankBalance },
-            { Metric: "Variance (Bank − Net Cash)", "Amount (SAR)": variance ?? 0 },
-          ]
-        : []),
-    ];
-    downloadCSV(`cash-flow-${todayIso()}`, rows);
+    downloadCSV(
+      `cash-flow-${todayIso()}`,
+      metricRows().map(([m, v]) => ({ Metric: m, "Amount (SAR)": v })),
+    );
     toast.success(i18n.t("funding.cash_flow_exported_csv"));
   };
 
@@ -244,51 +203,27 @@ function CashFlowDashboard() {
       `cash-flow-${todayIso()}.pdf`,
       [
         {
-          title: "Cash Flow Dashboard",
-          subtitle: `As of ${todayIso()} — VAT-aware liquidity`,
+          title: tr("funding.title"),
+          subtitle: `${tr("funding.asOfDate")} ${todayIso()}`,
           headers: ["Metric", "Amount (SAR)"],
           numericColumns: [1],
-          rows: [
-            ["Total Funding Inflows", fmt(t.inflows)],
-            ["Vendor Invoices (incl. VAT)", fmt(t.invoiceTotal)],
-            ["Payroll", fmt(t.payrollTotal)],
-            ["Petty Cash Receipts", fmt(t.receiptsTotal)],
-            ["Approved Expenditures (total)", fmt(t.approvedExpenditures)],
-            ["Direct VAT Payments", fmt(t.directVat)],
-            ["Embedded VAT in Invoices", fmt(t.invoiceVat)],
-            ["Net Cash Available", fmt(t.netCash)],
-            ...(bankBalance != null
-              ? [
-                  ["Bank Balance (Reconciled)", fmt(bankBalance)],
-                  ["Variance (Bank − Net Cash)", fmt(variance ?? 0)],
-                ]
-              : []),
-          ],
+          rows: metricRows().map(([m, v]) => [m, fmt(v)]),
         },
       ],
-      { documentTitle: "Cash Flow Report" },
+      { documentTitle: tr("funding.title") },
     );
     toast.success(i18n.t("funding.cash_flow_exported_pdf"));
   };
 
   const submitRecon = () => {
-    const err = validateAmount(bank);
-    // Bank balance can be zero (allow), but not negative or blank
     if (bank.trim() === "") {
-      setBankErr("Bank balance is required");
+      setBankErr(tr("glossary.cash.bankRequired"));
       return;
     }
     const n = Number(bank);
     if (!Number.isFinite(n)) {
-      setBankErr("Bank balance must be a number");
+      setBankErr(tr("glossary.cash.bankNumber"));
       return;
-    }
-    if (n < 0) {
-      setBankErr("Bank balance cannot be negative");
-      return;
-    }
-    if (err && n !== 0) {
-      /* allow zero */
     }
     setBankErr(null);
     save({ bankBalance: n, asOfDate: asOf, note: reconNote.trim() || undefined });
@@ -302,45 +237,79 @@ function CashFlowDashboard() {
           onClick={exportCsv}
           className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-[hsl(var(--surface-2))] px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
         >
-          <Download className="size-3.5" /> Export CSV
+          <Download className="size-3.5" /> {tr("glossary.export.csv")}
         </button>
         <button
           onClick={exportPdf}
           className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-[hsl(var(--surface-2))] px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
         >
-          <FileText className="size-3.5" /> Export PDF
+          <FileText className="size-3.5" /> {tr("glossary.export.pdf")}
         </button>
       </div>
 
+      {t.loaded && !t.hasFunding && (
+        <div
+          className="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-foreground"
+          dir={dir}
+          role="status"
+        >
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
+          <div>
+            <div className="font-semibold">{tr("glossary.cash.noFunding")}</div>
+            <div className="text-xs text-muted-foreground">{tr("glossary.cash.noFundingHint")}</div>
+          </div>
+        </div>
+      )}
+      {t.loaded && t.paymentsExceedFunding && (
+        <div
+          className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+          dir={dir}
+          role="alert"
+        >
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <div>
+            {tr("glossary.cash.paymentsExceedFunding", {
+              paid: fmtSAR(t.paid),
+              funding: fmtSAR(t.funding),
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4" dir={dir}>
-        <Kpi label={tr("funding.kpiInflows")} value={t.inflows} icon={TrendingUp} tone="pos" />
+        <Kpi label={tr("glossary.term.funding")} value={t.funding} icon={TrendingUp} tone="pos" />
+        <Kpi label={tr("glossary.term.paid")} value={t.paid} icon={TrendingDown} tone="neg" />
+        <Kpi label={tr("glossary.cash.taxNet")} value={t.taxNet} icon={ReceiptText} tone="neg" />
         <Kpi
-          label={tr("funding.kpiApproved")}
-          value={t.approvedExpenditures}
-          icon={TrendingDown}
-          tone="neg"
-        />
-        <Kpi label={tr("funding.kpiVat")} value={t.directVat} icon={ReceiptText} tone="neg" />
-        <Kpi
-          label={tr("funding.kpiNetCash")}
-          value={t.netCash}
+          label={tr("glossary.term.cashBalance")}
+          value={t.cashBalance}
           icon={Banknote}
-          tone={t.netCash >= 0 ? "pos" : "neg"}
+          tone={t.cashBalance >= 0 ? "pos" : "neg"}
           highlight
+        />
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2" dir={dir}>
+        <Kpi label={tr("glossary.cash.upcoming")} value={t.upcoming} icon={Wallet} tone="neg" />
+        <Kpi
+          label={tr("glossary.cash.expectedBalance")}
+          value={t.expectedBalance}
+          icon={Scale}
+          tone={t.expectedBalance >= 0 ? "pos" : "neg"}
         />
       </div>
 
       <div className="rounded-xl border border-border bg-[hsl(var(--surface-2))] p-4" dir={dir}>
         <div className="flex justify-between text-sm mb-2">
-          <span className="text-foreground font-medium">{tr("funding.utilization")}</span>
+          <span className="text-foreground font-medium">{tr("glossary.cash.utilisation")}</span>
           <span className="text-muted-foreground tabular-nums" dir="ltr">
-            {burnPct.toFixed(1)}%
+            {burnPct == null ? tr("glossary.cash.noFunding") : `${burnPct.toFixed(1)}%`}
           </span>
         </div>
         <div className="h-3 rounded-full bg-surface-2 overflow-hidden">
           <div
-            className={`h-full transition-all ${burnPct >= 90 ? "bg-destructive" : burnPct >= 70 ? "bg-warning" : "bg-success"}`}
-            style={{ width: `${burnPct}%` }}
+            className={`h-full transition-all ${(burnPct ?? 0) >= 90 ? "bg-destructive" : (burnPct ?? 0) >= 70 ? "bg-warning" : "bg-success"}`}
+            style={{ width: `${burnPct ?? 0}%` }}
           />
         </div>
       </div>
@@ -365,7 +334,6 @@ function CashFlowDashboard() {
             <label className="text-xs text-muted-foreground">{tr("funding.bankBalance")}</label>
             <input
               type="number"
-              min="0"
               step="0.01"
               placeholder="0"
               value={bank}
@@ -414,9 +382,9 @@ function CashFlowDashboard() {
           <div className="grid gap-3 md:grid-cols-3 mt-4">
             <ReconTile label={tr("funding.tileBank")} value={snap.bankBalance} tone="neutral" />
             <ReconTile
-              label={tr("funding.tileNetSystem")}
-              value={t.netCash}
-              tone={t.netCash >= 0 ? "pos" : "neg"}
+              label={tr("glossary.term.cashBalance")}
+              value={t.cashBalance}
+              tone={t.cashBalance >= 0 ? "pos" : "neg"}
             />
             <ReconTile
               label={tr("funding.tileVariance")}
@@ -432,30 +400,37 @@ function CashFlowDashboard() {
 
       <div className="grid gap-3 md:grid-cols-2" dir={dir}>
         <Breakdown
-          title={tr("funding.breakdown")}
+          title={tr("glossary.cash.position")}
           rows={[
-            { label: tr("funding.vendorInvoices"), value: t.invoiceTotal },
-            { label: tr("funding.payrollPaid"), value: t.payrollPaid },
-            { label: tr("funding.payrollApproved"), value: t.payrollApproved },
-            { label: tr("funding.payrollPending"), value: t.payrollPending, muted: true },
-            { label: tr("funding.payrollCommitted"), value: t.payrollCommitted, muted: true },
-            { label: tr("funding.pettyCash"), value: t.receiptsTotal },
-            { label: tr("funding.embeddedVat"), value: t.invoiceVat, muted: true },
+            { label: tr("glossary.term.actual"), value: t.actual },
+            { label: tr("glossary.term.paid"), value: t.paid },
+            { label: tr("glossary.term.payable"), value: t.payable },
+            { label: tr("glossary.cash.upcomingInvoices"), value: t.upcomingInvoices, muted: true },
+            {
+              label: tr("glossary.cash.upcomingInstalments"),
+              value: t.upcomingInstalments,
+              muted: true,
+            },
+            { label: tr("glossary.term.commitment"), value: t.commitment, muted: true },
           ]}
         />
         <Breakdown
           title={tr("funding.equation")}
           rows={[
-            { label: tr("funding.eqInflows"), value: t.inflows },
-            { label: tr("funding.eqMinusApproved"), value: -t.approvedExpenditures },
-            { label: tr("funding.eqMinusVat"), value: -t.directVat },
-            { label: tr("funding.eqNetCash"), value: t.netCash, bold: true },
+            { label: tr("glossary.term.funding"), value: t.funding },
+            { label: tr("glossary.cash.minusPaid"), value: -t.paid },
+            { label: tr("glossary.cash.minusVatPaid"), value: -t.vatPaid },
+            { label: tr("glossary.cash.plusVatRecovered"), value: t.vatRecovered },
+            { label: tr("glossary.cash.minusWht"), value: -t.whtRemitted },
+            { label: tr("glossary.term.cashBalance"), value: t.cashBalance, bold: true },
+            { label: tr("glossary.cash.minusUpcoming"), value: -t.upcoming },
+            { label: tr("glossary.cash.expectedBalance"), value: t.expectedBalance, bold: true },
           ]}
         />
       </div>
 
       <p className="text-xs text-muted-foreground" dir={dir}>
-        {tr("funding.liveNote")}
+        {tr("glossary.cash.note")}
       </p>
     </div>
   );
@@ -567,10 +542,41 @@ const emptyForm = (): FormState => ({
   note: "",
 });
 
+/** Entries kept in this browser before funding moved to the database (A09). */
+function LegacyImportBanner({
+  count,
+  onImport,
+}: {
+  count: number;
+  onImport: () => Promise<boolean>;
+}) {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  if (count === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-foreground">
+      <span>{t("glossary.cash.legacyFound", { count })}</span>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          const ok = await onImport();
+          setBusy(false);
+          if (ok) toast.success(t("glossary.cash.legacyImported"));
+        }}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+      >
+        <Upload className="size-3.5" /> {t("glossary.cash.legacyImport")}
+      </button>
+    </div>
+  );
+}
+
 function FundingInflowsTab() {
   const { t } = useTranslation();
 
-  const { items, add, remove, update } = useFundingEntries();
+  const { items, add, remove, update, legacy, importLegacy } = useFundingEntries();
   const [form, setForm] = useState<FormState>(emptyForm());
   const [errors, setErrors] = useState<{ source?: string; amount?: string }>({});
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -680,6 +686,7 @@ function FundingInflowsTab() {
 
   return (
     <div className="space-y-4">
+      <LegacyImportBanner count={legacy.length} onImport={importLegacy} />
       <div className="rounded-xl border border-border bg-[hsl(var(--surface-2))] p-4">
         <h3 className="text-sm font-semibold text-foreground mb-3">
           {t("funding.log_new_inflow")}
@@ -926,10 +933,21 @@ function FundingInflowsTab() {
 function VatPaymentsTab() {
   const { t } = useTranslation();
 
-  const { items, add, remove } = useVatPayments();
-  const [form, setForm] = useState({ date: todayIso(), amount: "", reference: "", note: "" });
+  const { items, add, remove, legacy, importLegacy } = useVatPayments();
+  const [form, setForm] = useState({
+    date: todayIso(),
+    amount: "",
+    reference: "",
+    note: "",
+    kind: "vat_paid" as TaxPaymentKind,
+  });
+  const kindLabel = (k?: TaxPaymentKind) => t(`glossary.cash.kind.${k ?? "vat_paid"}`);
   const [amtErr, setAmtErr] = useState<string | null>(null);
-  const total = items.reduce((s, e) => s + Number(e.amount || 0), 0);
+  // net cash out to the tax authority: VAT paid + WHT remitted − VAT recovered
+  const total = items.reduce(
+    (s, e) => s + (e.kind === "vat_recovered" ? -1 : 1) * Number(e.amount || 0),
+    0,
+  );
 
   const submit = () => {
     const err = validateAmount(form.amount);
@@ -939,12 +957,13 @@ function VatPaymentsTab() {
       return;
     }
     add({
+      kind: form.kind,
       date: form.date,
       amount: Number(form.amount),
       reference: form.reference.trim() || undefined,
       note: form.note.trim() || undefined,
     });
-    setForm({ date: todayIso(), amount: "", reference: "", note: "" });
+    setForm({ date: todayIso(), amount: "", reference: "", note: "", kind: form.kind });
     toast.success(t("funding.vat_payment_logged"));
   };
 
@@ -953,6 +972,7 @@ function VatPaymentsTab() {
       `vat-payments-${todayIso()}`,
       items.map((e) => ({
         Date: e.date,
+        Kind: kindLabel(e.kind),
         "Amount (SAR)": e.amount,
         Reference: e.reference ?? "",
         Note: e.note ?? "",
@@ -964,23 +984,42 @@ function VatPaymentsTab() {
       {
         title: "Direct VAT Payments",
         subtitle: `Total: ${fmtSAR(total)}`,
-        headers: ["Date", "Amount (SAR)", "Reference", "Note"],
-        numericColumns: [1],
-        rows: items.map((e) => [e.date, fmt(e.amount), e.reference ?? "—", e.note ?? "—"]),
+        headers: ["Date", "Kind", "Amount (SAR)", "Reference", "Note"],
+        numericColumns: [2],
+        rows: items.map((e) => [
+          e.date,
+          kindLabel(e.kind),
+          fmt(e.amount),
+          e.reference ?? "—",
+          e.note ?? "—",
+        ]),
       },
     ]);
   };
 
   return (
     <div className="space-y-4">
+      <LegacyImportBanner count={legacy.length} onImport={importLegacy} />
       <div className="rounded-xl border border-border bg-[hsl(var(--surface-2))] p-4">
         <h3 className="text-sm font-semibold text-foreground mb-1">
-          {t("funding.log_direct_vat_payment")}
+          {t("glossary.cash.taxTitle")}
         </h3>
         <p className="text-xs text-muted-foreground mb-3">
           {t("funding.track_vat_paid_directly_to_tax_authorities_outside")}
         </p>
-        <div className="grid gap-2 md:grid-cols-5">
+        <div className="grid gap-2 md:grid-cols-6">
+          <select
+            value={form.kind}
+            onChange={(e) => setForm({ ...form, kind: e.target.value as TaxPaymentKind })}
+            aria-label={t("glossary.cash.kindLabel")}
+            className="rounded-lg border border-border bg-[hsl(var(--surface-2))] px-3 py-2 text-sm text-foreground"
+          >
+            {(["vat_paid", "vat_recovered", "wht_remitted"] as TaxPaymentKind[]).map((k) => (
+              <option key={k} value={k}>
+                {kindLabel(k)}
+              </option>
+            ))}
+          </select>
           <input
             type="date"
             value={form.date}
@@ -1031,7 +1070,9 @@ function VatPaymentsTab() {
 
       <div className="rounded-xl border border-border bg-[hsl(var(--surface-2))] overflow-hidden">
         <div className="flex justify-between items-center p-4 border-b border-border flex-wrap gap-2">
-          <h3 className="text-sm font-semibold text-foreground">VAT Payments ({items.length})</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {t("glossary.cash.taxList", { count: items.length })}
+          </h3>
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-destructive">Total: {fmtSAR(total)}</span>
             <button
@@ -1059,10 +1100,13 @@ function VatPaymentsTab() {
             <table className="w-full text-sm">
               <thead className="bg-surface text-muted-foreground">
                 <tr>
-                  <th className="text-left px-4 py-2 font-medium">Date</th>
-                  <th className="text-right px-4 py-2 font-medium">{t("funding.amount_sar")}</th>
-                  <th className="text-left px-4 py-2 font-medium">{t("funding.reference")}</th>
-                  <th className="text-left px-4 py-2 font-medium">{t("funding.note")}</th>
+                  <th className="text-start px-4 py-2 font-medium">{t("glossary.cash.dateCol")}</th>
+                  <th className="text-start px-4 py-2 font-medium">
+                    {t("glossary.cash.kindLabel")}
+                  </th>
+                  <th className="text-end px-4 py-2 font-medium">{t("funding.amount_sar")}</th>
+                  <th className="text-start px-4 py-2 font-medium">{t("funding.reference")}</th>
+                  <th className="text-start px-4 py-2 font-medium">{t("funding.note")}</th>
                   <th className="px-2 py-2"></th>
                 </tr>
               </thead>
@@ -1070,6 +1114,7 @@ function VatPaymentsTab() {
                 {items.map((e) => (
                   <tr key={e.id} className="border-t border-border text-foreground">
                     <td className="px-4 py-2">{e.date}</td>
+                    <td className="px-4 py-2">{kindLabel(e.kind)}</td>
                     <td className="px-4 py-2 text-right tabular-nums font-medium text-destructive">
                       {fmt(e.amount)}
                     </td>
