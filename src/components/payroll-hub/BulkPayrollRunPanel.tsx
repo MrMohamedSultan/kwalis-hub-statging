@@ -334,36 +334,41 @@ function RunRow({
     };
     if (next === "submitted") patch.submitted_at = nowIso;
     if (next === "approved") patch.approved_at = nowIso;
-    if (next === "posted") patch.posted_at = nowIso;
+
+    if (next === "posted") {
+      // B21 — one payment path: posting never marks anything paid. The
+      // database (post_payroll_run, db/pending/176) turns every line into an
+      // instalment + a payment request on Payment Approvals, refuses timesheet
+      // lines for people paid through contract instalments, and settles the
+      // attached overtime so it cannot be put in another run.
+      const { error: totalsErr } = await supabase
+        .from("payroll_runs")
+        .update({ gross_total: gross, net_total: net || gross, wht_total: wht })
+        .eq("id", run.id);
+      if (totalsErr) {
+        toast.error(totalsErr.message);
+        setBusy(false);
+        return;
+      }
+      const { data, error: postErr } = await (supabase.rpc as any)("post_payroll_run", {
+        _run: run.id,
+      });
+      setBusy(false);
+      if (postErr) {
+        toast.error(postErr.message);
+        return;
+      }
+      const n = Number((data as { payment_requests?: number } | null)?.payment_requests ?? 0);
+      toast.success(t("approvals.payroll.posted", { count: n }));
+      onChanged();
+      return;
+    }
+
     const { error } = await supabase.from("payroll_runs").update(patch).eq("id", run.id);
     if (error) {
       toast.error(error.message);
       setBusy(false);
       return;
-    }
-    if (next === "posted") {
-      const inserts = items.map((it) => ({
-        organization_id: run.organization_id,
-        project_id: run.project_id,
-        ref_id: `PR-${run.id.slice(0, 8)}-${it.id.slice(0, 4)}`,
-        name: it.beneficiary_name,
-        kind: run.kind || "crew",
-        total_amount: Number(it.net || it.gross || 0),
-        budget_code: it.budget_code,
-        payments: ["Paid"],
-        percents: [100],
-      }));
-      if (inserts.length > 0) {
-        const { error: e2 } = await supabase.from("payroll").insert(inserts);
-        if (e2) toast.error(`Posted but ledger insert failed: ${e2.message}`);
-      }
-      // Settle the approved overtime attached to this run so it can never be paid twice.
-      const { error: e3 } = await supabase
-        .from("overtime_entries")
-        .update({ status: "paid", paid_at: nowIso })
-        .eq("payroll_run_id", run.id)
-        .eq("status", "approved");
-      if (e3) toast.error(`Posted but overtime settlement failed: ${e3.message}`);
     }
 
     setBusy(false);
