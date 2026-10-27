@@ -7,7 +7,7 @@
 //   EFC          estimated final cost + variance       ← get_cost_report
 //   Paid         cash settled to date
 //   Budget       approved (active) budget
-//   Available    budget − actual − committed, one stacked bar
+//   Remaining    budget − actual − commitment (glossary), one stacked bar
 //   Timeline     production days: total / elapsed / remaining
 //   By section   budget vs committed vs actual per Top Sheet section
 //
@@ -125,8 +125,12 @@ export function PerformanceOverview({
     () => (cost.data && cost.data.length ? cost.data.reduce((s, r) => s + r.efc, 0) : budget),
     [cost.data, budget],
   );
-  const variance = budget - efc; // + under budget / − over budget
+  const variance = budget - efc; // glossary Variance: + saving / − overrun
   const over = variance < -0.5;
+  // B18: "headroom" is the Remaining Budget (Budget − Actual − Commitment).
+  // With the default ETC (= Remaining) EFC equals the budget, so Variance is 0
+  // by definition and was the wrong figure to show as headroom.
+  const headroom = over ? Math.abs(variance) : Math.max(available, 0);
 
   const sections = useMemo(() => {
     const m = new Map<
@@ -211,18 +215,18 @@ export function PerformanceOverview({
             {over ? t("perf.yes") : t("perf.no")}
           </div>
           <div className="mt-3 text-xs text-ink-muted">
-            {over ? t("perf.overBy") : t("perf.headroom")}{" "}
+            {over ? t("perf.overBy") : t("glossary.dash.headroom")}{" "}
             <span className="font-semibold text-ink-primary" dir="ltr">
-              {money(Math.abs(variance))}
+              {money(headroom)}
             </span>
           </div>
         </div>
         <Headline
-          label={t("perf.efc")}
+          label={t("glossary.term.efc")}
           value={money(efc)}
           sub={
             <>
-              {t("perf.variance")}{" "}
+              {t("glossary.term.variance")}{" "}
               <span
                 dir="ltr"
                 className={`font-semibold ${over ? "text-status-critical" : "text-status-good"}`}
@@ -234,9 +238,12 @@ export function PerformanceOverview({
           }
         />
         <Headline
-          label={t("perf.paid")}
+          label={t("glossary.term.paid")}
           value={money(paid)}
-          sub={t("perf.paidSub", { pct: (actual > 0 ? (paid / actual) * 100 : 0).toFixed(1) })}
+          sub={t("glossary.dash.paidSub", {
+            pct: (actual > 0 ? (paid / actual) * 100 : 0).toFixed(1),
+            payable: money(Math.max(actual - paid, 0)),
+          })}
         />
         <Headline label={t("perf.budget")} value={money(budget)} sub={t("perf.budgetSub")} />
       </div>
@@ -244,7 +251,7 @@ export function PerformanceOverview({
       {/* ── Available for new commitments ───────────────────────────── */}
       <div className="rounded-xl border border-border bg-surface p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <div className="text-xs font-medium text-ink-muted">{t("perf.available")}</div>
+          <div className="text-xs font-medium text-ink-muted">{t("glossary.term.remaining")}</div>
           <div
             className={`text-2xl font-semibold tracking-tight ${available < 0 ? "text-status-critical" : "text-ink-primary"}`}
           >
@@ -275,17 +282,17 @@ export function PerformanceOverview({
         <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-secondary">
           <Legend2
             color={colors.data1}
-            label={t("perf.actual")}
+            label={t("glossary.term.actual")}
             value={`${pct(actual).toFixed(1)}%`}
           />
           <Legend2
             color={colors.data3}
-            label={t("perf.committed")}
+            label={t("glossary.term.commitment")}
             value={`${pct(committed).toFixed(1)}%`}
           />
           <Legend2
             color="var(--muted)"
-            label={t("perf.availableShort")}
+            label={t("glossary.term.remaining")}
             value={`${Math.max(0, pct(available)).toFixed(1)}%`}
           />
         </div>
@@ -347,7 +354,7 @@ export function PerformanceOverview({
                 },
                 {
                   key: "committedC",
-                  label: t("perf.committed"),
+                  label: t("glossary.term.commitment"),
                   align: "end",
                   numeric: true,
                   format: (r) =>
@@ -355,7 +362,7 @@ export function PerformanceOverview({
                 },
                 {
                   key: "actualC",
-                  label: t("perf.actual"),
+                  label: t("glossary.term.actual"),
                   align: "end",
                   numeric: true,
                   format: (r) =>
@@ -410,14 +417,14 @@ export function PerformanceOverview({
                   />
                   <Bar
                     dataKey="committedC"
-                    name={t("perf.committed")}
+                    name={t("glossary.term.commitment")}
                     fill={colors.data3}
                     radius={[4, 4, 0, 0]}
                     maxBarSize={28}
                   />
                   <Bar
                     dataKey="actualC"
-                    name={t("perf.actual")}
+                    name={t("glossary.term.actual")}
                     fill={colors.data1}
                     radius={[4, 4, 0, 0]}
                     maxBarSize={28}

@@ -75,6 +75,8 @@ function BudgetReconciliationPage() {
   const [rows, setRows] = useState<ReconRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [onlyDiscrepancies, setOnlyDiscrepancies] = useState(false);
+  // B19: hundreds of untouched codes — hidden by default
+  const [hideZero, setHideZero] = useState(true);
 
   const applyPreset = (key: PresetKey) => {
     setPreset(key);
@@ -115,18 +117,29 @@ function BudgetReconciliationPage() {
     void load();
   }, [load]);
 
+  const nonZero = useMemo(
+    () =>
+      hideZero
+        ? rows.filter((r) =>
+            [r.master_planned, r.master_actual, r.project_estimate, r.committed, r.actuals].some(
+              (v) => Math.abs(v) >= 0.005,
+            ),
+          )
+        : rows,
+    [rows, hideZero],
+  );
   const visible = useMemo(
     () =>
       onlyDiscrepancies
-        ? rows.filter(
+        ? nonZero.filter(
             (r) =>
               !r.in_master ||
               r.is_header ||
               Math.abs(money(r.master_actual - r.actuals)) > 0.01 ||
               Math.abs(money(r.master_planned - r.project_estimate)) > 0.01,
           )
-        : rows,
-    [rows, onlyDiscrepancies],
+        : nonZero,
+    [nonZero, onlyDiscrepancies],
   );
 
   const totals = useMemo(
@@ -166,11 +179,11 @@ function BudgetReconciliationPage() {
       Currency: r.currency,
       "Master Planned": r.master_planned,
       "Project Estimate": r.project_estimate,
-      Committed: r.committed,
-      "Actuals (paid)": r.actuals,
+      [i18n.t("glossary.term.commitment")]: r.committed,
+      [i18n.t("glossary.term.actual")]: r.actuals,
       "Master Actual": r.master_actual,
       "Actuals Δ (Master − Rolled-up)": money(r.master_actual - r.actuals),
-      Variance: r.variance,
+      [i18n.t("glossary.term.remaining")]: r.variance,
     }));
 
   const exportCsv = () => {
@@ -183,11 +196,11 @@ function BudgetReconciliationPage() {
       Currency: "",
       "Master Planned": totals.master_planned,
       "Project Estimate": totals.project_estimate,
-      Committed: totals.committed,
-      "Actuals (paid)": totals.actuals,
+      [i18n.t("glossary.term.commitment")]: totals.committed,
+      [i18n.t("glossary.term.actual")]: totals.actuals,
       "Master Actual": totals.master_actual,
       "Actuals Δ (Master − Rolled-up)": money(totals.master_actual - totals.actuals),
-      Variance: totals.variance,
+      [i18n.t("glossary.term.remaining")]: totals.variance,
     };
     downloadCSV(`${fileBase}.csv`, [...csvRows(), totalsRow] as Record<string, unknown>[]);
     toast.success(t("budget_reconciliation.reconciliation_exported"));
@@ -206,11 +219,11 @@ function BudgetReconciliationPage() {
             "Description",
             "Master Planned",
             "Estimate",
-            "Committed",
-            "Actuals",
+            i18n.t("glossary.term.commitment"),
+            i18n.t("glossary.term.actual"),
             "Master Actual",
             "Δ Actuals",
-            "Variance",
+            i18n.t("glossary.term.remaining"),
           ],
           rows: [
             ...visible.map((r) => [
@@ -297,6 +310,14 @@ function BudgetReconciliationPage() {
             />
             {t("budget_reconciliation.only_discrepancies")}
           </label>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={hideZero}
+              onChange={(e) => setHideZero(e.target.checked)}
+            />
+            {t("glossary.cost.hideZero")}
+          </label>
           <div className="ms-auto flex gap-2">
             <button
               type="button"
@@ -365,8 +386,8 @@ function BudgetReconciliationPage() {
                     {t("budget_reconciliation.master_planned")}
                   </th>
                   <th className="text-right py-2 px-3">Estimate</th>
-                  <th className="text-right py-2 px-3">Committed</th>
-                  <th className="text-right py-2 px-3">Actuals</th>
+                  <th className="text-end py-2 px-3">{t("glossary.term.commitment")}</th>
+                  <th className="text-end py-2 px-3">{t("glossary.term.actual")}</th>
                   <th className="text-right py-2 px-3">
                     {t("budget_reconciliation.master_actual")}
                   </th>
