@@ -2929,5 +2929,198 @@
       "Other": "Other",
       "Adjustments": "Adjustments"
     }
+  },
+  "approvals": {
+    "title": "Payment Approvals",
+    "subtitle": "Request → approve → pay. Approvers and payers act here.",
+    "noPermission": "You don't have access to payment approvals. Ask your organization admin for one of these permissions:",
+    "pickProject": "Select a project to see its payment requests.",
+    "loading": "Loading…",
+    "working": "Working…",
+    "close": "Close",
+    "empty": "No requests match this filter.",
+    "emptyMyTurn": "Nothing is waiting for your approval.",
+    "countOf": "{{shown}} of {{total}} requests",
+    "trail": "Audit trail",
+    "showTrail": "Show audit trail",
+    "hideTrail": "Hide audit trail",
+    "selectAll": "Select all",
+    "selectOne": "Select request",
+    "levelProgress": "Approval levels: {{done}} of {{total}}",
+    "waitingFor": "Waiting for: {{label}}",
+    "contractApproveFailed": "The contract could not be approved.",
+    "confirmDeleteDraft": "Delete this draft?",
+    "rejectTitle": "Reject payment request",
+    "cancelTitle": "Cancel payment request",
+    "rejectReason": "Reason for rejection",
+    "cancelReason": "Reason for cancelling",
+    "cancelExplain": "The request stays on record as Cancelled with your reason; the amount is released.",
+    "reasonPlaceholder": "The requester will see this reason…",
+    "reasonTooShort": "Please write a reason (at least 3 characters).",
+    "confirmReject": "Reject",
+    "confirmCancel": "Cancel request",
+    "confirmPaid": "Confirm payment",
+    "executeTitle": "Pay and upload receipt",
+    "paymentDate": "Payment date",
+    "paymentMethod": "Payment method",
+    "tab": {
+      "all": "All",
+      "myTurn": "My turn"
+    },
+    "status": {
+      "draft": "Draft",
+      "waiting_approval": "Requested",
+      "approved": "Approved",
+      "paid": "Paid",
+      "rejected": "Rejected",
+      "cancelled": "Cancelled"
+    },
+    "col": {
+      "source": "Source",
+      "type": "Type",
+      "amount": "Amount",
+      "totalRequested": "Total / requested before",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "module": {
+      "label": "Module",
+      "all": "All modules",
+      "contracts": "Crew & cast contracts",
+      "payroll": "Payroll",
+      "vendor": "Vendors, invoices & POs",
+      "petty_cash": "Petty cash"
+    },
+    "type": {
+      "invoice": "Invoice",
+      "purchase_order": "Purchase order",
+      "petty_cash": "Petty cash",
+      "payroll_row": "Payroll",
+      "crew_contract": "Crew contract",
+      "cast_contract": "Cast contract",
+      "vendor_contract": "Vendor contract",
+      "instalment": "Contract instalment",
+      "payroll_run": "Payroll run line"
+    },
+    "method": {
+      "Cash": "Cash",
+      "Transfer": "Bank transfer",
+      "Check": "Cheque",
+      "Card": "Card",
+      "Bank": "Bank"
+    },
+    "action": {
+      "submit": "Send for approval",
+      "deleteDraft": "Delete draft",
+      "approve": "Approve",
+      "approveLevel": "Approve (level {{level}} of {{total}})",
+      "reject": "Reject",
+      "execute": "Pay & upload receipt",
+      "viewReceipt": "View receipt",
+      "cancel": "Cancel",
+      "cancelHint": "Cancel with a reason — the request stays on record"
+    },
+    "bulk": {
+      "approve": "Approve selected",
+      "selected": "{{count}} of {{total}} selected",
+      "available": "{{count}} requests waiting for your approval in this view",
+      "done": "Approved: {{count}}",
+      "partial": "Approved: {{ok}} · failed: {{fail}}"
+    },
+    "toast": {
+      "submitted": "Sent for approval.",
+      "draftSaved": "Draft saved.",
+      "submitFailed": "Could not send the request.",
+      "createFailed": "Could not create the request.",
+      "approved": "Request approved.",
+      "levelApproved": "Your level is approved — the request moves to the next approver.",
+      "approveFailed": "Could not approve the request.",
+      "rejected": "Request rejected.",
+      "cancelled": "Request cancelled.",
+      "deleted": "Draft deleted.",
+      "deleteFailed": "Could not delete.",
+      "paid": "Payment recorded.",
+      "payFailed": "Could not record the payment.",
+      "proofFailed": "Could not open the receipt.",
+      "actionFailed": "The action failed."
+    },
+    "receipt": {
+      "label": "Receipt / proof of payment",
+      "replace": "Replace file",
+      "pick": "Click to attach the receipt — PDF, PNG or JPEG (max 10 MB)",
+      "formats": "Accepted: PDF, PNG, JPEG · max 10 MB",
+      "preview": "Receipt preview",
+      "previewPdf": "Preview the file before confirming",
+      "required": "Please attach the proof of payment (PDF, PNG or JPEG).",
+      "badType": "The receipt must be a PDF, PNG or JPEG file.",
+      "tooBig": "The receipt is larger than 10 MB.",
+      "empty": "The receipt file is empty."
+    },
+    "modal": {
+      "title": "New payment request",
+      "noPermission": "You don't have the permission",
+      "sourceTotal": "Source total",
+      "alreadyRequested": "Paid / requested before",
+      "remaining": "Remaining",
+      "amount": "Amount of this request ({{currency}})",
+      "amountRequired": "Enter an amount greater than zero.",
+      "exceeds": "This is more than the remaining balance ({{amount}}).",
+      "notes": "Notes (optional)",
+      "saveDraft": "Save as draft"
+    },
+    "timeline": {
+      "user": "User",
+      "created": "Created by {{name}}",
+      "submitted": "Sent for approval by {{name}}",
+      "levelApproved": "Level {{level}} · {{label}} — approved by {{name}}",
+      "levelWaiting": "Level {{level}} · {{label}} — waiting",
+      "approved": "Approved by {{name}}",
+      "rejected": "Rejected by {{name}}",
+      "paid": "Paid and receipt uploaded by {{name}}",
+      "cancelled": "Cancelled by {{name}}",
+      "waitingApprover": "Waiting for the approver",
+      "waitingPayment": "Waiting for payment"
+    },
+    "chain": {
+      "toggle": "Approval chain settings",
+      "title": "Approval chain",
+      "explain": "Each level applies from its minimum amount (SAR). A request needs every level that applies, in order, each by a different person who did not raise it. With no levels, one organization admin approves.",
+      "none": "No levels yet — one organization admin approves every request.",
+      "add": "Add level",
+      "level": "Level",
+      "label": "Name",
+      "labelPlaceholder": "e.g. Production accountant",
+      "minAmount": "From amount (SAR)",
+      "approver": "Approved by",
+      "role": "Role",
+      "save": "Save",
+      "delete": "Delete level",
+      "saved": "Level saved.",
+      "deleted": "Level deleted.",
+      "confirmDelete": "Delete approval level {{level}}?",
+      "labelRequired": "Give the level a name (up to 80 characters).",
+      "amountInvalid": "The minimum amount must be zero or more.",
+      "roleRequired": "Choose the role that approves this level.",
+      "kind": {
+        "org_admin": "Organization admin",
+        "org_owner": "Organization owner",
+        "project_executive": "Project executive / board",
+        "role": "Users with a role"
+      }
+    },
+    "payables": {
+      "awaiting": "Waiting for approval on Payment Approvals.",
+      "openApprovals": "Open Payment Approvals",
+      "contractNotApproved": "The contract is not approved yet — payment can be requested once it is Active.",
+      "approveFirst": "This instalment must be approved on Payment Approvals before it is paid.",
+      "paidLocked": "Paid through Payment Approvals — it can no longer be changed here.",
+      "lastRejected": "Last request was rejected",
+      "lastCancelled": "Last request was cancelled",
+      "withdrawReason": "Withdrawn from the payables screen",
+      "instalmentN": "Instalment {{n}}"
+    },
+    "payroll": {
+      "posted": "Run posted — {{count}} line(s) sent to Payment Approvals."
+    }
   }
 }

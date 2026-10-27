@@ -2929,5 +2929,198 @@
       "Other": "أخرى",
       "Adjustments": "تسويات"
     }
+  },
+  "approvals": {
+    "title": "اعتمادات السداد",
+    "subtitle": "طلب ← اعتماد ← سداد. المعتمدون والمنفّذون يتخذون الإجراء هنا.",
+    "noPermission": "ليس لديك صلاحية على اعتمادات السداد. اطلب من مسؤول المؤسسة إحدى هذه الصلاحيات:",
+    "pickProject": "اختر مشروعاً لعرض طلبات السداد الخاصة به.",
+    "loading": "جارٍ التحميل…",
+    "working": "جارٍ التنفيذ…",
+    "close": "إغلاق",
+    "empty": "لا توجد طلبات مطابقة لهذه التصفية.",
+    "emptyMyTurn": "لا يوجد شيء بانتظار اعتمادك.",
+    "countOf": "{{shown}} من {{total}} طلب",
+    "trail": "سجل التدقيق",
+    "showTrail": "عرض سجل التدقيق",
+    "hideTrail": "إخفاء سجل التدقيق",
+    "selectAll": "تحديد الكل",
+    "selectOne": "تحديد الطلب",
+    "levelProgress": "مستويات الاعتماد: {{done}} من {{total}}",
+    "waitingFor": "بانتظار: {{label}}",
+    "contractApproveFailed": "تعذّر اعتماد العقد.",
+    "confirmDeleteDraft": "حذف هذه المسودة؟",
+    "rejectTitle": "رفض طلب السداد",
+    "cancelTitle": "إلغاء طلب السداد",
+    "rejectReason": "سبب الرفض",
+    "cancelReason": "سبب الإلغاء",
+    "cancelExplain": "يبقى الطلب في السجل بحالة «ملغى» مع السبب، ويُحرَّر المبلغ.",
+    "reasonPlaceholder": "سيظهر هذا السبب لمقدّم الطلب…",
+    "reasonTooShort": "يرجى كتابة السبب (٣ أحرف على الأقل).",
+    "confirmReject": "رفض",
+    "confirmCancel": "إلغاء الطلب",
+    "confirmPaid": "تأكيد السداد",
+    "executeTitle": "السداد ورفع الإيصال",
+    "paymentDate": "تاريخ السداد",
+    "paymentMethod": "طريقة السداد",
+    "tab": {
+      "all": "الكل",
+      "myTurn": "دوري"
+    },
+    "status": {
+      "draft": "مسودة",
+      "waiting_approval": "مطلوب",
+      "approved": "معتمد",
+      "paid": "مدفوع",
+      "rejected": "مرفوض",
+      "cancelled": "ملغى"
+    },
+    "col": {
+      "source": "المصدر",
+      "type": "النوع",
+      "amount": "المبلغ",
+      "totalRequested": "الإجمالي / المطلوب سابقاً",
+      "status": "الحالة",
+      "actions": "الإجراءات"
+    },
+    "module": {
+      "label": "القسم",
+      "all": "كل الأقسام",
+      "contracts": "عقود الطاقم والممثلين",
+      "payroll": "الرواتب",
+      "vendor": "الموردون والفواتير وأوامر الشراء",
+      "petty_cash": "العهد النقدية"
+    },
+    "type": {
+      "invoice": "فاتورة",
+      "purchase_order": "أمر شراء",
+      "petty_cash": "عهدة نقدية",
+      "payroll_row": "رواتب",
+      "crew_contract": "عقد طاقم",
+      "cast_contract": "عقد ممثل",
+      "vendor_contract": "عقد مورد",
+      "instalment": "قسط عقد",
+      "payroll_run": "سطر مسير رواتب"
+    },
+    "method": {
+      "Cash": "نقدي",
+      "Transfer": "تحويل بنكي",
+      "Check": "شيك",
+      "Card": "بطاقة",
+      "Bank": "بنك"
+    },
+    "action": {
+      "submit": "إرسال للاعتماد",
+      "deleteDraft": "حذف المسودة",
+      "approve": "اعتماد",
+      "approveLevel": "اعتماد (المستوى {{level}} من {{total}})",
+      "reject": "رفض",
+      "execute": "السداد ورفع الإيصال",
+      "viewReceipt": "عرض الإيصال",
+      "cancel": "إلغاء",
+      "cancelHint": "إلغاء مع ذكر السبب — يبقى الطلب في السجل"
+    },
+    "bulk": {
+      "approve": "اعتماد المحدد",
+      "selected": "تم تحديد {{count}} من {{total}}",
+      "available": "{{count}} طلب بانتظار اعتمادك في هذا العرض",
+      "done": "تم الاعتماد: {{count}}",
+      "partial": "تم الاعتماد: {{ok}} · تعذّر: {{fail}}"
+    },
+    "toast": {
+      "submitted": "تم الإرسال للاعتماد.",
+      "draftSaved": "تم حفظ المسودة.",
+      "submitFailed": "تعذّر إرسال الطلب.",
+      "createFailed": "تعذّر إنشاء الطلب.",
+      "approved": "تم اعتماد الطلب.",
+      "levelApproved": "تم اعتماد مستواك — انتقل الطلب إلى المعتمد التالي.",
+      "approveFailed": "تعذّر اعتماد الطلب.",
+      "rejected": "تم رفض الطلب.",
+      "cancelled": "تم إلغاء الطلب.",
+      "deleted": "تم حذف المسودة.",
+      "deleteFailed": "تعذّر الحذف.",
+      "paid": "تم تسجيل السداد.",
+      "payFailed": "تعذّر تسجيل السداد.",
+      "proofFailed": "تعذّر فتح الإيصال.",
+      "actionFailed": "تعذّر تنفيذ الإجراء."
+    },
+    "receipt": {
+      "label": "الإيصال / إثبات السداد",
+      "replace": "استبدال الملف",
+      "pick": "اضغط لإرفاق الإيصال — PDF أو PNG أو JPEG (بحد أقصى ١٠ ميغابايت)",
+      "formats": "الصيغ المقبولة: PDF، PNG، JPEG · الحد الأقصى ١٠ ميغابايت",
+      "preview": "معاينة الإيصال",
+      "previewPdf": "معاينة الملف قبل التأكيد",
+      "required": "يرجى إرفاق إثبات السداد (PDF أو PNG أو JPEG).",
+      "badType": "يجب أن يكون الإيصال ملف PDF أو PNG أو JPEG.",
+      "tooBig": "حجم الإيصال أكبر من ١٠ ميغابايت.",
+      "empty": "ملف الإيصال فارغ."
+    },
+    "modal": {
+      "title": "طلب سداد جديد",
+      "noPermission": "ليست لديك الصلاحية",
+      "sourceTotal": "إجمالي المصدر",
+      "alreadyRequested": "المدفوع / المطلوب سابقاً",
+      "remaining": "المتبقي",
+      "amount": "مبلغ هذا الطلب ({{currency}})",
+      "amountRequired": "أدخل مبلغاً أكبر من صفر.",
+      "exceeds": "المبلغ أكبر من الرصيد المتبقي ({{amount}}).",
+      "notes": "ملاحظات (اختيارية)",
+      "saveDraft": "حفظ كمسودة"
+    },
+    "timeline": {
+      "user": "مستخدم",
+      "created": "أنشأه {{name}}",
+      "submitted": "أرسله للاعتماد {{name}}",
+      "levelApproved": "المستوى {{level}} · {{label}} — اعتمده {{name}}",
+      "levelWaiting": "المستوى {{level}} · {{label}} — بالانتظار",
+      "approved": "اعتمده {{name}}",
+      "rejected": "رفضه {{name}}",
+      "paid": "سدّده ورفع الإيصال {{name}}",
+      "cancelled": "ألغاه {{name}}",
+      "waitingApprover": "بانتظار المعتمد",
+      "waitingPayment": "بانتظار السداد"
+    },
+    "chain": {
+      "toggle": "إعدادات سلسلة الاعتماد",
+      "title": "سلسلة الاعتماد",
+      "explain": "كل مستوى يُطبَّق ابتداءً من حدّه الأدنى (بالريال). يحتاج الطلب كل المستويات المنطبقة عليه بالترتيب، ولكل مستوى شخص مختلف ليس هو مقدّم الطلب. إن لم توجد مستويات، يعتمد الطلب مسؤول واحد في المؤسسة.",
+      "none": "لا توجد مستويات بعد — يعتمد كل طلب مسؤول واحد في المؤسسة.",
+      "add": "إضافة مستوى",
+      "level": "المستوى",
+      "label": "الاسم",
+      "labelPlaceholder": "مثال: محاسب الإنتاج",
+      "minAmount": "ابتداءً من مبلغ (ريال)",
+      "approver": "يعتمده",
+      "role": "الدور",
+      "save": "حفظ",
+      "delete": "حذف المستوى",
+      "saved": "تم حفظ المستوى.",
+      "deleted": "تم حذف المستوى.",
+      "confirmDelete": "حذف مستوى الاعتماد {{level}}؟",
+      "labelRequired": "أعطِ المستوى اسماً (حتى ٨٠ حرفاً).",
+      "amountInvalid": "يجب أن يكون الحد الأدنى صفراً أو أكثر.",
+      "roleRequired": "اختر الدور الذي يعتمد هذا المستوى.",
+      "kind": {
+        "org_admin": "مسؤول المؤسسة",
+        "org_owner": "مالك المؤسسة",
+        "project_executive": "إدارة المشروع / المجلس",
+        "role": "أصحاب دور معيّن"
+      }
+    },
+    "payables": {
+      "awaiting": "بانتظار الاعتماد في شاشة اعتمادات السداد.",
+      "openApprovals": "فتح اعتمادات السداد",
+      "contractNotApproved": "العقد غير معتمد بعد — يمكن طلب الدفع بعد أن تصبح حالته Active.",
+      "approveFirst": "يجب اعتماد هذا القسط في شاشة اعتمادات السداد قبل سداده.",
+      "paidLocked": "تم السداد عبر اعتمادات السداد — لا يمكن تعديله من هنا.",
+      "lastRejected": "رُفض آخر طلب",
+      "lastCancelled": "أُلغي آخر طلب",
+      "withdrawReason": "سُحب الطلب من شاشة المستحقات",
+      "instalmentN": "القسط {{n}}"
+    },
+    "payroll": {
+      "posted": "تم ترحيل المسير — أُرسل {{count}} سطر إلى اعتمادات السداد."
+    }
   }
 }
