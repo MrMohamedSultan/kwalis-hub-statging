@@ -7,6 +7,9 @@
 SELECT id AS gl_script FROM gl_accounts WHERE code='GL-1000' \gset
 SELECT id AS gl_cast   FROM gl_accounts WHERE code='GL-1300' \gset
 SELECT id AS gl_dir    FROM gl_accounts WHERE code='GL-1200' \gset
+-- 182 seeds platform default rows (organization_id NULL) into the map; this
+-- file checks the behaviour from an EMPTY map, so it starts without them.
+DELETE FROM budget_code_gl_map WHERE organization_id IS NULL;
 SELECT t.as_user(:'A');
 -- before any mapping: everything is Uncategorized (today's behaviour)
 SELECT t.eq('unmapped: one Uncategorized row', (SELECT count(*) FROM get_cost_by_gl_account(:'P1')), 1::bigint);
