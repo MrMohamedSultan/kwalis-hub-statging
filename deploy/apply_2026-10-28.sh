@@ -55,14 +55,19 @@ for n in $FILES; do
   if [ "$n" = "201" ]; then
     # 201's backfill and repoint updates fire 200's project/organization trigger:
     # a row whose project belongs to another organization would abort 201.
-    MISMATCHES=$($PSQL -At -c "SELECT count(*) FROM public.project_org_mismatches();")
+    # Rows with an EMPTY organization_id are not a conflict: 200's trigger fills
+    # the organization from the project on the next write. Only a row that names a
+    # DIFFERENT organization than its project's blocks 201.
+    NULL_ORG=$($PSQL -At -c "SELECT count(*) FROM public.project_org_mismatches() WHERE organization_id IS NULL;")
+    echo "-- rows with an empty organization_id (filled from their project on next write, not a conflict): $NULL_ORG"
+    MISMATCHES=$($PSQL -At -c "SELECT count(*) FROM public.project_org_mismatches() WHERE organization_id IS NOT NULL;")
     if [ "$MISMATCHES" != "0" ]; then
-      echo "STOP: project_org_mismatches() returned $MISMATCHES row(s) — fix them before 201 (171 → 200 are applied):"
-      $PSQL -c "SELECT * FROM public.project_org_mismatches();"
+      echo "STOP: $MISMATCHES row(s) name a different organization than their project's — fix them before 201 (171 → 200 are applied):"
+      $PSQL -c "SELECT * FROM public.project_org_mismatches() WHERE organization_id IS NOT NULL;"
       echo "Then run the script again (171 → 200 are idempotent) or apply 201, 202, 203 by hand."
       exit 1
     fi
-    echo "-- project_org_mismatches(): 0 rows, continuing with 201"
+    echo "-- no real project/organization conflicts, continuing with 201"
   fi
   f=$(ls db/pending/${n}_*.sql)
   echo "-- $f"
