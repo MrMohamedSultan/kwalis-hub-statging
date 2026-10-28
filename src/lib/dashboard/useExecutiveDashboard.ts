@@ -26,7 +26,6 @@ import { safeDivide, safeNumber } from "@/lib/safe";
 import { inDateRange } from "./date-range";
 import {
   emptyRealFinancials,
-  lineTotalSar,
   realFinancialsQueryOptions,
   type RealFinancials,
 } from "./real-financials";
@@ -51,15 +50,40 @@ interface ExecutiveLists {
   deptName: (code: string) => string;
 }
 
-const REBATE_RATE = 0.35;
+/** Film Commission headline (db/pending/197): the project's own rate and cap,
+ *  QPE on the approved mapping — never a hard-coded rate (E10, decision 9). */
+export interface RebateHeadline {
+  qpeBudget: number;
+  ratePct: number | null;
+  expectedRebate: number | null;
+}
+
+async function fetchRebateHeadline(projectId: string): Promise<RebateHeadline> {
+  type Rpc = (fn: string, a: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+  const { data, error } = await (supabase.rpc as unknown as Rpc)("get_film_commission_rebate", {
+    p_project_id: projectId,
+    p_sections: ["summary"],
+  });
+  if (error || !data) return { qpeBudget: 0, ratePct: null, expectedRebate: null };
+  const s = ((data as { summary?: Record<string, unknown> }).summary ?? {}) as Record<
+    string,
+    unknown
+  >;
+  return {
+    qpeBudget: safeNumber(s.qpe_budget as number),
+    ratePct: s.rebate_rate_pct == null ? null : Number(s.rebate_rate_pct),
+    expectedRebate: s.expected_rebate == null ? null : Number(s.expected_rebate),
+  };
+}
 
 function buildReal(
   fin: RealFinancials,
   actuals: LedgerActualRow[],
   meta: ProductionMeta,
   deptName: (code: string) => string,
+  rebate: RebateHeadline | null = null,
 ): ExecutiveDashboardData {
-  const { totalBudget, fxRate } = fin;
+  const { totalBudget } = fin;
 
   // Top sheet + departments — shared builders, identical to the
   // operational dashboard (departments include payroll commitments).
@@ -85,9 +109,9 @@ function buildReal(
   const trailingBurn = traj.trailingBurn || weeklyBurn;
   const planToDate = traj.planToDate;
 
-  const qualifying = fin.lines
-    .filter((l) => l.rebate_eligible)
-    .reduce((s, l) => s + lineTotalSar(l, fxRate), 0);
+  // QPE on the budget from the single eligibility source (197), not the old
+  // manual "R" flag on budget lines.
+  const qualifying = rebate?.qpeBudget ?? 0;
 
   return {
     production: {
@@ -111,8 +135,8 @@ function buildReal(
     qfe: {
       qualifying: Math.round(qualifying),
       totalSpend: Math.round(spent),
-      rebateRate: REBATE_RATE,
-      estimatedRebate: Math.round(qualifying * REBATE_RATE),
+      rebateRate: rebate?.ratePct != null ? rebate.ratePct / 100 : 0,
+      estimatedRebate: Math.round(rebate?.expectedRebate ?? 0),
     },
     weeklyBurn: Math.round(weeklyBurn),
     // Needs ≥2 trailing weeks to be a real comparison — otherwise NULL.
@@ -172,6 +196,13 @@ export function useExecutiveDashboard(
     },
   });
 
+  const rebateQuery = useQuery({
+    queryKey: ["rebate-headline", projectId] as const,
+    enabled: !!projectId,
+    staleTime: 60_000,
+    queryFn: () => fetchRebateHeadline(projectId!),
+  });
+
   // Heavy derivation — memoized on the raw query data. Re-renders are
   // free; arrays are only rebuilt when the source data actually changes.
   const data = useMemo<ExecutiveDashboardData>(() => {
@@ -188,8 +219,9 @@ export function useExecutiveDashboard(
       listsQuery.data?.actuals ?? [],
       fallbackMeta,
       listsQuery.data?.deptName ?? ((code) => code),
+      rebateQuery.data ?? null,
     );
-  }, [projectId, meta, finQuery.data, listsQuery.data]);
+  }, [projectId, meta, finQuery.data, listsQuery.data, rebateQuery.data]);
 
   return {
     data,

@@ -342,6 +342,8 @@ export type Person = {
    * database links / creates the profile on save).
    */
   personId?: string | null;
+  /** Saudi trainee — Film Commission headcount (db/pending/197). */
+  isTrainee?: boolean | null;
 };
 
 export type DealType = "weekly" | "daily" | "package";
@@ -920,6 +922,7 @@ const fromPersonRow = (r: any): Person => ({
   motherSaudi: r.mother_saudi,
   relatedParty: r.related_party,
   personId: r.person_id,
+  isTrainee: r.is_trainee,
 });
 /** Only send optional columns the record actually carries (see fromPersonRow). */
 const definedOnly = (o: Record<string, unknown>) =>
@@ -977,6 +980,7 @@ const toPersonRow = (p: Person) => ({
     mother_saudi: p.motherSaudi,
     related_party: p.relatedParty,
     person_id: p.personId,
+    is_trainee: p.isTrainee,
   }),
   project_id: p.projectId ?? activePid(),
   organization_id: p.organizationId ?? activeOrgId(),
