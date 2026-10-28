@@ -5342,5 +5342,130 @@
       "po": "PO",
       "due": "Due"
     }
+  },
+  "decisions": {
+    "common": {
+      "save": "Save",
+      "back": "Back"
+    },
+    "approval": {
+      "pending": "Pending approval",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "cancelled": "Cancelled",
+      "approve": "Approve",
+      "reject": "Reject",
+      "cancel": "Cancel",
+      "column": "Approval",
+      "filter": "Filter by approval status",
+      "allStatuses": "All approval statuses",
+      "reason": "Reason",
+      "makerChecker": "You recorded this invoice — another user must approve or reject it"
+    },
+    "invoice": {
+      "approved": "Invoice approved — it now counts as Actual",
+      "rejected": "Invoice rejected",
+      "cancelled": "Invoice cancelled — the cancellation is recorded",
+      "rejectTitle": "Reject invoice",
+      "cancelTitle": "Cancel approved invoice",
+      "cancelHint": "An approved invoice is not deleted: it is cancelled with a reason, and its ledger entry is reversed. Not possible while it has payments or an open payment request.",
+      "deleteApproved": "An approved invoice cannot be deleted — cancel it instead.",
+      "payNeedsApproval": "The invoice must be approved before it can be paid"
+    },
+    "receipt": {
+      "status": {
+        "submitted": "Submitted",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "cancelled": "Cancelled"
+      },
+      "cancelTitle": "Cancel approved receipt",
+      "cancelHint": "An approved receipt is locked and not deleted: it is cancelled with a reason and leaves Actual.",
+      "cancelled": "Receipt cancelled — the cancellation is recorded",
+      "deleteApproved": "An approved receipt cannot be deleted — cancel it instead."
+    },
+    "wht7099": {
+      "badge": "WHT on 7099",
+      "booked": "Booked on line {{code}} (Actual + Commitment)",
+      "contractHint": "+ {{amount}} company-borne WHT charged to line {{code}}",
+      "otherLines": "{{amount}} of company-borne WHT is on invoices and stays on their own budget lines; only contract WHT is charged to line {{code}}."
+    },
+    "region": {
+      "riyadh": "Riyadh",
+      "makkah": "Makkah",
+      "madinah": "Madinah",
+      "eastern_province": "Eastern Province",
+      "asir": "Asir",
+      "tabuk": "Tabuk",
+      "hail": "Hail",
+      "northern_borders": "Northern Borders",
+      "jazan": "Jazan",
+      "najran": "Najran",
+      "al_bahah": "Al Bahah",
+      "al_jawf": "Al Jawf",
+      "qassim": "Qassim",
+      "label": "Region",
+      "hint": "KSA region of this line (empty = the project's default region)",
+      "projectDefault": "Project default region",
+      "none": "Not set",
+      "outside_ksa": "Outside KSA",
+      "estimate": "Estimate",
+      "variance": "Variance (estimate − actual)",
+      "reportHint": "Estimate by each budget line's region (else the project default). Actual by the transaction's spend city, else the region of its budget line, else the project default. SAR excl. VAT; approved invoices only.",
+      "panelTitle": "Default region",
+      "panelHint": "Budget lines without their own region count in this region in the Film Commission budget by region.",
+      "saved": "Default region saved"
+    },
+    "wht": {
+      "title": "Withholding tax rates",
+      "hint": "Saudi WHT rates by service type (ZATCA schedule — verify with your tax adviser). The contract form uses them; a signed contract keeps the rate it was signed with. An organization rate replaces the platform rate for that service type.",
+      "service": "Service type",
+      "rate": "Rate",
+      "source": "Source",
+      "scope": "Applies to",
+      "platformRow": "All organizations",
+      "orgRow": "This organization",
+      "addOrgRate": "Add organization rate",
+      "saved": "Rate saved",
+      "invalidRate": "Enter a rate between 0 and 99.99",
+      "service_types": {
+        "default": "Default (no service type chosen)",
+        "management_fees": "Management fees",
+        "royalties": "Royalties",
+        "technical_consulting": "Technical and consulting services",
+        "rent": "Rent",
+        "air_tickets_freight": "Air tickets, air and sea freight",
+        "international_telecom": "International telecommunications",
+        "insurance_reinsurance": "Insurance and reinsurance premiums",
+        "dividends": "Dividends",
+        "loan_returns": "Loan returns",
+        "related_party_services": "Services paid to a related party",
+        "other": "Any other payments"
+      }
+    },
+    "files": {
+      "title": "Contract files",
+      "hint": "Files saved by older versions outside a project folder are moved to <project>/… and every record that points at them is updated. Then the contracts bucket switches from organization-wide to project-scoped reading.",
+      "dryRun": "Dry run",
+      "move": "Move files",
+      "ignoreOrphans": "Files no record uses may stay where they are",
+      "done": "{{moved}} file(s) moved — policy: {{policy}}",
+      "file": "File",
+      "newPath": "New path",
+      "owner": "Record",
+      "actionCol": "Action",
+      "action": {
+        "move": "To move",
+        "repoint": "To repoint",
+        "repointed": "Repointed",
+        "conflict": "Used by several projects",
+        "orphan": "Not used by any record"
+      },
+      "policy": {
+        "switched": "project-scoped",
+        "skipped": "unchanged (files remain)",
+        "no storage schema": "no storage"
+      }
+    }
   }
 }
