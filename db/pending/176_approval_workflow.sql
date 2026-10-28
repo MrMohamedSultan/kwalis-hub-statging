@@ -52,6 +52,22 @@
 -- X10  Maker-checker on every chain level (requester never approves; one
 --      person approves one level only).
 --
+-- Security review fixes (secfix, before first apply):
+--   #1  a request is inserted only as draft / waiting_approval, and the
+--       approval / execution / cancellation stamps are cleared on insert
+--       (guard_new_payment_request, BEFORE INSERT — 030 is BEFORE UPDATE only);
+--   #2  document / organization / project of a request never change once it
+--       is raised, and its amount / currency once it is submitted; the source
+--       validation also fires when those columns change; the instalment sync
+--       only writes the request's own contract (same org / project);
+--   #6  invoice / PO / petty cash / contract sources must belong to the
+--       request's organization and project (payment_request_source_scope);
+--   #11 without an approval chain a direct UPDATE to approved needs an org
+--       admin (as the RPC already did);
+--   #12 reverse_payroll_run only touches payroll rows of the run's project;
+--   #19 payment_request_amount_sar is SECURITY INVOKER;
+--   #20 foreign contracts are never looked at (no existence / status leak).
+--
 -- Additive: new columns, tables, functions, triggers; three existing
 -- functions are redefined (enforce_payment_request_maker_checker from 035,
 -- enforce_payment_request_limit and revalidate_payment_request_on_submit from
@@ -66,6 +82,7 @@
 -- Depends on 030, 035, 160.
 --
 -- Rollback (in this order):
+--   DROP TRIGGER trg_payment_request_insert_guard ON public.payment_requests;
 --   DROP TRIGGER trg_payment_request_validate_source ON public.payment_requests;
 --   DROP TRIGGER trg_payment_request_sync_milestone ON public.payment_requests;
 --   DROP TRIGGER trg_payment_request_notify ON public.payment_requests;
@@ -81,7 +98,9 @@
 --     public.notify_payment_approvers(uuid), public.validate_payment_request_source(),
 --     public.sync_milestone_from_payment_request(), public.notify_payment_request_change(),
 --     public.keep_decided_payment_requests(), public.guard_payroll_milestones(),
---     public.enforce_contract_approval_maker_checker(), public.require_post_payroll_run_rpc();
+--     public.enforce_contract_approval_maker_checker(), public.require_post_payroll_run_rpc(),
+--     public.guard_new_payment_request(), public.payment_request_source_scope(text, uuid),
+--     public.project_exists(uuid);
 --   re-run 035 (maker-checker function) and restore enforce_payment_request_limit /
 --   revalidate_payment_request_on_submit / reverse_payroll_run from the live schema;
 --   DROP TABLE public.payment_request_approvals, public.payment_approval_levels;
@@ -175,14 +194,25 @@ $$;
 
 -- Request amount in SAR: SAR as is; the project currency at the project's
 -- locked rate; anything else unconverted.
+-- secfix #19: SECURITY INVOKER — a caller only converts with the rate of a
+-- project it can read (inside the DEFINER functions below it sees all).
 CREATE OR REPLACE FUNCTION public.payment_request_amount_sar(_amount numeric, _currency text, _project uuid)
-RETURNS numeric LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+RETURNS numeric LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
   SELECT round(CASE
     WHEN upper(COALESCE(NULLIF(_currency, ''), 'SAR')) = 'SAR' THEN _amount
     ELSE _amount * COALESCE((SELECT NULLIF(p.fx_rate, 0) FROM public.projects p
                               WHERE p.id = _project AND upper(p.currency) = upper(_currency)), 1)
   END, 2)
 $$;
+
+-- secfix: does this project row still exist (used to let the FK set
+-- project_id to NULL when a project is deleted; reveals nothing else)
+CREATE OR REPLACE FUNCTION public.project_exists(_project uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT _project IS NOT NULL AND EXISTS (SELECT 1 FROM public.projects WHERE id = _project)
+$$;
+REVOKE ALL ON FUNCTION public.project_exists(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.project_exists(uuid) TO authenticated, service_role;
 
 -- ---------------------------------------------------------------------
 -- 4. D05 / X11 — approval chain configuration and approvals
@@ -395,6 +425,18 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
+  -- secfix #2: what a request pays (document, organization, project) never
+  -- changes once it is raised — raise a new request instead. The only
+  -- allowed move is project_id -> NULL by the FK when the project is deleted.
+  IF NEW.source_type IS DISTINCT FROM OLD.source_type
+     OR NEW.source_id IS DISTINCT FROM OLD.source_id
+     OR NEW.organization_id IS DISTINCT FROM OLD.organization_id
+     OR (NEW.project_id IS DISTINCT FROM OLD.project_id
+         AND NOT (NEW.project_id IS NULL AND NOT public.project_exists(OLD.project_id))) THEN
+    RAISE EXCEPTION 'payment_requests: the document, organization and project of a request cannot be changed — cancel it and raise a new one'
+      USING ERRCODE = '42501';
+  END IF;
+
   IF NEW.status IS DISTINCT FROM OLD.status THEN
     -- 176: decided statuses never move back
     IF OLD.status IN ('paid', 'rejected', 'cancelled')
@@ -420,6 +462,13 @@ BEGIN
                   WHERE NOT EXISTS (SELECT 1 FROM public.payment_request_approvals a
                                      WHERE a.payment_request_id = OLD.id AND a.level_no = l.level_no)) THEN
         RAISE EXCEPTION 'Approval chain: every approval level must approve this request first (use the Approve action on Payment Approvals)'
+          USING ERRCODE = '42501';
+      END IF;
+      -- secfix #11: without a chain the single approval belongs to an org
+      -- admin (the RPC checks it too; this holds for a direct UPDATE)
+      IF NOT EXISTS (SELECT 1 FROM public.payment_request_required_levels(OLD.id))
+         AND NOT (public.is_super_admin(v_uid) OR public.is_org_admin(v_uid, OLD.organization_id)) THEN
+        RAISE EXCEPTION 'Only an organization admin can approve payment requests'
           USING ERRCODE = '42501';
       END IF;
 
@@ -485,6 +534,14 @@ BEGIN
       RAISE EXCEPTION 'payment_requests: the amount cannot change after an approval level approved it — reject it and raise a new request'
         USING ERRCODE = '42501';
     END IF;
+  END IF;
+
+  -- secfix #2: the figure is fixed once the request is sent for approval
+  IF OLD.status <> 'draft'
+     AND (NEW.requested_amount IS DISTINCT FROM OLD.requested_amount
+          OR NEW.currency IS DISTINCT FROM OLD.currency) THEN
+    RAISE EXCEPTION 'payment_requests: the amount of a submitted request cannot change — cancel it and raise a new one'
+      USING ERRCODE = '42501';
   END IF;
 
   RETURN NEW;
@@ -565,6 +622,61 @@ $$;
 -- ---------------------------------------------------------------------
 -- 7. B13 — what a request may point at
 -- ---------------------------------------------------------------------
+-- secfix #1: a request is born as a draft or waiting for approval; the
+-- approval / execution / cancellation trail is written only by the
+-- database on later status changes (030 trigger is BEFORE UPDATE only).
+CREATE OR REPLACE FUNCTION public.guard_new_payment_request()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NULL THEN            -- service role / SQL editor / seeds
+    RETURN NEW;
+  END IF;
+  IF NEW.status IS NULL OR NEW.status NOT IN ('draft', 'waiting_approval') THEN
+    RAISE EXCEPTION 'payment_requests: a new request starts as draft or waiting for approval (got %)', NEW.status
+      USING ERRCODE = '42501';
+  END IF;
+  NEW.approved_by := NULL;  NEW.approved_at := NULL;
+  NEW.rejected_by := NULL;  NEW.rejected_at := NULL;  NEW.rejection_reason := NULL;
+  NEW.executed_by := NULL;  NEW.executed_at := NULL;
+  NEW.cancelled_by := NULL; NEW.cancelled_at := NULL; NEW.cancellation_reason := NULL;
+  RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION public.guard_new_payment_request() FROM PUBLIC, anon, authenticated;
+DROP TRIGGER IF EXISTS trg_payment_request_insert_guard ON public.payment_requests;
+CREATE TRIGGER trg_payment_request_insert_guard
+  BEFORE INSERT ON public.payment_requests
+  FOR EACH ROW EXECUTE FUNCTION public.guard_new_payment_request();
+
+-- Organization / project of the document a request points at (is_found
+-- false = no such document; NULL = a source type without a table). Internal: called only from the SECURITY DEFINER validation.
+CREATE OR REPLACE FUNCTION public.payment_request_source_scope(_type text, _id uuid,
+  OUT is_found boolean, OUT organization_id uuid, OUT project_id uuid)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF _type = 'invoice' THEN
+    SELECT true, i.organization_id, i.project_id INTO is_found, organization_id, project_id FROM public.invoices i WHERE i.id = _id;
+  ELSIF _type = 'purchase_order' THEN
+    SELECT true, po.organization_id, po.project_id INTO is_found, organization_id, project_id FROM public.purchase_orders po WHERE po.id = _id;
+  ELSIF _type = 'petty_cash' THEN
+    SELECT true, ca.organization_id, ca.project_id INTO is_found, organization_id, project_id FROM public.cash_advances ca WHERE ca.id = _id;
+  ELSIF _type = 'payroll_row' THEN
+    SELECT true, p.organization_id, p.project_id INTO is_found, organization_id, project_id FROM public.payroll p WHERE p.id = _id;
+  ELSIF _type IN ('crew_contract', 'cast_contract') THEN
+    SELECT true, pe.organization_id, pe.project_id INTO is_found, organization_id, project_id FROM public.people pe WHERE pe.id = _id;
+    IF NOT COALESCE(is_found, false) THEN
+      SELECT true, cm.organization_id, cm.project_id INTO is_found, organization_id, project_id FROM public.crew_members cm WHERE cm.id = _id;
+    END IF;
+  ELSE
+    is_found := NULL;                      -- vendor_contract: no source table to check
+    RETURN;
+  END IF;
+  is_found := COALESCE(is_found, false);      -- SELECT INTO without a row leaves NULLs
+END $$;
+REVOKE ALL ON FUNCTION public.payment_request_source_scope(text, uuid) FROM PUBLIC, anon, authenticated;
+
 CREATE OR REPLACE FUNCTION public.validate_payment_request_source()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -578,13 +690,37 @@ DECLARE
   v_ref    text;
   v_status text;
   v_amt    numeric;
+  s        record;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN NEW;
   END IF;
-  -- on UPDATE only re-check when the request is sent for approval
-  IF TG_OP = 'UPDATE' AND NOT (NEW.status = 'waiting_approval' AND OLD.status = 'draft') THEN
+  -- on UPDATE re-check when the request is sent for approval or when what it
+  -- pays changes (secfix #2: the trigger also fires on those columns)
+  IF TG_OP = 'UPDATE'
+     AND NOT (NEW.status = 'waiting_approval' AND OLD.status = 'draft')
+     AND NEW.source_type IS NOT DISTINCT FROM OLD.source_type
+     AND NEW.source_id IS NOT DISTINCT FROM OLD.source_id
+     AND NEW.requested_amount IS NOT DISTINCT FROM OLD.requested_amount
+     AND NEW.currency IS NOT DISTINCT FROM OLD.currency
+     AND NEW.organization_id IS NOT DISTINCT FROM OLD.organization_id
+     AND NEW.project_id IS NOT DISTINCT FROM OLD.project_id THEN
     RETURN NEW;
+  END IF;
+
+  -- secfix #6 / #20: the document must belong to the request's organization
+  -- and project; checked first, so nothing about another tenant's document
+  -- (its existence, status or amounts) shows in an error.
+  SELECT * INTO s FROM public.payment_request_source_scope(NEW.source_type, NEW.source_id);
+  IF s.is_found IS NOT NULL THEN
+    IF NOT s.is_found OR s.organization_id IS DISTINCT FROM NEW.organization_id
+       OR (NEW.project_id IS NOT NULL AND s.project_id IS DISTINCT FROM NEW.project_id) THEN
+      RAISE EXCEPTION 'payment_requests: the document was not found in this project'
+        USING ERRCODE = '42501';
+    END IF;
+    IF NEW.project_id IS NULL AND s.project_id IS NOT NULL THEN
+      NEW.project_id := s.project_id;     -- RLS WITH CHECK then applies to that project
+    END IF;
   END IF;
 
   IF NEW.source_type IN ('crew_contract', 'cast_contract') THEN
@@ -596,13 +732,12 @@ BEGIN
       RAISE EXCEPTION 'payment_requests: an instalment request must point at its payroll row'
         USING ERRCODE = '22023';
     END IF;
-    SELECT * INTO p FROM public.payroll WHERE id = NEW.source_id;
+    SELECT * INTO p FROM public.payroll
+     WHERE id = NEW.source_id
+       AND organization_id = NEW.organization_id
+       AND project_id IS NOT DISTINCT FROM NEW.project_id;
     IF NOT FOUND THEN
-      RAISE EXCEPTION 'payment_requests: contract not found' USING ERRCODE = '22023';
-    END IF;
-    IF p.organization_id IS DISTINCT FROM NEW.organization_id OR p.project_id IS DISTINCT FROM NEW.project_id THEN
-      RAISE EXCEPTION 'payment_requests: the request and the contract belong to different projects'
-        USING ERRCODE = '42501';
+      RAISE EXCEPTION 'payment_requests: the document was not found in this project' USING ERRCODE = '42501';
     END IF;
     SELECT e INTO m FROM jsonb_array_elements(COALESCE(p.payment_schedule, '[]'::jsonb)) e
      WHERE e->>'id' = NEW.payroll_milestone_id LIMIT 1;
@@ -623,14 +758,18 @@ BEGIN
     END IF;
     v_ref := p.ref_id;
   ELSIF NEW.source_type = 'payroll_row' THEN
-    SELECT ref_id INTO v_ref FROM public.payroll WHERE id = NEW.source_id;
+    SELECT ref_id INTO v_ref FROM public.payroll
+     WHERE id = NEW.source_id AND organization_id = NEW.organization_id;
   END IF;
 
   -- B13: no payment request while the contract is not approved
+  -- (secfix #20: only contracts of the request's organization are looked at)
   IF v_ref ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
-    SELECT contract_status INTO v_status FROM public.people WHERE id = v_ref::uuid;
+    SELECT contract_status INTO v_status FROM public.people
+     WHERE id = v_ref::uuid AND organization_id = NEW.organization_id;
     IF NOT FOUND THEN
-      SELECT contract_status INTO v_status FROM public.crew_members WHERE id = v_ref::uuid;
+      SELECT contract_status INTO v_status FROM public.crew_members
+       WHERE id = v_ref::uuid AND organization_id = NEW.organization_id;
     END IF;
     IF FOUND AND v_status IS DISTINCT FROM 'Active' THEN
       RAISE EXCEPTION 'Contract not approved: a payment can be requested only after the contract is approved (status is %)', v_status
@@ -644,7 +783,8 @@ $$;
 
 DROP TRIGGER IF EXISTS trg_payment_request_validate_source ON public.payment_requests;
 CREATE TRIGGER trg_payment_request_validate_source
-  BEFORE INSERT OR UPDATE OF status ON public.payment_requests
+  BEFORE INSERT OR UPDATE OF status, source_type, source_id, requested_amount, currency, organization_id, project_id
+  ON public.payment_requests
   FOR EACH ROW EXECUTE FUNCTION public.validate_payment_request_source();
 
 -- ---------------------------------------------------------------------
@@ -697,7 +837,10 @@ BEGIN
            SELECT COALESCE(jsonb_agg(CASE WHEN e->>'id' = r.payroll_milestone_id THEN e || v_patch ELSE e END
                                      ORDER BY ord), '[]'::jsonb)
              FROM jsonb_array_elements(p.payment_schedule) WITH ORDINALITY AS t(e, ord))
-   WHERE p.id = r.source_id;
+   WHERE p.id = r.source_id
+     AND r.source_type = 'payroll_row'                                -- secfix #2: only the
+     AND p.organization_id = r.organization_id                        -- request's own contract
+     AND p.project_id IS NOT DISTINCT FROM r.project_id;
   PERFORM set_config('kwalis.milestone_sync', '', true);
 
   IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
@@ -1236,6 +1379,8 @@ BEGIN
            ledger = '[]'::jsonb,
            payment_schedule = '[]'::jsonb                                   -- 176: no instalment left to pay
      WHERE ref_id LIKE 'PR-' || left(_run::text, 8) || '-%'
+       AND organization_id = r.organization_id                              -- secfix #12: the run's
+       AND project_id IS NOT DISTINCT FROM r.project_id                     -- own project only
      RETURNING 1
   ) SELECT count(*) INTO ledger_count FROM unpaid;
   UPDATE public.payroll_run_items SET payroll_id = NULL WHERE payroll_run_id = _run;   -- 176

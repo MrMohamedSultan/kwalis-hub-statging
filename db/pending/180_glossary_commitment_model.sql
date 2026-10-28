@@ -79,6 +79,12 @@
 -- SECURITY: new tables with RLS, SECURITY DEFINER triggers / RPCs, views read
 -- by the app — per SECURITY.md apply only after owner approval.
 --
+-- Security review fixes (secfix, before first apply):
+--   #5  payroll_legacy_paid and #19 amount_to_sar are SECURITY INVOKER (the
+--       payments / project rate are read through RLS);
+--   #12 reverse_payroll_run and the reversed-run backfill only touch payroll
+--       rows of the run's own organization / project.
+--
 -- Rollback (in this order):
 --   DROP TRIGGER trg_payroll_instalments_sync ON public.payroll;
 --   DROP TRIGGER trg_payroll_schedule_rules ON public.payroll;
@@ -129,8 +135,9 @@ $$;
 
 -- Amount in SAR: SAR as is; USD or the project currency at the project's
 -- locked rate (3.75 when none); anything else unconverted.
+-- secfix #19: SECURITY INVOKER — the rate is read through projects RLS.
 CREATE OR REPLACE FUNCTION public.amount_to_sar(p_amount numeric, p_currency text, p_project uuid)
-RETURNS numeric LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+RETURNS numeric LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
   SELECT round(CASE
     WHEN upper(COALESCE(NULLIF(btrim(p_currency), ''), 'SAR')) = 'SAR' THEN COALESCE(p_amount, 0)
     WHEN upper(p_currency) = 'USD'
@@ -143,8 +150,10 @@ $$;
 -- What was paid on a contract that has no instalment schedule: the payments
 -- ledger, or the legacy Paid slots (payments / percents JSON), whichever is
 -- larger.
+-- secfix #5: SECURITY INVOKER — the payments are read through payments RLS,
+-- so a caller only sums payments of projects it can open.
 CREATE OR REPLACE FUNCTION public.payroll_legacy_paid(p_id uuid, p_payments jsonb, p_percents jsonb, p_total numeric)
-RETURNS numeric LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+RETURNS numeric LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
   SELECT GREATEST(
     COALESCE((SELECT sum(pm.amount) FROM public.payments pm
                WHERE pm.source_type = 'payroll' AND pm.source_id = p_id), 0),
@@ -1370,7 +1379,10 @@ BEGIN
      RETURNING 1
   ) SELECT count(*) INTO ot_count FROM reverted;
   -- 180: the run's payroll rows are cancelled contracts — they leave Commitment
-  FOR pr_row IN SELECT id FROM public.payroll WHERE ref_id LIKE 'PR-' || left(_run::text, 8) || '-%' LOOP
+  FOR pr_row IN SELECT id FROM public.payroll
+                 WHERE ref_id LIKE 'PR-' || left(_run::text, 8) || '-%'
+                   AND organization_id = r.organization_id                  -- secfix #12: the run's
+                   AND project_id IS NOT DISTINCT FROM r.project_id LOOP    -- own project only
     PERFORM set_config('kwalis.contract_cancel', pr_row.id::text, true);
     UPDATE public.payroll
        SET payments = '["Unpaid"]'::jsonb,
@@ -1422,6 +1434,8 @@ UPDATE public.payroll p
   FROM public.payroll_runs r
  WHERE r.status = 'cancelled'
    AND p.ref_id LIKE 'PR-' || left(r.id::text, 8) || '-%'
+   AND p.organization_id = r.organization_id                                -- secfix #12
+   AND p.project_id IS NOT DISTINCT FROM r.project_id
    AND p.contract_cancelled_at IS NULL
    AND jsonb_array_length(COALESCE(p.payment_schedule, '[]'::jsonb)) = 0;
 
