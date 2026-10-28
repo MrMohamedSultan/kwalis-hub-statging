@@ -11,6 +11,9 @@ import { Panel } from "@/components/AppShell";
 import { formatAmount } from "@/lib/format-number";
 import { groupByAccount, ledgerTotals, type GeneralLedgerLine } from "@/lib/ledger-calc";
 import { useActiveProject, useGeneralLedger, useTrialBalance } from "./ledger-data";
+import { transactionFromLedgerLine } from "./ledger-drawer";
+import { GlTransactionDrawer } from "@/features/reports/gl-transactions/GlTransactionDrawer";
+import type { GlTransaction } from "@/features/reports/gl-transactions/gl-transactions-data";
 import {
   accountLabel,
   ExportButtons,
@@ -36,7 +39,11 @@ export function GeneralLedgerReport({
   embedded?: boolean;
 }) {
   const { t } = useTranslation();
-  const { projectId, projectCode, projectName } = useActiveProject();
+  const { projectId, organizationId, projectCode, projectName } = useActiveProject();
+  // G09: a line opens the transaction drawer of its document (184)
+  const [selected, setSelected] = useState<GlTransaction | null>(null);
+  const open = (l: GeneralLedgerLine) =>
+    setSelected(transactionFromLedgerLine(l, { organizationId, projectId }));
   const [from, setFrom] = useState(initialFrom);
   const [to, setTo] = useState(initialTo);
   const [accountId, setAccountId] = useState<string | null>(initialAccountId);
@@ -57,7 +64,10 @@ export function GeneralLedgerReport({
   const totals = ledgerTotals(lines);
   const phase = data[0]?.phase;
 
-  const eventLabel = (l: GeneralLedgerLine) => t(`journal.event.${l.event_type}`, l.event_type);
+  const eventLabel = (l: GeneralLedgerLine) =>
+    t(`journal.event.${l.event_type}`, {
+      defaultValue: t(`reconcile.event.${l.event_type}`, { defaultValue: l.event_type }),
+    });
 
   const build = () => ({
     title: t("journal.general_ledger"),
@@ -180,7 +190,13 @@ export function GeneralLedgerReport({
                     {ls.map((l) => (
                       <tr
                         key={`${l.event_key}-${l.entry_seq}-${l.line_no}`}
-                        className={`border-b border-border/50 ${l.is_reversal ? "text-muted-foreground" : ""}`}
+                        onClick={() => open(l)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") open(l);
+                        }}
+                        tabIndex={0}
+                        title={t("reconcile.gl.openHint")}
+                        className={`cursor-pointer border-b border-border/50 hover:bg-muted/60 ${l.is_reversal ? "text-muted-foreground" : ""}`}
                       >
                         <td className={txtCls}>{l.entry_date}</td>
                         <td className={txtCls}>{l.entry_ref ?? eventLabel(l)}</td>
@@ -230,6 +246,7 @@ export function GeneralLedgerReport({
           </table>
         </div>
       )}
+      {selected && <GlTransactionDrawer row={selected} onClose={() => setSelected(null)} />}
     </Panel>
   );
 }
