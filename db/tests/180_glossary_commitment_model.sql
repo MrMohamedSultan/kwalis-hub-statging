@@ -32,6 +32,7 @@ INSERT INTO purchase_orders(id,po_number,vendor_name,budget_code,amount,status,d
  (:'PO','GLO1-PO-0001','Lens house','2101',1000,'approved','2026-09-10',:'O1',:'P');
 INSERT INTO invoices(id,invoice_no,description,budget_code,price,vat_amount,date,vendor_name,organization_id,project_id,purchase_order_id) VALUES
  (:'INV','INV-1','Lens rental','2101',1000,0,'2026-09-15','Lens house',:'O1',:'P',:'PO');
+UPDATE invoices SET approval_status = 'approved' WHERE approval_status = 'pending' AND created_by IS NULL;  -- 201: fixture invoices approved (a recorded invoice is only a Commitment)
 INSERT INTO people(id,kind,full_name,contract_status,organization_id,project_id) VALUES
  ('a1800000-0000-0000-0000-000000000001','crew','Hotel guest','Active',:'O1',:'P');
 INSERT INTO car_rentals(project_id,organization_id,make_model,license_plate,daily_rate,currency,rental_start_date,rental_end_date,budget_code) VALUES

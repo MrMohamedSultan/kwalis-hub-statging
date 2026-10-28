@@ -35,6 +35,7 @@ INSERT INTO invoices(id,invoice_no,description,department,budget_code,price,vata
  ('c1000000-0000-0000-0000-000000000006','INV-006','VFX shots','Post','2102',5000,false,0,'2026-09-10','Paris Post SARL',:'O1',:'P3',true,true,true,true,NULL,5,250),
  -- unknown vendor, no nationality: eligible by default
  ('c1000000-0000-0000-0000-000000000007',NULL,'Catering','Catering','2101',1000,true,150,'2026-09-12','Unknown Kitchen',:'O1',:'P3',true,false,false,false,NULL,0,0);
+UPDATE invoices SET approval_status = 'approved' WHERE approval_status = 'pending' AND created_by IS NULL;  -- 201: fixture invoices approved (a recorded invoice is only a Commitment)
 INSERT INTO payroll(id,ref_id,name,kind,total_amount,budget_code,organization_id,project_id,created_at,wht_percent,wht_amount) VALUES
  ('d1000000-0000-0000-0000-000000000001','PR-01','Saudi Actor','cast',40000,'1403',:'O1',:'P3','2026-07-15',0,0),
  ('d1000000-0000-0000-0000-000000000002','d1000000-0000-0000-0000-000000000002','Tunisian DOP','crew',30000,'2101',:'O1',:'P3','2026-08-15',5,1500),

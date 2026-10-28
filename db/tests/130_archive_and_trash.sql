@@ -6,14 +6,21 @@
 \set P1 '20000000-0000-0000-0000-000000000001'
 \set P4 '20000000-0000-0000-0000-000000000004'
 \set INV '60000000-0000-0000-0000-000000000001'
+-- 201: an approved invoice is cancelled, never deleted; the trash test uses a
+-- recorded (pending) invoice, which is a Commitment
+SELECT t.as_user(:'D');
+SELECT t.denied('201: an approved invoice cannot be deleted', format($$DELETE FROM invoices WHERE id=%L$$, :'INV'));
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false);
+UPDATE invoices SET approval_status = 'pending' WHERE id = :'INV';
 -- baseline for "comes back in every report"
 SELECT t.as_user(:'D');
-SELECT actual AS a0, paid_to_date AS p0 FROM get_cost_report(:'P1') WHERE budget_code='1403' \gset
+SELECT actual AS a0, committed AS c0, paid_to_date AS p0 FROM get_cost_report(:'P1') WHERE budget_code='1403' \gset
 SELECT sum(actual) AS bt0 FROM get_budget_tracking(:'P1') WHERE budget_code='1403' \gset
 -- delete an invoice (org admin) -> it lands in trash
 DELETE FROM invoices WHERE id = :'INV';
 SELECT t.eq('the invoice is gone from the table', (SELECT count(*) FROM invoices WHERE id=:'INV'), 0::bigint);
-SELECT t.eq('...and from the cost report', (SELECT actual FROM get_cost_report(:'P1') WHERE budget_code='1403'), :a0::numeric - 5000);
+SELECT t.eq('...and from the cost report', (SELECT committed FROM get_cost_report(:'P1') WHERE budget_code='1403'), :c0::numeric - 5000);
 SELECT t.eq('it is in the trash with a readable title', (SELECT title FROM trash_items WHERE record_id=:'INV'), 'Casting agency');
 SELECT t.eq('trash records who deleted it', (SELECT deleted_by FROM trash_items WHERE record_id=:'INV'), :'D'::uuid);
 SELECT t.eq('kept for 30 days', (SELECT expires_at = deleted_at + interval '30 days' FROM trash_items WHERE record_id=:'INV'), true);
@@ -34,9 +41,12 @@ SELECT t.eq('same row, same link to its budget line', (SELECT linked_budget_line
 SELECT t.eq('back in the cost report: actual', (SELECT actual FROM get_cost_report(:'P1') WHERE budget_code='1403'), :a0::numeric);
 SELECT t.eq('back in the cost report: its payment is linked again', (SELECT paid_to_date FROM get_cost_report(:'P1') WHERE budget_code='1403'), :p0::numeric);
 SELECT t.eq('back in budget tracking', (SELECT sum(actual) FROM get_budget_tracking(:'P1') WHERE budget_code='1403'), :bt0::numeric);
-SELECT t.eq('back in the ledger view', (SELECT count(*) FROM v_ledger_transactions WHERE source_id=:'INV' AND entry_kind='actual'), 1::bigint);
+SELECT t.eq('back in the cost report: commitment', (SELECT committed FROM get_cost_report(:'P1') WHERE budget_code='1403'), :c0::numeric);
+SELECT t.eq('back in the ledger view (pending = commitment)', (SELECT count(*) FROM v_ledger_transactions WHERE source_id=:'INV' AND entry_kind='commitment'), 1::bigint);
 SELECT t.denied('cannot restore twice', format($$SELECT restore_trash_item(%L)$$, :'trash_id'));
 RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false);
+UPDATE invoices SET approval_status = 'approved' WHERE id = :'INV';   -- 201: fixture back to approved for the next files
 SELECT t.eq('delete and restore are both in the audit trail', (SELECT string_agg(operation, ',' ORDER BY created_at) FROM audit_history WHERE table_name='invoices' AND record_id=:'INV' AND operation IN ('DELETE','INSERT')), 'DELETE,INSERT');
 -- purge
 SELECT t.as_user(:'D');

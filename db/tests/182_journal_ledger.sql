@@ -35,6 +35,7 @@ INSERT INTO project_funding(organization_id,project_id,funding_date,amount,statu
  (:'O1', :'P3', '2026-12-01', 50000, 'expected', 'Financier', 'TRF-2');
 INSERT INTO invoices(id,description,budget_code,price,vat_amount,wht_amount,date,vendor_name,invoice_no,organization_id,project_id)
 VALUES (:'I1','Lighting kit','1403',10000,1500,500,'2026-09-05','Gaffer Co','INV-77',:'O1',:'P3');
+UPDATE invoices SET approval_status = 'approved' WHERE approval_status = 'pending' AND created_by IS NULL;  -- 201: fixture invoices approved (a recorded invoice is only a Commitment)
 INSERT INTO payments(organization_id,project_id,source_type,source_id,amount,payment_date,method)
 VALUES (:'O1',:'P3','invoice',:'I1',11000,'2026-09-10','Transfer');
 -- contract: gross 20,000, net 19,000; two 50% instalments (on the net)

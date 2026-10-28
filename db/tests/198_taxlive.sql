@@ -25,6 +25,7 @@ INSERT INTO vendors(id,name,organization_id,project_id,bank_name,iban) VALUES
  ('d1980000-0000-0000-0000-000000000001','Lens house KSA',:'O1',:'P','Al Rajhi','SA0380000000608010167519');
 INSERT INTO invoices(id,invoice_no,description,budget_code,price,vat_amount,date,vendor_name,organization_id,project_id) VALUES
  ('c1980000-0000-0000-0000-000000000001','INV-198','Lens rental','2101',1000,150,'2026-10-01','Lens house KSA',:'O1',:'P');
+UPDATE invoices SET approval_status = 'approved' WHERE approval_status = 'pending' AND created_by IS NULL;  -- 201: fixture invoices approved (a recorded invoice is only a Commitment)
 INSERT INTO cash_advances(id,holder,total_advance,organization_id,project_id,status) VALUES
  ('e1980000-0000-0000-0000-000000000001','Runner',500,:'O1',:'P','open');
 SET session_replication_role = origin;

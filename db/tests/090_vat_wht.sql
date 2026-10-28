@@ -51,6 +51,6 @@ SELECT t.eq('documents with their own rate are unaffected', (SELECT wht_amount F
 SELECT t.as_user(:'B');
 SELECT t.denied('tenant B refused: VAT', $$SELECT * FROM get_vat_report('20000000-0000-0000-0000-000000000003')$$);
 SELECT t.denied('tenant B refused: WHT', $$SELECT * FROM get_wht_report('20000000-0000-0000-0000-000000000003')$$);
-SELECT t.eq('tenant B sees only the platform default rate', (SELECT count(*) FROM wht_rate_rules), 1::bigint);
+SELECT t.eq('tenant B sees only platform rates (201: the Saudi table)', (SELECT count(*) FROM wht_rate_rules WHERE organization_id IS NOT NULL), 0::bigint);
 SELECT t.eq('tenant B does not inherit org1''s rate', public.resolve_wht_rate('10000000-0000-0000-0000-000000000002','post'), 5.00);
 RESET ROLE;

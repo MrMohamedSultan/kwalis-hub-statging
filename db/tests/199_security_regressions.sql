@@ -59,6 +59,7 @@ INSERT INTO vendors(name,organization_id,project_id,bank_name,bank_country,iban)
 INSERT INTO invoices(id,description,budget_code,price,vat_amount,date,vendor_name,organization_id,project_id) VALUES
  (:'IV1','Own invoice','1403',1000,0,'2026-10-01','Own Vendor',:'O1',:'P1'),
  (:'IV2','Victim invoice','1403',1000,0,'2026-10-01','Secret Vendor',:'O2',:'P2');
+UPDATE invoices SET approval_status = 'approved' WHERE approval_status = 'pending' AND created_by IS NULL;  -- 201: fixture invoices approved (a recorded invoice is only a Commitment)
 
 -- ============================================================ HIGH #1
 -- a member inserts a request that is already approved / paid, with forged stamps
@@ -186,14 +187,15 @@ SELECT t.denied('#6 legit: a hand payment repeating it is still refused', format
 SELECT t.as_user(:'A');
 INSERT INTO payments(id,organization_id,project_id,source_type,source_id,amount,payment_date,notes) VALUES
  ('e1990000-0000-0000-0000-000000000701',:'O1',:'P1','payroll',:'RB2',10,'2026-10-07','probe payroll'),
- ('e1990000-0000-0000-0000-000000000702',:'O1',:'P1','invoice',:'IV2',10,'2026-10-07','probe invoice'),
  ('e1990000-0000-0000-0000-000000000703',:'O1',:'P1','payroll',:'RA2',10,'2026-10-07','own payroll'),
  ('e1990000-0000-0000-0000-000000000704',:'O1',:'P1','invoice',:'IV1',10,'2026-10-07','own invoice');
+-- 201: a payment naming another tenant's invoice is refused outright (approved invoice of this project required)
+SELECT t.denied('#7/#8 (201) payment on another tenant''s invoice refused', format($$INSERT INTO payments(id,organization_id,project_id,source_type,source_id,amount,payment_date,notes) VALUES ('e1990000-0000-0000-0000-000000000702',%L,%L,'invoice',%L,10,'2026-10-07','probe invoice')$$, :'O1', :'P1', :'IV2'));
 RESET ROLE; SELECT set_config('request.jwt.claim.sub', '', false);
 SELECT t.eq('#7 no IBAN copied from another tenant''s contract', (SELECT payee_iban FROM payments WHERE id = 'e1990000-0000-0000-0000-000000000701'), NULL::text);
 SELECT t.eq('#7 no IBAN copied from another tenant''s vendor', (SELECT payee_iban FROM payments WHERE id = 'e1990000-0000-0000-0000-000000000702'), NULL::text);
 SELECT t.eq('#8 no bank name / country copied from another tenant''s contract', (SELECT COALESCE(bank_name,'-')||'|'||COALESCE(bank_country,'-') FROM payments WHERE id = 'e1990000-0000-0000-0000-000000000701'), '-|-');
-SELECT t.eq('#8 no bank name / country copied from another tenant''s vendor', (SELECT COALESCE(bank_name,'-')||'|'||COALESCE(bank_country,'-') FROM payments WHERE id = 'e1990000-0000-0000-0000-000000000702'), '-|-');
+SELECT t.eq('#8 no bank name / country copied from another tenant''s vendor', COALESCE((SELECT COALESCE(bank_name,'-')||'|'||COALESCE(bank_country,'-') FROM payments WHERE id = 'e1990000-0000-0000-0000-000000000702'), '-|-'), '-|-');
 SELECT t.eq('#8 snapshot function: another project''s invoice gives nothing', (SELECT COALESCE(bank_name,'-') FROM public.payment_snapshot_values('invoice', :'IV2', 10, :'P1')), '-');
 SELECT t.eq('#7 legit: own contract IBAN is captured', (SELECT payee_iban FROM payments WHERE id = 'e1990000-0000-0000-0000-000000000703'), 'SA0000OWNIBAN');
 SELECT t.eq('#7 legit: own vendor IBAN is captured', (SELECT payee_iban FROM payments WHERE id = 'e1990000-0000-0000-0000-000000000704'), 'SA0000OWNVENDOR');
