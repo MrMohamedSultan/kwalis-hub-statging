@@ -5363,6 +5363,24 @@
     "po": {
       "period_order": "The service period ends before it starts.",
       "period_hint": "Optional. With a service period the PO accrues evenly over it in Live Balance (only the part not yet invoiced)."
+    },
+    "petty": {
+      "qpe_note": "The cash share is measured against the QPE total (eligible spend excl. VAT) from the Film Commission eligibility rules.",
+      "forbidden_title": "Cash in categories not allowed in cash",
+      "forbidden_count_one": "{{count}} payment in cash in a category the Film Commission does not accept in cash",
+      "forbidden_count_other": "{{count}} payments in cash in categories the Film Commission does not accept in cash",
+      "forbidden_hint": "Wages, location / rent fees, accommodation, flights, insurance, professional services and the other categories marked \"never in cash\" must be paid by bank transfer; these amounts are not eligible.",
+      "col_ref": "Reference",
+      "col_source": "Document",
+      "col_party": "Party",
+      "col_date": "Date",
+      "col_category": "QPE category",
+      "col_cash": "Paid in cash (SAR)",
+      "src_invoice": "Invoice",
+      "src_petty_cash": "Petty cash receipt",
+      "src_payroll": "Contract",
+      "src_overtime": "Overtime",
+      "src_per_diem": "Per diem"
     }
   }
 }
