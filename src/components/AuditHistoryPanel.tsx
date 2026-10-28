@@ -154,7 +154,7 @@ export function AuditHistoryPanel({
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">
                   <span
-                    className={`inline-block px-1.5 py-0.5 rounded text-[10px] mr-1 ${
+                    className={`inline-block px-1.5 py-0.5 rounded text-[10px] me-1 ${
                       r.operation === "INSERT"
                         ? "bg-success/15 text-success"
                         : r.operation === "UPDATE"

@@ -1239,7 +1239,7 @@ function SearchableCountrySelect({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 text-left outline-none focus:ring-2 ring-brand flex items-center justify-between"
+        className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 text-start outline-none focus:ring-2 ring-brand flex items-center justify-between"
       >
         <span className={value ? "" : "text-muted-foreground"}>
           {value || placeholder || "Select..."}
@@ -1268,7 +1268,7 @@ function SearchableCountrySelect({
                   setOpen(false);
                   setQuery("");
                 }}
-                className="w-full text-left px-3 py-1.5 hover:bg-muted text-sm"
+                className="w-full text-start px-3 py-1.5 hover:bg-muted text-sm"
               >
                 {c}
               </button>
@@ -3377,7 +3377,7 @@ function ContractForm({
               type="file"
               accept="image/*,application/pdf"
               onChange={(e) => setIdDocument(e.target.files?.[0] ?? null)}
-              className="flex-1 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-brand/20 file:text-brand file:px-3 file:py-1.5"
+              className="flex-1 text-sm file:me-3 file:rounded-md file:border-0 file:bg-brand/20 file:text-brand file:px-3 file:py-1.5"
             />
             {idDocument && (
               <button
@@ -3415,7 +3415,7 @@ function ContractForm({
               type="file"
               accept="image/*,application/pdf"
               onChange={(e) => setIbanCertificate(e.target.files?.[0] ?? null)}
-              className="flex-1 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-brand/20 file:text-brand file:px-3 file:py-1.5"
+              className="flex-1 text-sm file:me-3 file:rounded-md file:border-0 file:bg-brand/20 file:text-brand file:px-3 file:py-1.5"
             />
             {ibanCertificate && (
               <button
@@ -3453,7 +3453,7 @@ function ContractForm({
               type="file"
               accept="application/pdf"
               onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
-              className="flex-1 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-brand/20 file:text-brand file:px-3 file:py-1.5"
+              className="flex-1 text-sm file:me-3 file:rounded-md file:border-0 file:bg-brand/20 file:text-brand file:px-3 file:py-1.5"
             />
             {attachment && (
               <button

@@ -288,13 +288,13 @@ function CharactersPage() {
                   <table className="w-full text-sm">
                     <thead className="bg-surface/60 text-muted-foreground text-xs uppercase tracking-wider">
                       <tr>
-                        <th className="text-left px-3 py-2">Name</th>
-                        <th className="text-left px-3 py-2">Description</th>
-                        <th className="text-left px-3 py-2">Season</th>
-                        <th className="text-left px-3 py-2">
+                        <th className="text-start px-3 py-2">Name</th>
+                        <th className="text-start px-3 py-2">Description</th>
+                        <th className="text-start px-3 py-2">Season</th>
+                        <th className="text-start px-3 py-2">
                           {t("characters.linked_budget_line")}
                         </th>
-                        <th className="text-right px-3 py-2 w-28">Actions</th>
+                        <th className="text-end px-3 py-2 w-28">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -381,7 +381,7 @@ function CharactersPage() {
                                 <span className="text-muted-foreground">—</span>
                               )}
                             </td>
-                            <td className="px-3 py-2 text-right">
+                            <td className="px-3 py-2 text-end">
                               {isEdit ? (
                                 <div className="inline-flex gap-1">
                                   <button

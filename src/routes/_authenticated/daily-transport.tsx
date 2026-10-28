@@ -519,7 +519,7 @@ function DailyTransportPage() {
                     (h) => (
                       <th
                         key={h}
-                        className="px-3 py-2 text-left text-xs uppercase tracking-wider font-medium"
+                        className="px-3 py-2 text-start text-xs uppercase tracking-wider font-medium"
                       >
                         {h}
                       </th>
@@ -596,11 +596,11 @@ function DailyTransportPage() {
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <td className="px-3 py-2 text-end whitespace-nowrap">
                       <button
                         disabled={!row.dirty || savingIdx === idx}
                         onClick={() => save(idx)}
-                        className="inline-flex items-center gap-1 rounded-lg bg-brand/90 hover:bg-brand text-white px-3 py-1.5 text-xs font-medium disabled:opacity-40 mr-1"
+                        className="inline-flex items-center gap-1 rounded-lg bg-brand/90 hover:bg-brand text-white px-3 py-1.5 text-xs font-medium disabled:opacity-40 me-1"
                       >
                         {savingIdx === idx ? (
                           <Loader2 className="size-3 animate-spin" />
@@ -661,7 +661,7 @@ function PassengerPicker({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full min-h-[32px] flex items-center flex-wrap gap-1 bg-surface-2 border border-border rounded-lg px-2 py-1 text-sm text-left outline-none focus:ring-2 ring-brand"
+        className="w-full min-h-[32px] flex items-center flex-wrap gap-1 bg-surface-2 border border-border rounded-lg px-2 py-1 text-sm text-start outline-none focus:ring-2 ring-brand"
       >
         {selectedOpts.length === 0 ? (
           <span className="text-muted-foreground">Select passengers…</span>
@@ -682,7 +682,7 @@ function PassengerPicker({
             </span>
           ))
         )}
-        <ChevronDown className="size-3 text-muted-foreground ml-auto" />
+        <ChevronDown className="size-3 text-muted-foreground ms-auto" />
       </button>
       {open && (
         <div className="absolute z-30 mt-1 w-64 bg-card border border-border rounded-lg shadow-2xl overflow-hidden">
@@ -708,12 +708,12 @@ function PassengerPicker({
                     key={o.id}
                     type="button"
                     onClick={() => onToggle(o.id)}
-                    className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left text-foreground hover:bg-muted ${checked ? "bg-card/[0.06]" : ""}`}
+                    className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-start text-foreground hover:bg-muted ${checked ? "bg-card/[0.06]" : ""}`}
                   >
                     <span>
                       <span className="font-medium">{o.name}</span>
                       {o.subtitle && (
-                        <span className="text-muted-foreground ml-1">· {o.subtitle}</span>
+                        <span className="text-muted-foreground ms-1">· {o.subtitle}</span>
                       )}
                     </span>
                     {checked && <span className="text-brand">✓</span>}

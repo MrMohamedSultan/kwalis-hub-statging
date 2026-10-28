@@ -1237,7 +1237,7 @@ function AdvanceForm({
         </Field>
 
         <Field label={t("platform.ui.floatType")}>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {(Object.keys(FLOAT_TYPE_LABELS) as FloatType[]).map((t) => {
               const Icon = FLOAT_TYPE_ICONS[t];
               const active = floatType === t;
@@ -1310,7 +1310,7 @@ function AdvanceForm({
           )}
         </Field>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Field label={t("platform.ui.currency")}>
             <select
               value={effectiveCurrency}

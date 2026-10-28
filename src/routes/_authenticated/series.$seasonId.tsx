@@ -267,12 +267,14 @@ function SeasonDetail() {
           <table className="w-full text-sm">
             <thead className="text-xs uppercase text-muted-foreground">
               <tr className="border-b border-border">
-                <th className="text-left py-2 px-2">#</th>
-                <th className="text-left py-2 px-2">Title</th>
-                <th className="text-left py-2 px-2">{t("series_seasonid.shoot_date")}</th>
-                <th className="text-right py-2 px-2">Allocated</th>
-                <th className="text-right py-2 px-2">% of Season</th>
-                <th className="text-left py-2 px-2">{t("series_seasonid.variance_explanation")}</th>
+                <th className="text-start py-2 px-2">#</th>
+                <th className="text-start py-2 px-2">Title</th>
+                <th className="text-start py-2 px-2">{t("series_seasonid.shoot_date")}</th>
+                <th className="text-end py-2 px-2">Allocated</th>
+                <th className="text-end py-2 px-2">% of Season</th>
+                <th className="text-start py-2 px-2">
+                  {t("series_seasonid.variance_explanation")}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -297,7 +299,7 @@ function SeasonDetail() {
                       <td className="py-2 px-2 text-muted-foreground align-top">
                         {ep.shooting_date ?? "—"}
                       </td>
-                      <td className="py-2 px-2 text-right tabular-nums align-top">
+                      <td className="py-2 px-2 text-end tabular-nums align-top">
                         {unallocated ? (
                           <span className="inline-flex items-center gap-1 text-warning text-xs">
                             <AlertTriangle className="size-3" /> Unallocated
@@ -306,7 +308,7 @@ function SeasonDetail() {
                           formatUSD(allocated)
                         )}
                       </td>
-                      <td className="py-2 px-2 text-right tabular-nums text-muted-foreground align-top">
+                      <td className="py-2 px-2 text-end tabular-nums text-muted-foreground align-top">
                         {totalAllocated > 0
                           ? ((allocated / totalAllocated) * 100).toFixed(1)
                           : "0.0"}
@@ -337,10 +339,10 @@ function SeasonDetail() {
           <table className="w-full text-sm">
             <thead className="text-xs uppercase text-muted-foreground sticky top-0 bg-surface">
               <tr className="border-b border-border">
-                <th className="text-left py-2 px-2">Code</th>
-                <th className="text-left py-2 px-2">Description</th>
-                <th className="text-left py-2 px-2">Group</th>
-                <th className="text-right py-2 px-2">Total</th>
+                <th className="text-start py-2 px-2">Code</th>
+                <th className="text-start py-2 px-2">Description</th>
+                <th className="text-start py-2 px-2">Group</th>
+                <th className="text-end py-2 px-2">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -356,7 +358,7 @@ function SeasonDetail() {
                     <td className="py-2 px-2 tabular-nums">{l.mainCode}</td>
                     <td className="py-2 px-2">{l.description}</td>
                     <td className="py-2 px-2 text-muted-foreground">{l.group}</td>
-                    <td className="py-2 px-2 text-right tabular-nums">{formatUSD(lineTotal(l))}</td>
+                    <td className="py-2 px-2 text-end tabular-nums">{formatUSD(lineTotal(l))}</td>
                   </tr>
                 ))
               )}
@@ -373,10 +375,10 @@ function SeasonDetail() {
           <table className="w-full text-sm">
             <thead className="text-xs uppercase text-muted-foreground sticky top-0 bg-surface">
               <tr className="border-b border-border">
-                <th className="text-left py-2 px-2">Date</th>
-                <th className="text-left py-2 px-2">Description</th>
-                <th className="text-left py-2 px-2">Ref</th>
-                <th className="text-right py-2 px-2">Amount</th>
+                <th className="text-start py-2 px-2">Date</th>
+                <th className="text-start py-2 px-2">Description</th>
+                <th className="text-start py-2 px-2">Ref</th>
+                <th className="text-end py-2 px-2">Amount</th>
               </tr>
             </thead>
             <tbody>
@@ -392,7 +394,7 @@ function SeasonDetail() {
                     <td className="py-2 px-2 text-muted-foreground">{t.entry_date ?? "—"}</td>
                     <td className="py-2 px-2">{t.description ?? "—"}</td>
                     <td className="py-2 px-2 text-muted-foreground">{t.reference_no ?? "—"}</td>
-                    <td className="py-2 px-2 text-right tabular-nums">
+                    <td className="py-2 px-2 text-end tabular-nums">
                       {formatUSD(Number(t.amount || 0))}
                     </td>
                   </tr>

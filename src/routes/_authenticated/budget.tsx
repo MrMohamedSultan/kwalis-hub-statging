@@ -2719,7 +2719,7 @@ function DryRunPreview({
                 <li key={s.id} className="py-1.5 flex flex-wrap items-baseline gap-x-2">
                   <span className="font-mono text-highlight">{row.mainCode}</span>
                   <span className="text-foreground/80 truncate max-w-md">{row.description}</span>
-                  <span className="ml-auto flex items-baseline gap-2">
+                  <span className="ms-auto flex items-baseline gap-2">
                     <span className="text-muted-foreground line-through">
                       {row.headerCode || "—"}
                     </span>
@@ -3203,7 +3203,7 @@ function CommitSummaryModal({
           <div className="text-[11px] text-muted-foreground mt-0.5">Parsed via {via}</div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
           <div className="rounded-lg border border-border bg-surface-2 p-3">
             <div className="text-[10px] uppercase text-muted-foreground">
               {t("platform.ui.rows")}

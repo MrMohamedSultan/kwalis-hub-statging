@@ -146,7 +146,7 @@ function SettingsPage() {
                   <button
                     key={t.key}
                     onClick={() => setTab(t.key)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left whitespace-nowrap transition-colors ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-start whitespace-nowrap transition-colors ${
                       active
                         ? "bg-brand text-brand-foreground font-semibold"
                         : "text-muted-foreground hover:bg-muted"
@@ -399,7 +399,7 @@ function ProjectSettingsPanel() {
             value={form.project_name}
             onChange={(e) => setForm({ ...form, project_name: e.target.value })}
             disabled={loading}
-            className="bg-sidebar-active text-sidebar-foreground border border-border rounded-lg px-3 py-2 w-64 outline-none text-right font-medium"
+            className="bg-sidebar-active text-sidebar-foreground border border-border rounded-lg px-3 py-2 w-64 outline-none text-end font-medium"
           />
         </Field>
         <Field label={t("platform.settings.projectType")}>

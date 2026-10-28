@@ -817,7 +817,7 @@ export function ProductionTimelinePage() {
               <div className="absolute z-30 mt-1 w-80 rounded-xl border border-border bg-popover shadow-xl p-2">
                 <button
                   onClick={duplicateAsDraft}
-                  className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-muted text-left"
+                  className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-muted text-start"
                 >
                   <Plus className="size-3.5" />
                   {t("production_timeline.duplicate_current_schedule_create_draft")}
@@ -1941,7 +1941,7 @@ function CreateEventModal({
                                   setChosen(it);
                                   setPickerOpen(false);
                                 }}
-                                className={`w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-left hover:bg-muted ${selected ? "bg-brand/10" : ""}`}
+                                className={`w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-start hover:bg-muted ${selected ? "bg-brand/10" : ""}`}
                               >
                                 <span
                                   className={`${it.bg} ${textOnBg(it.bg)} w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-extrabold shrink-0 ring-1 ring-border`}
@@ -1998,7 +1998,7 @@ function CreateEventModal({
               <Clock className="size-3.5" />
               {t("production_timeline.working_duration")}
             </div>
-            <div className="grid grid-cols-3 gap-2 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
               <div>
                 <label className="text-[10px] text-muted-foreground">
                   {t("production_timeline.weeks_w")}
@@ -2149,7 +2149,7 @@ function FiltersSidebar({
           <button
             key={p}
             onClick={() => setFilter(p)}
-            className={`w-full text-left rounded-lg px-2 py-1.5 text-xs hover:bg-muted ${filter === p ? "bg-brand/15 text-brand-foreground font-semibold" : ""}`}
+            className={`w-full text-start rounded-lg px-2 py-1.5 text-xs hover:bg-muted ${filter === p ? "bg-brand/15 text-brand-foreground font-semibold" : ""}`}
           >
             {p}
           </button>
@@ -2197,7 +2197,7 @@ function FiltersSidebar({
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="w-full text-left rounded-lg px-2 py-1.5 text-xs text-brand hover:bg-muted flex items-center gap-1.5"
+            className="w-full text-start rounded-lg px-2 py-1.5 text-xs text-brand hover:bg-muted flex items-center gap-1.5"
           >
             <Plus className="size-3" />
             {t("production_timeline.create_new_filter")}
@@ -2429,7 +2429,7 @@ function AllProjectDatesDrawer({
                         setFilter(k);
                         setMenuOpen(false);
                       }}
-                      className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-card dark:hover:bg-muted text-left"
+                      className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-card dark:hover:bg-muted text-start"
                     >
                       {filter === k ? (
                         <CheckCircle2 className="size-3.5 text-brand" />
@@ -2456,7 +2456,7 @@ function AllProjectDatesDrawer({
                         setFilter(k);
                         setMenuOpen(false);
                       }}
-                      className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-card dark:hover:bg-muted text-left"
+                      className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-card dark:hover:bg-muted text-start"
                     >
                       {filter === k ? (
                         <CheckCircle2 className="size-3.5 text-brand" />

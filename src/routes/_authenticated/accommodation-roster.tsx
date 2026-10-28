@@ -253,7 +253,7 @@ function AccommodationRosterPage() {
                   ].map((h) => (
                     <th
                       key={h}
-                      className="px-3 py-2 text-left text-xs uppercase tracking-wider font-medium"
+                      className="px-3 py-2 text-start text-xs uppercase tracking-wider font-medium"
                     >
                       {h}
                     </th>
@@ -453,7 +453,7 @@ function AccommodationRosterPage() {
                             ))}
                         </select>
                       </td>
-                      <td className="px-3 py-2 text-right">
+                      <td className="px-3 py-2 text-end">
                         <button
                           disabled={!dirty || savingId === p.id}
                           onClick={() => save(p.id)}

@@ -645,7 +645,7 @@ function SidebarComponent({
 
         <button
           onClick={toggle}
-          className={`flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-white/10 text-left ${railRow}`}
+          className={`flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-white/10 text-start ${railRow}`}
           aria-label={t("sidebar.toggle_theme")}
           title={theme === "dark" ? "Switch to Professional Light" : "Switch to Cinematic Dark"}
         >
@@ -669,7 +669,7 @@ function SidebarComponent({
               to={item.path as any}
               onClick={onNavigate}
               title={t(item.label)}
-              className={`flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-white/10 text-left ${railRow}`}
+              className={`flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-white/10 text-start ${railRow}`}
             >
               <Icon className="size-4 shrink-0" />
               <span
@@ -685,7 +685,7 @@ function SidebarComponent({
           to="/auth"
           onClick={() => signOut()}
           title={t("nav.logout")}
-          className={`flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-white/10 text-left ${railRow}`}
+          className={`flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-white/10 text-start ${railRow}`}
         >
           <LogOut className="size-4 shrink-0" />
           <span

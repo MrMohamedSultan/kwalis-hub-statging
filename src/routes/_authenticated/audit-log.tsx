@@ -260,13 +260,13 @@ export function AuditLogPage() {
           <table className="w-full text-sm">
             <thead className="text-xs uppercase tracking-widest text-muted-foreground">
               <tr className="border-b border-border">
-                <th className="text-left font-medium py-2 pr-3">When</th>
-                <th className="text-left font-medium py-2 pr-3">Category</th>
-                <th className="text-left font-medium py-2 pr-3">Action</th>
-                <th className="text-left font-medium py-2 pr-3">Summary</th>
-                <th className="text-left font-medium py-2 pr-3">Entity</th>
-                <th className="text-left font-medium py-2 pr-3">User</th>
-                <th className="text-left font-medium py-2 pr-3">Severity</th>
+                <th className="text-start font-medium py-2 pr-3">When</th>
+                <th className="text-start font-medium py-2 pr-3">Category</th>
+                <th className="text-start font-medium py-2 pr-3">Action</th>
+                <th className="text-start font-medium py-2 pr-3">Summary</th>
+                <th className="text-start font-medium py-2 pr-3">Entity</th>
+                <th className="text-start font-medium py-2 pr-3">User</th>
+                <th className="text-start font-medium py-2 pr-3">Severity</th>
               </tr>
             </thead>
             <tbody>

@@ -47,18 +47,18 @@ export function PaymentHistory({
       <table className="w-full text-xs">
         <thead className="text-muted-foreground">
           <tr className="border-b border-border">
-            <th className="text-left px-3 py-1.5 font-medium uppercase tracking-wider">Date</th>
-            <th className="text-right px-3 py-1.5 font-medium uppercase tracking-wider">Amount</th>
-            <th className="text-left px-3 py-1.5 font-medium uppercase tracking-wider">Method</th>
-            <th className="text-left px-3 py-1.5 font-medium uppercase tracking-wider">Notes</th>
-            <th className="text-left px-3 py-1.5 font-medium uppercase tracking-wider">Receipt</th>
+            <th className="text-start px-3 py-1.5 font-medium uppercase tracking-wider">Date</th>
+            <th className="text-end px-3 py-1.5 font-medium uppercase tracking-wider">Amount</th>
+            <th className="text-start px-3 py-1.5 font-medium uppercase tracking-wider">Method</th>
+            <th className="text-start px-3 py-1.5 font-medium uppercase tracking-wider">Notes</th>
+            <th className="text-start px-3 py-1.5 font-medium uppercase tracking-wider">Receipt</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((p) => (
             <tr key={p.id} className="border-b border-border">
               <td className="px-3 py-2 tabular-nums">{p.paymentDate}</td>
-              <td className="px-3 py-2 text-right font-semibold tabular-nums">
+              <td className="px-3 py-2 text-end font-semibold tabular-nums">
                 {formatUSD(Number(p.amount))}
               </td>
               <td className="px-3 py-2">{p.method}</td>

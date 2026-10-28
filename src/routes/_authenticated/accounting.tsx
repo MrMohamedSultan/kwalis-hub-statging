@@ -585,7 +585,7 @@ function VendorDocsCell({ vendor }: { vendor: Vendor }) {
                 <button
                   type="button"
                   onClick={() => openFile(f)}
-                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-muted text-xs flex items-center gap-2"
+                  className="w-full text-start px-2 py-1.5 rounded-lg hover:bg-muted text-xs flex items-center gap-2"
                 >
                   <FileText className="size-3.5 shrink-0" />
                   <span className="truncate">{f.name}</span>
@@ -885,7 +885,7 @@ function NewVendorForm({ initial, onDone }: { initial?: Vendor | null; onDone: (
               type="file"
               multiple
               onChange={(e) => setPendingFiles(Array.from(e.target.files ?? []))}
-              className="block w-full text-sm text-muted-foreground file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-brand/20 file:text-brand file:hover:bg-brand/30"
+              className="block w-full text-sm text-muted-foreground file:me-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-brand/20 file:text-brand file:hover:bg-brand/30"
             />
             {pendingFiles.length > 0 && (
               <ul className="mt-2 text-xs text-muted-foreground space-y-0.5">
@@ -1411,7 +1411,7 @@ function VendorLedgerModal({ vendor, onClose }: { vendor: Vendor; onClose: () =>
 
       {tab === "ledger" && (
         <>
-          <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
             <div className="rounded-xl border border-info/30 bg-info/10 p-3">
               <div className="text-[11px] text-info uppercase tracking-wide">
                 {t("accounting.total_billed")}
@@ -2956,7 +2956,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
               <div className="text-muted-foreground mb-2 uppercase tracking-wider text-xs">
                 Amount Breakdown · تفاصيل المبالغ
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
                     Excl. VAT · بدون ضريبة
@@ -3072,7 +3072,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 <div className="grid grid-cols-[1fr_110px_140px_36px] gap-2 text-[10px] uppercase tracking-wider text-muted-foreground px-1">
                   <span>{t("accounting.date")}</span>
                   <span>{t("platform.ui.percent")}</span>
-                  <span className="text-right">{t("accounting.amount")}</span>
+                  <span className="text-end">{t("accounting.amount")}</span>
                   <span />
                 </div>
                 {schedule.map((row, i) => {
@@ -3106,7 +3106,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                         onQuickAdd={addScheduleRow}
                         autoFocusPercent={i === lastAddedIdx}
                         percentClassName={`${inputCls} pr-7 tabular-nums`}
-                        amountClassName={`${inputCls} text-right tabular-nums`}
+                        amountClassName={`${inputCls} text-end tabular-nums`}
                       />
                       <button
                         type="button"
@@ -3156,7 +3156,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 <span className="truncate text-xs">
                   {invoicePdf ? invoicePdf.name : "Attach invoice.pdf later if not available…"}
                 </span>
-                {invoicePdf && <Check className="size-4 text-success ml-auto" />}
+                {invoicePdf && <Check className="size-4 text-success ms-auto" />}
                 <input
                   type="file"
                   accept="application/pdf"
@@ -3171,7 +3171,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 <span className="truncate text-xs">
                   {receiptPdf ? receiptPdf.name : "Attach receipt.pdf later if not available…"}
                 </span>
-                {receiptPdf && <Check className="size-4 text-success ml-auto" />}
+                {receiptPdf && <Check className="size-4 text-success ms-auto" />}
                 <input
                   type="file"
                   accept="application/pdf"
@@ -3639,7 +3639,7 @@ function AdvanceCards() {
                   <PaymentStatusPill paid={paidTotal} total={a.totalAdvance} />
                 </div>
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 text-center text-xs">
                 <div>
                   <div className="text-muted-foreground">{t("platform.ui.total")}</div>
                   <div className="font-semibold mt-1">{formatUSD(a.totalAdvance)}</div>
@@ -4516,7 +4516,7 @@ function Table({ headers, children }: { headers: string[]; children: React.React
             {headers.map((h) => (
               <th
                 key={h}
-                className="text-left px-3 py-2 font-medium text-xs uppercase tracking-wider"
+                className="text-start px-3 py-2 font-medium text-xs uppercase tracking-wider"
               >
                 {h}
               </th>

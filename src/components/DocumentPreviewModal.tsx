@@ -110,7 +110,7 @@ export function DocumentPreviewModal({
         <div className="flex-1 min-h-0 bg-muted/30">
           {loading && (
             <div className="h-full grid place-items-center text-sm text-muted-foreground">
-              <Loader2 className="size-5 animate-spin mr-2 inline" />
+              <Loader2 className="size-5 animate-spin me-2 inline" />
               Loading preview…
             </div>
           )}

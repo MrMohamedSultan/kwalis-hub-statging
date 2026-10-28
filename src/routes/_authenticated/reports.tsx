@@ -444,18 +444,18 @@ function FinalReport({
         <table className="app-table w-full">
           <thead className="text-muted-foreground">
             <tr className="border-b border-border">
-              <th className="px-4 py-2 text-left font-medium text-xs uppercase tracking-wider">
+              <th className="px-4 py-2 text-start font-medium text-xs uppercase tracking-wider">
                 Metric
               </th>
               {groupCols.map((g) => (
                 <th
                   key={g}
-                  className="px-4 py-2 text-right font-medium text-xs uppercase tracking-wider"
+                  className="px-4 py-2 text-end font-medium text-xs uppercase tracking-wider"
                 >
                   {g}
                 </th>
               ))}
-              <th className="px-4 py-2 text-right font-medium text-xs uppercase tracking-wider bg-surface">
+              <th className="px-4 py-2 text-end font-medium text-xs uppercase tracking-wider bg-surface">
                 TOTAL
               </th>
             </tr>
@@ -473,13 +473,13 @@ function FinalReport({
                         : "text-success font-semibold"
                       : "";
                   return (
-                    <td key={g} className={`px-4 py-3 text-right tabular-nums ${cls}`}>
+                    <td key={g} className={`px-4 py-3 text-end tabular-nums ${cls}`}>
                       {formatUSD(v)}
                     </td>
                   );
                 })}
                 <td
-                  className={`px-4 py-3 text-right tabular-nums bg-surface font-semibold ${
+                  className={`px-4 py-3 text-end tabular-nums bg-surface font-semibold ${
                     tone === "variance"
                       ? Number(totals[key]) < 0
                         ? "text-destructive"
@@ -526,7 +526,7 @@ function FinalReport({
                   {["Season", "Episodes", "Allocated", "% of Budget", "Avg / Episode"].map((h) => (
                     <th
                       key={h}
-                      className="px-4 py-2 text-left font-medium text-xs uppercase tracking-wider"
+                      className="px-4 py-2 text-start font-medium text-xs uppercase tracking-wider"
                     >
                       {h}
                     </th>
@@ -684,7 +684,7 @@ function GLReport() {
                 (h) => (
                   <th
                     key={h}
-                    className="px-4 py-2 text-left text-xs uppercase tracking-wider font-medium"
+                    className="px-4 py-2 text-start text-xs uppercase tracking-wider font-medium"
                   >
                     {h}
                   </th>
@@ -896,7 +896,7 @@ function PaidReport() {
               ].map((h) => (
                 <th
                   key={h}
-                  className="px-4 py-2 text-left text-xs uppercase tracking-wider font-medium"
+                  className="px-4 py-2 text-start text-xs uppercase tracking-wider font-medium"
                 >
                   {h}
                 </th>
@@ -1244,7 +1244,7 @@ function GlAccountReport() {
           </div>
           <div>
             <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
-              Search <kbd className="ml-1 px-1 text-[9px] rounded bg-surface-2">/</kbd>
+              Search <kbd className="ms-1 px-1 text-[9px] rounded bg-surface-2">/</kbd>
             </div>
             <input
               ref={searchRef}
@@ -1257,8 +1257,8 @@ function GlAccountReport() {
               className="bg-surface-2 border border-border rounded-xl px-3 py-2 text-sm min-w-[200px]"
             />
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <div className="text-xs text-muted-foreground mr-2">
+          <div className="ms-auto flex items-center gap-2">
+            <div className="text-xs text-muted-foreground me-2">
               {loading
                 ? "Loading GL accounts…"
                 : `${filteredRows.length} of ${summary.rows.length} accounts`}
@@ -1283,7 +1283,7 @@ function GlAccountReport() {
                 ].map((h) => (
                   <th
                     key={h}
-                    className="px-4 py-2 text-left text-xs uppercase tracking-wider font-medium"
+                    className="px-4 py-2 text-start text-xs uppercase tracking-wider font-medium"
                   >
                     {h}
                   </th>
@@ -1691,7 +1691,7 @@ function RebateReport() {
                     >
                       {label}
                       {clickable && (
-                        <span className="ml-1 text-[10px] text-brand">{sortIcon(key!)}</span>
+                        <span className="ms-1 text-[10px] text-brand">{sortIcon(key!)}</span>
                       )}
                     </th>
                   );
@@ -1749,13 +1749,13 @@ function RebateReport() {
                           <span className="text-xs whitespace-nowrap">{l.supplierNationality}</span>
                         </div>
                       </td>
-                      <td className="px-3 py-3 text-right font-mono tabular-nums text-sm">
+                      <td className="px-3 py-3 text-end font-mono tabular-nums text-sm">
                         {formatUSD(l.amountExVat)}
                       </td>
-                      <td className="px-3 py-3 text-right font-mono tabular-nums text-sm text-muted-foreground">
+                      <td className="px-3 py-3 text-end font-mono tabular-nums text-sm text-muted-foreground">
                         {l.vatAmount > 0 ? formatUSD(l.vatAmount) : "—"}
                       </td>
-                      <td className="px-3 py-3 text-right font-mono tabular-nums font-semibold">
+                      <td className="px-3 py-3 text-end font-mono tabular-nums font-semibold">
                         {formatUSD(l.amount)}
                       </td>
                       <td className="px-3 py-3">
@@ -1916,7 +1916,7 @@ function RebateReport() {
                       (Excl. VAT basis)
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-right tabular-nums" colSpan={3}>
+                  <td className="px-3 py-3 text-end tabular-nums" colSpan={3}>
                     {formatUSD(filteredQfeTotal)}
                   </td>
                   <td className="px-3 py-3 text-success" colSpan={2}>
@@ -1945,7 +1945,7 @@ function RebateReport() {
                   </option>
                 ))}
               </select>
-              <span className="ml-2">
+              <span className="ms-2">
                 Showing{" "}
                 <span className="text-foreground font-medium">{(page - 1) * pageSize + 1}</span>–
                 <span className="text-foreground font-medium">
@@ -2176,7 +2176,7 @@ function VatReport() {
                   (h) => (
                     <th
                       key={h}
-                      className="px-4 py-2 text-left text-xs uppercase tracking-wider font-medium"
+                      className="px-4 py-2 text-start text-xs uppercase tracking-wider font-medium"
                     >
                       {h}
                     </th>
@@ -2222,7 +2222,7 @@ function VatReport() {
                 {["Date", "Invoice #", "Vendor", "Net (Excl. VAT)", "VAT (15%)"].map((h) => (
                   <th
                     key={h}
-                    className="px-4 py-2 text-left text-xs uppercase tracking-wider font-medium"
+                    className="px-4 py-2 text-start text-xs uppercase tracking-wider font-medium"
                   >
                     {h}
                   </th>
@@ -2554,14 +2554,14 @@ function QfeRebateAuditReport() {
         <div className="overflow-x-auto">
           <table className="app-table w-full text-sm">
             <thead>
-              <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
+              <tr className="text-start text-xs uppercase tracking-wider text-muted-foreground">
                 <th className="px-4 py-3">{t("reports.invoice_date")}</th>
                 <th className="px-4 py-3">Vendor Name</th>
                 <th className="px-4 py-3">{t("reports.vendor_cr_no")}</th>
                 <th className="px-4 py-3">Invoice #</th>
                 <th className="px-4 py-3">Description</th>
                 <th className="px-4 py-3">{t("reports.budget_code_gl")}</th>
-                <th className="px-4 py-3 text-right">{t("reports.net_amount_excl_vat")}</th>
+                <th className="px-4 py-3 text-end">{t("reports.net_amount_excl_vat")}</th>
                 <th className="px-4 py-3">Doc</th>
               </tr>
             </thead>
@@ -2589,7 +2589,7 @@ function QfeRebateAuditReport() {
                     <td className="px-4 py-3 font-mono text-xs">
                       {r.budgetCode || <span className="text-muted-foreground">Unassigned</span>}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">{formatUSD(r.netAmount)}</td>
+                    <td className="px-4 py-3 text-end tabular-nums">{formatUSD(r.netAmount)}</td>
                     <td className="px-4 py-3">
                       {r.docUrl ? (
                         <a
@@ -2611,10 +2611,10 @@ function QfeRebateAuditReport() {
             {filtered.length > 0 && (
               <tfoot>
                 <tr className="border-t border-border bg-surface font-semibold">
-                  <td colSpan={6} className="px-4 py-3 text-right">
+                  <td colSpan={6} className="px-4 py-3 text-end">
                     {t("reports.total_filtered")}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatUSD(filteredNet)}</td>
+                  <td className="px-4 py-3 text-end tabular-nums">{formatUSD(filteredNet)}</td>
                   <td />
                 </tr>
               </tfoot>
@@ -2768,12 +2768,12 @@ function RebateTrackingReport() {
         <h3 className="text-lg font-semibold mb-3">{t("reports.rebateeligible_by_group")}</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-surface/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
+            <thead className="bg-surface/60 text-start text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-3 py-2">Group</th>
-                <th className="px-3 py-2 text-right">Estimated</th>
-                <th className="px-3 py-2 text-right">Actual</th>
-                <th className="px-3 py-2 text-right">Variance</th>
+                <th className="px-3 py-2 text-end">Estimated</th>
+                <th className="px-3 py-2 text-end">Actual</th>
+                <th className="px-3 py-2 text-end">Variance</th>
               </tr>
             </thead>
             <tbody>
@@ -2788,10 +2788,10 @@ function RebateTrackingReport() {
               {byGroup.map((g) => (
                 <tr key={g.group} className="border-t border-border">
                   <td className="px-3 py-2 font-semibold">{g.group}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{formatUSD(g.estimated)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{formatUSD(g.actual)}</td>
+                  <td className="px-3 py-2 text-end tabular-nums">{formatUSD(g.estimated)}</td>
+                  <td className="px-3 py-2 text-end tabular-nums">{formatUSD(g.actual)}</td>
                   <td
-                    className={`px-3 py-2 text-right tabular-nums ${g.variance >= 0 ? "text-warning" : "text-highlight"}`}
+                    className={`px-3 py-2 text-end tabular-nums ${g.variance >= 0 ? "text-warning" : "text-highlight"}`}
                   >
                     {formatUSD(g.variance)}
                   </td>
@@ -2808,12 +2808,12 @@ function RebateTrackingReport() {
         </h3>
         <div className="overflow-x-auto max-h-[360px]">
           <table className="w-full text-sm">
-            <thead className="bg-surface text-left text-xs uppercase tracking-wide text-muted-foreground sticky top-0">
+            <thead className="bg-surface text-start text-xs uppercase tracking-wide text-muted-foreground sticky top-0">
               <tr>
                 <th className="px-3 py-2">Code</th>
                 <th className="px-3 py-2">Description</th>
                 <th className="px-3 py-2">Group</th>
-                <th className="px-3 py-2 text-right">Planned</th>
+                <th className="px-3 py-2 text-end">Planned</th>
               </tr>
             </thead>
             <tbody>
@@ -2822,7 +2822,7 @@ function RebateTrackingReport() {
                   <td className="px-3 py-2 font-mono">{b.mainCode}</td>
                   <td className="px-3 py-2">{b.description}</td>
                   <td className="px-3 py-2">{b.group}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{formatUSD(lineTotal(b))}</td>
+                  <td className="px-3 py-2 text-end tabular-nums">{formatUSD(lineTotal(b))}</td>
                 </tr>
               ))}
             </tbody>
@@ -2836,13 +2836,13 @@ function RebateTrackingReport() {
         </h3>
         <div className="overflow-x-auto max-h-[360px]">
           <table className="w-full text-sm">
-            <thead className="bg-surface text-left text-xs uppercase tracking-wide text-muted-foreground sticky top-0">
+            <thead className="bg-surface text-start text-xs uppercase tracking-wide text-muted-foreground sticky top-0">
               <tr>
                 <th className="px-3 py-2">Date</th>
                 <th className="px-3 py-2">Invoice #</th>
                 <th className="px-3 py-2">Vendor</th>
                 <th className="px-3 py-2">{t("reports.budget_code")}</th>
-                <th className="px-3 py-2 text-right">{t("reports.amount_excl_vat")}</th>
+                <th className="px-3 py-2 text-end">{t("reports.amount_excl_vat")}</th>
               </tr>
             </thead>
             <tbody>
@@ -2852,7 +2852,7 @@ function RebateTrackingReport() {
                   <td className="px-3 py-2">{i.invoiceNo}</td>
                   <td className="px-3 py-2">{i.vendorName}</td>
                   <td className="px-3 py-2 font-mono">{i.budgetCode}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
+                  <td className="px-3 py-2 text-end tabular-nums">
                     {formatUSD(Number(i.price || 0))}
                   </td>
                 </tr>

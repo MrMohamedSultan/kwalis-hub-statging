@@ -1031,7 +1031,7 @@ function PerDiemLedgerPage() {
                   ].map((h) => (
                     <th
                       key={h}
-                      className="px-2 py-2 text-left text-[11px] uppercase tracking-wider font-medium"
+                      className="px-2 py-2 text-start text-[11px] uppercase tracking-wider font-medium"
                     >
                       {h}
                     </th>
@@ -1316,7 +1316,7 @@ function PersonBlock({
                 )}
               </div>
             </td>
-            <td className="px-2 py-2 text-right whitespace-nowrap">
+            <td className="px-2 py-2 text-end whitespace-nowrap">
               <button
                 disabled={!r.dirty || savingKey === r.key}
                 onClick={() => onSave(r.key)}

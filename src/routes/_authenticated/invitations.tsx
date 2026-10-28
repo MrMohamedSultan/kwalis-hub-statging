@@ -310,14 +310,14 @@ export function InvitationsPage({
           ) : (
             <div className="overflow-x-auto">
               <table className="app-table w-full">
-                <thead className="bg-surface text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <thead className="bg-surface text-start text-xs uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3">Email</th>
                     <th className="px-4 py-3">Organization</th>
                     <th className="px-4 py-3">Project</th>
                     <th className="px-4 py-3">Role</th>
                     <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
+                    <th className="px-4 py-3 text-end">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -445,7 +445,7 @@ function OrgAccessTree({
               <div key={o.id}>
                 <button
                   onClick={() => toggle(o.id)}
-                  className="w-full flex items-center gap-3 px-5 py-3 hover:bg-muted text-left"
+                  className="w-full flex items-center gap-3 px-5 py-3 hover:bg-muted text-start"
                 >
                   {isOpen ? (
                     <ChevronDown className="size-4 text-muted-foreground shrink-0" />
@@ -798,7 +798,7 @@ function InviteRow({
           <Icon className="size-3" /> {status}
         </span>
       </td>
-      <td className="px-4 py-3 text-right">
+      <td className="px-4 py-3 text-end">
         <div className="inline-flex items-center gap-1.5">
           {status === "pending" && (
             <button
@@ -972,7 +972,7 @@ export function CreateUserDirectCard({
               <button
                 type="button"
                 onClick={() => setScope("company")}
-                className={`rounded-lg border px-3 py-2 text-left text-xs transition ${scope === "company" ? "border-brand bg-brand/10 text-foreground" : "border-border bg-surface text-muted-foreground hover:bg-muted"}`}
+                className={`rounded-lg border px-3 py-2 text-start text-xs transition ${scope === "company" ? "border-brand bg-brand/10 text-foreground" : "border-border bg-surface text-muted-foreground hover:bg-muted"}`}
               >
                 <div className="font-semibold">🏢 Company Member</div>
                 <div className="text-[10px] opacity-80 mt-0.5">
@@ -988,7 +988,7 @@ export function CreateUserDirectCard({
                   setProjectIds([]);
                   setRoleId("");
                 }}
-                className={`rounded-lg border px-3 py-2 text-left text-xs transition ${scope === "platform" ? "border-warning/40 bg-warning/10 text-foreground" : "border-border bg-surface text-muted-foreground hover:bg-muted"}`}
+                className={`rounded-lg border px-3 py-2 text-start text-xs transition ${scope === "platform" ? "border-warning/40 bg-warning/10 text-foreground" : "border-border bg-surface text-muted-foreground hover:bg-muted"}`}
               >
                 <div className="font-semibold">👑 Platform Admin</div>
                 <div className="text-[10px] opacity-80 mt-0.5">
@@ -1262,7 +1262,7 @@ function MembersCard({
       <div className="flex items-center gap-2 mb-3">
         <Users className="size-4 text-brand" />
         <h3 className="text-sm font-semibold">{t("invitations.team_members")}</h3>
-        <span className="ml-auto text-xs text-muted-foreground">{members.length} total</span>
+        <span className="ms-auto text-xs text-muted-foreground">{members.length} total</span>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
@@ -1325,13 +1325,13 @@ function MembersCard({
       ) : (
         <div className="overflow-x-auto -mx-2">
           <table className="app-table w-full">
-            <thead className="bg-surface text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+            <thead className="bg-surface text-start text-[10px] uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2">Scope</th>
                 <th className="px-3 py-2">Organization</th>
                 <th className="px-3 py-2">Role</th>
-                <th className="px-3 py-2 text-right">Actions</th>
+                <th className="px-3 py-2 text-end">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1459,7 +1459,7 @@ function MemberRow({
       <td className="px-3 py-2 text-xs">{orgName}</td>
       <td className="px-3 py-2 text-xs capitalize">{m.role}</td>
 
-      <td className="px-3 py-2 text-right">
+      <td className="px-3 py-2 text-end">
         {open ? (
           <div className="inline-flex items-center gap-2">
             <input

@@ -67,7 +67,7 @@ export function BudgetHeader({
             title={t("budgetheader.version_history")}
           >
             <History className="size-3.5" /> History
-            <span className="ml-1 px-1.5 py-0 rounded bg-muted text-muted-foreground text-[10px] font-semibold">
+            <span className="ms-1 px-1.5 py-0 rounded bg-muted text-muted-foreground text-[10px] font-semibold">
               {meta.history.length}
             </span>
           </button>
@@ -163,7 +163,7 @@ function BudgetHeaderHistoryModal({ onClose }: { onClose: () => void }) {
                       <div className="text-xs text-muted-foreground mt-1 truncate">{h.note}</div>
                     )}
                   </div>
-                  <div className="text-right text-xs text-muted-foreground shrink-0">
+                  <div className="text-end text-xs text-muted-foreground shrink-0">
                     <div>{h.versionDate}</div>
                     <div className="opacity-70">{formatDateTime(h.savedAt)}</div>
                   </div>

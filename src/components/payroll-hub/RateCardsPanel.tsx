@@ -110,12 +110,12 @@ export function RateCardsPanel() {
           <table className="w-full text-sm">
             <thead className="bg-surface text-[11px] uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="text-left py-2 px-3">{t("ratecardspanel.label")}</th>
-                <th className="text-left py-2 px-3">{t("ratecardspanel.person")}</th>
-                <th className="text-left py-2 px-3">{t("ratecardspanel.cadence")}</th>
-                <th className="text-right py-2 px-3">{t("ratecardspanel.base_rate")}</th>
-                <th className="text-right py-2 px-3">Per-diem</th>
-                <th className="text-right py-2 px-3">Housing</th>
+                <th className="text-start py-2 px-3">{t("ratecardspanel.label")}</th>
+                <th className="text-start py-2 px-3">{t("ratecardspanel.person")}</th>
+                <th className="text-start py-2 px-3">{t("ratecardspanel.cadence")}</th>
+                <th className="text-end py-2 px-3">{t("ratecardspanel.base_rate")}</th>
+                <th className="text-end py-2 px-3">Per-diem</th>
+                <th className="text-end py-2 px-3">Housing</th>
                 <th />
               </tr>
             </thead>
@@ -171,16 +171,16 @@ function RateCardRow({
           {CADENCE_LABEL[row.cadence as Cadence] ?? row.cadence}
         </span>
       </td>
-      <td className="py-2 px-3 text-right tabular-nums">
+      <td className="py-2 px-3 text-end tabular-nums">
         {formatMoney(Number(row.base_rate), row.currency)}
       </td>
-      <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">
+      <td className="py-2 px-3 text-end tabular-nums text-muted-foreground">
         {formatMoney(Number(row.per_diem), row.currency)}
       </td>
-      <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">
+      <td className="py-2 px-3 text-end tabular-nums text-muted-foreground">
         {formatMoney(Number(row.housing_allowance), row.currency)}
       </td>
-      <td className="py-2 px-3 text-right">
+      <td className="py-2 px-3 text-end">
         <button
           type="button"
           onClick={onDelete}

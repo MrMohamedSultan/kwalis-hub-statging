@@ -596,7 +596,7 @@ export function CrewPayrollTab({
             className="bg-surface-2 border border-border rounded-lg pl-8 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-brand/60 w-72"
           />
         </div>
-        <span className="text-[10px] uppercase tracking-widest text-muted-foreground ml-1">
+        <span className="text-[10px] uppercase tracking-widest text-muted-foreground ms-1">
           {t("crewpayrolltab.filter_by_status")}
         </span>
         {filterChips.map((c) => {
@@ -701,7 +701,7 @@ export function CrewPayrollTab({
           Mark Paid {bulkCounts.approved > 0 ? `(${bulkCounts.approved})` : ""}
         </button>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ms-auto flex items-center gap-2">
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground hidden sm:inline">
             Export {selected.size > 0 ? "selection" : "filtered view"}
           </span>
@@ -752,15 +752,15 @@ export function CrewPayrollTab({
                   )}
                 </button>
               </th>
-              <th className="text-left px-4 py-3 font-medium">{t("platform.ui.beneficiary")}</th>
-              <th className="text-left px-4 py-3 font-medium">{t("platform.ui.kind")}</th>
-              <th className="text-left px-4 py-3 font-medium">{t("platform.ui.budget")}</th>
-              <th className="text-right px-4 py-3 font-medium">{t("platform.ui.total")}</th>
-              <th className="text-right px-4 py-3 font-medium">{t("platform.ui.paid")}</th>
-              <th className="text-right px-4 py-3 font-medium">{t("crewpayrolltab.remaining")}</th>
-              <th className="text-left px-4 py-3 font-medium">{t("platform.ui.structure")}</th>
-              <th className="text-left px-4 py-3 font-medium">{t("platform.ui.status")}</th>
-              <th className="text-right px-4 py-3 font-medium">{t("platform.ui.actions")}</th>
+              <th className="text-start px-4 py-3 font-medium">{t("platform.ui.beneficiary")}</th>
+              <th className="text-start px-4 py-3 font-medium">{t("platform.ui.kind")}</th>
+              <th className="text-start px-4 py-3 font-medium">{t("platform.ui.budget")}</th>
+              <th className="text-end px-4 py-3 font-medium">{t("platform.ui.total")}</th>
+              <th className="text-end px-4 py-3 font-medium">{t("platform.ui.paid")}</th>
+              <th className="text-end px-4 py-3 font-medium">{t("crewpayrolltab.remaining")}</th>
+              <th className="text-start px-4 py-3 font-medium">{t("platform.ui.structure")}</th>
+              <th className="text-start px-4 py-3 font-medium">{t("platform.ui.status")}</th>
+              <th className="text-end px-4 py-3 font-medium">{t("platform.ui.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -826,7 +826,7 @@ export function CrewPayrollTab({
                                   search: { tab: "invoices", focus: srcInv.id } as any,
                                 })
                               }
-                              className="font-medium text-foreground hover:text-brand underline underline-offset-2 decoration-dotted decoration-brand/60 text-left inline-flex items-center gap-1"
+                              className="font-medium text-foreground hover:text-brand underline underline-offset-2 decoration-dotted decoration-brand/60 text-start inline-flex items-center gap-1"
                               title={`Open source invoice #${srcInv.invoiceNo || srcInv.id.slice(0, 6)}`}
                             >
                               <FileSearch className="size-3.5 text-brand/80" />
@@ -882,10 +882,10 @@ export function CrewPayrollTab({
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold">
+                  <td className="px-4 py-3 text-end tabular-nums font-semibold">
                     {formatUSD(total)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-success">
+                  <td className="px-4 py-3 text-end tabular-nums text-success">
                     {formatUSD(paid)}
                     {pending > 0 && (
                       <div className="text-[10px] text-warning font-normal">
@@ -893,7 +893,7 @@ export function CrewPayrollTab({
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatUSD(remaining)}</td>
+                  <td className="px-4 py-3 text-end tabular-nums">{formatUSD(remaining)}</td>
                   <td className="px-4 py-3">
                     <div className="text-xs">
                       {slots > 0
@@ -959,7 +959,7 @@ export function CrewPayrollTab({
                       >
                         Entries
                         {pendingCount + approvedCount > 0 && (
-                          <span className="ml-1 inline-flex items-center justify-center min-w-4 h-4 px-1 text-[9px] font-semibold rounded-full bg-warning/20 text-warning border border-warning/40">
+                          <span className="ms-1 inline-flex items-center justify-center min-w-4 h-4 px-1 text-[9px] font-semibold rounded-full bg-warning/20 text-warning border border-warning/40">
                             {pendingCount + approvedCount}
                           </span>
                         )}
@@ -1005,7 +1005,7 @@ export function CrewPayrollTab({
             </span>{" "}
             of <span className="font-mono text-foreground">{rows.length}</span>
           </span>
-          <div className="flex items-center gap-1 ml-2">
+          <div className="flex items-center gap-1 ms-2">
             <span className="text-[10px] uppercase tracking-widest">{t("platform.ui.rows")}</span>
             <select
               value={pageSize}
@@ -1022,7 +1022,7 @@ export function CrewPayrollTab({
               ))}
             </select>
           </div>
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ms-auto flex items-center gap-1">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={safePage <= 1}
@@ -1264,7 +1264,7 @@ function StructureModal({ row, onClose }: { row: PayrollRow; onClose: () => void
                     onChange={(e) => updateMilestone(i, Number(e.target.value) || 0)}
                     className="flex-1 bg-surface-2 border border-border rounded-lg px-3 py-1.5 text-sm outline-none"
                   />
-                  <span className="text-xs text-muted-foreground w-24 text-right">
+                  <span className="text-xs text-muted-foreground w-24 text-end">
                     {formatUSD(((Number(row.totalAmount) || 0) * (Number(m) || 0)) / 100)}
                   </span>
                   <button

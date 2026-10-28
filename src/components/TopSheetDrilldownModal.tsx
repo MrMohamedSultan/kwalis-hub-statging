@@ -173,14 +173,14 @@ export function TopSheetDrilldownModal({
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+              <tr className="border-b border-border text-start text-[10px] uppercase tracking-wide text-muted-foreground">
                 <th className="py-2 pr-3">{t("topsheetdrilldownmodal.date", "Date")}</th>
                 <th className="py-2 pr-3">{t("topsheetdrilldownmodal.source", "Source")}</th>
                 <th className="py-2 pr-3">{t("topsheetdrilldownmodal.reference", "Reference")}</th>
                 <th className="py-2 pr-3">
                   {t("topsheetdrilldownmodal.description", "Description")}
                 </th>
-                <th className="py-2 text-right">
+                <th className="py-2 text-end">
                   {t("topsheetdrilldownmodal.amount_sar", "Amount (SAR)")}
                 </th>
               </tr>
@@ -195,7 +195,7 @@ export function TopSheetDrilldownModal({
                   <td className="py-2 pr-3 font-mono text-xs">{r.reference ?? "—"}</td>
                   <td className="py-2 pr-3">{r.description}</td>
                   <td
-                    className={`py-2 text-right font-mono ${
+                    className={`py-2 text-end font-mono ${
                       r.amount < 0 ? "text-destructive" : "text-foreground"
                     }`}
                   >
@@ -209,7 +209,7 @@ export function TopSheetDrilldownModal({
                 <td className="py-2 pr-3" colSpan={4}>
                   {t("topsheetdrilldownmodal.total", "Total")}
                 </td>
-                <td className="py-2 text-right font-mono">
+                <td className="py-2 text-end font-mono">
                   <SarAmount amount={total} />
                 </td>
               </tr>

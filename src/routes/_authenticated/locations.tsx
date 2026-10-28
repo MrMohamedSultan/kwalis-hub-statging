@@ -573,7 +573,7 @@ function LocationForm({
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="Contact Name">
               <input
                 value={contactName}
@@ -597,7 +597,7 @@ function LocationForm({
               />
             </Field>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="Daily Rate (USD)">
               <input
                 type="number"

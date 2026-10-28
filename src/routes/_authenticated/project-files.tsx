@@ -814,7 +814,7 @@ function ProjectFilesPage() {
                   <button
                     key={f.id}
                     onClick={() => setCurrentId(f.id)}
-                    className="flex items-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2 text-left hover:bg-muted"
+                    className="flex items-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2 text-start hover:bg-muted"
                   >
                     <Folder className="size-4 text-warning" />
                     <span className="truncate flex-1">{f.name}</span>

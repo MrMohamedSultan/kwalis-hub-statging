@@ -284,11 +284,11 @@ function GlAccountsPage() {
         <table className="w-full text-sm">
           <thead className="bg-surface text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
-              <th className="text-left px-3 py-2 font-medium">Code</th>
-              <th className="text-left px-3 py-2 font-medium">Name</th>
-              <th className="text-left px-3 py-2 font-medium">Category</th>
-              <th className="text-left px-3 py-2 font-medium">Description</th>
-              <th className="text-right px-3 py-2 font-medium w-[1%]">Actions</th>
+              <th className="text-start px-3 py-2 font-medium">Code</th>
+              <th className="text-start px-3 py-2 font-medium">Name</th>
+              <th className="text-start px-3 py-2 font-medium">Category</th>
+              <th className="text-start px-3 py-2 font-medium">Description</th>
+              <th className="text-end px-3 py-2 font-medium w-[1%]">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -318,12 +318,12 @@ function GlAccountsPage() {
                     </span>
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">{r.description ?? "—"}</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-right">
+                  <td className="px-3 py-2 whitespace-nowrap text-end">
                     <GuardedButton
                       perm="gl.manage"
                       actionLabel="edit GL accounts"
                       onClick={() => startEdit(r)}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-surface hover:bg-muted text-xs mr-1"
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-surface hover:bg-muted text-xs me-1"
                     >
                       <Pencil className="size-3" /> Edit
                     </GuardedButton>

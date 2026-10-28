@@ -590,7 +590,7 @@ function ApprovalActivityLog({ projectId, refreshKey }: { projectId: string; ref
                 <span className="italic"> — {e.note}</span>
               )}
             </span>
-            <span className="text-muted-foreground dark:text-muted-foreground shrink-0 sm:text-right">
+            <span className="text-muted-foreground dark:text-muted-foreground shrink-0 sm:text-end">
               by {e.actor_name ?? "system"}
             </span>
           </div>

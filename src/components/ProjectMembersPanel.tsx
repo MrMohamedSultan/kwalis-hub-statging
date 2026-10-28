@@ -220,11 +220,11 @@ export function ProjectMembersPanel({
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-[10px] uppercase tracking-wide text-muted-foreground border-b border-border">
+              <tr className="text-start text-[10px] uppercase tracking-wide text-muted-foreground border-b border-border">
                 <th className="py-2 pr-3">Name</th>
                 <th className="py-2 pr-3">Role</th>
                 <th className="py-2 pr-3">Executive Title</th>
-                <th className="py-2 pr-3 text-right">Action</th>
+                <th className="py-2 pr-3 text-end">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -267,7 +267,7 @@ export function ProjectMembersPanel({
                       ))}
                     </select>
                   </td>
-                  <td className="py-2 pr-3 text-right">
+                  <td className="py-2 pr-3 text-end">
                     <button
                       onClick={() => void removeMember(m)}
                       disabled={m.role === "owner"}

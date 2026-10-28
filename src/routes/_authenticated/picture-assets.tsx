@@ -640,7 +640,7 @@ function PictureAssetsPage() {
                     ].map((h) => (
                       <th
                         key={h}
-                        className="px-3 py-2 text-left text-xs uppercase tracking-wider font-medium"
+                        className="px-3 py-2 text-start text-xs uppercase tracking-wider font-medium"
                       >
                         {h}
                       </th>
@@ -807,10 +807,10 @@ function PictureAssetsPage() {
                           </button>
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <td className="px-3 py-2 text-end whitespace-nowrap">
                         <button
                           onClick={() => openEdit(row)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-border hover:bg-muted px-2 py-1 text-xs font-medium mr-1"
+                          className="inline-flex items-center gap-1 rounded-lg border border-border hover:bg-muted px-2 py-1 text-xs font-medium me-1"
                         >
                           <Pencil className="size-3" /> Edit
                         </button>
@@ -1253,7 +1253,7 @@ function AssetModal({
                   step={0.01}
                   value={row.agreed_cost}
                   onChange={(e) => set({ agreed_cost: Number(e.target.value) || 0 })}
-                  className="mt-1 w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm text-right outline-none focus:ring-2 ring-brand"
+                  className="mt-1 w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm text-end outline-none focus:ring-2 ring-brand"
                   dir="ltr"
                 />
               </div>

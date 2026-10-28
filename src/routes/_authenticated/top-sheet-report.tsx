@@ -527,7 +527,7 @@ function TopSheetCostReportPage() {
             ))}
           </div>
 
-          <div className="relative ml-auto min-w-[200px] flex-1 max-w-xs">
+          <div className="relative ms-auto min-w-[200px] flex-1 max-w-xs">
             <Search className="size-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               value={q}
@@ -965,7 +965,7 @@ function ValidationBanner({
       <div className="flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-3 py-2 text-xs text-success">
         <CheckCircle2 className="size-4" />
         Rollup validated — every budget line is mapped and every transaction reconciles.
-        <span className="ml-auto text-muted-foreground">
+        <span className="ms-auto text-muted-foreground">
           {fx.amount(validation.totals.accountsBudgetSum)} across accounts ={" "}
           {fx.amount(validation.totals.budgetLinesSum)} in budget.
         </span>
@@ -984,7 +984,7 @@ function ValidationBanner({
             {validation.issues.length} rollup {validation.issues.length === 1 ? "issue" : "issues"}{" "}
             found
           </span>
-          <span className="ml-auto text-muted-foreground">
+          <span className="ms-auto text-muted-foreground">
             Diff: {fx.amount(validation.totals.diff)}
           </span>
           <span className="opacity-60">{open ? "▾" : "▸"}</span>
@@ -1060,7 +1060,7 @@ function SelfTestsPanel() {
             {summary.failed > 0 ? ` · ${summary.failed} failing` : ""}
           </span>
         )}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ms-auto flex items-center gap-2">
           {results && (
             <button
               onClick={() => setOpen((v) => !v)}

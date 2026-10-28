@@ -209,7 +209,7 @@ function SeriesManagement({ projectId, projectName }: { projectId: string; proje
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <button
                     onClick={() => setExpanded((e) => ({ ...e, [season.id]: !isOpen }))}
-                    className="flex items-center gap-2 text-left"
+                    className="flex items-center gap-2 text-start"
                   >
                     {isOpen ? (
                       <ChevronDown className="size-4" />
@@ -245,11 +245,11 @@ function SeriesManagement({ projectId, projectName }: { projectId: string; proje
                     <table className="w-full text-sm">
                       <thead className="text-xs uppercase text-muted-foreground">
                         <tr className="border-b border-border">
-                          <th className="text-left py-2 px-2">#</th>
-                          <th className="text-left py-2 px-2">Title</th>
-                          <th className="text-left py-2 px-2">{t("series.duration_min")}</th>
-                          <th className="text-left py-2 px-2">Shoot Date</th>
-                          <th className="text-right py-2 px-2">Budget</th>
+                          <th className="text-start py-2 px-2">#</th>
+                          <th className="text-start py-2 px-2">Title</th>
+                          <th className="text-start py-2 px-2">{t("series.duration_min")}</th>
+                          <th className="text-start py-2 px-2">Shoot Date</th>
+                          <th className="text-end py-2 px-2">Budget</th>
                           <th className="py-2 px-2"></th>
                         </tr>
                       </thead>
@@ -296,7 +296,7 @@ function SeriesManagement({ projectId, projectName }: { projectId: string; proje
                                   className="bg-transparent border border-border rounded px-2 py-1 outline-none"
                                 />
                               </td>
-                              <td className="py-2 px-2 text-right">
+                              <td className="py-2 px-2 text-end">
                                 <input
                                   type="number"
                                   defaultValue={ep.budget_allocation}
@@ -305,10 +305,10 @@ function SeriesManagement({ projectId, projectName }: { projectId: string; proje
                                     if (v !== ep.budget_allocation)
                                       updateEpisode(ep.id, { budget_allocation: v });
                                   }}
-                                  className="bg-transparent border border-border rounded px-2 py-1 w-28 text-right outline-none"
+                                  className="bg-transparent border border-border rounded px-2 py-1 w-28 text-end outline-none"
                                 />
                               </td>
-                              <td className="py-2 px-2 text-right">
+                              <td className="py-2 px-2 text-end">
                                 <button
                                   onClick={() => removeEpisode(ep.id)}
                                   className="p-1 text-destructive hover:text-destructive"

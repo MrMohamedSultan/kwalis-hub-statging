@@ -866,12 +866,12 @@ function FundingInflowsTab() {
             <table className="w-full text-sm">
               <thead className="bg-surface text-muted-foreground">
                 <tr>
-                  <th className="text-left px-4 py-2 font-medium">{t("platform.ui.date")}</th>
-                  <th className="text-left px-4 py-2 font-medium">{t("platform.ui.source")}</th>
-                  <th className="text-left px-4 py-2 font-medium">{t("platform.ui.kind")}</th>
-                  <th className="text-right px-4 py-2 font-medium">{t("funding.amount_sar")}</th>
-                  <th className="text-left px-4 py-2 font-medium">{t("funding.reference")}</th>
-                  <th className="text-left px-4 py-2 font-medium">{t("funding.note")}</th>
+                  <th className="text-start px-4 py-2 font-medium">{t("platform.ui.date")}</th>
+                  <th className="text-start px-4 py-2 font-medium">{t("platform.ui.source")}</th>
+                  <th className="text-start px-4 py-2 font-medium">{t("platform.ui.kind")}</th>
+                  <th className="text-end px-4 py-2 font-medium">{t("funding.amount_sar")}</th>
+                  <th className="text-start px-4 py-2 font-medium">{t("funding.reference")}</th>
+                  <th className="text-start px-4 py-2 font-medium">{t("funding.note")}</th>
                   <th className="px-2 py-2"></th>
                 </tr>
               </thead>
@@ -924,7 +924,7 @@ function FundingInflowsTab() {
                               if (editErrors.amount)
                                 setEditErrors({ ...editErrors, amount: undefined });
                             }}
-                            className={`${inputCls(editErrors.amount)} w-full min-w-0 text-right`}
+                            className={`${inputCls(editErrors.amount)} w-full min-w-0 text-end`}
                           />
                           <select
                             aria-label={t("exports.funding_currency")}
@@ -981,7 +981,7 @@ function FundingInflowsTab() {
                       <td className="px-4 py-2 tabular-nums">{formatDate(e.date)}</td>
                       <td className="px-4 py-2">{e.source}</td>
                       <td className="px-4 py-2">{e.kind}</td>
-                      <td className="px-4 py-2 text-right tabular-nums font-medium text-success">
+                      <td className="px-4 py-2 text-end tabular-nums font-medium text-success">
                         {fmt(e.amount)}
                         {e.currency && e.currency !== LEDGER_CURRENCY && (
                           <div dir="ltr" className="text-[11px] font-normal text-muted-foreground">
@@ -1158,10 +1158,10 @@ function VatPaymentsTab() {
             <table className="w-full text-sm">
               <thead className="bg-surface text-muted-foreground">
                 <tr>
-                  <th className="text-left px-4 py-2 font-medium">{t("platform.ui.date")}</th>
-                  <th className="text-right px-4 py-2 font-medium">{t("funding.amount_sar")}</th>
-                  <th className="text-left px-4 py-2 font-medium">{t("funding.reference")}</th>
-                  <th className="text-left px-4 py-2 font-medium">{t("funding.note")}</th>
+                  <th className="text-start px-4 py-2 font-medium">{t("platform.ui.date")}</th>
+                  <th className="text-end px-4 py-2 font-medium">{t("funding.amount_sar")}</th>
+                  <th className="text-start px-4 py-2 font-medium">{t("funding.reference")}</th>
+                  <th className="text-start px-4 py-2 font-medium">{t("funding.note")}</th>
                   <th className="px-2 py-2"></th>
                 </tr>
               </thead>
@@ -1169,7 +1169,7 @@ function VatPaymentsTab() {
                 {items.map((e) => (
                   <tr key={e.id} className="border-t border-border text-foreground">
                     <td className="px-4 py-2 tabular-nums">{formatDate(e.date)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums font-medium text-destructive">
+                    <td className="px-4 py-2 text-end tabular-nums font-medium text-destructive">
                       {fmt(e.amount)}
                     </td>
                     <td className="px-4 py-2 text-muted-foreground">{e.reference || "—"}</td>

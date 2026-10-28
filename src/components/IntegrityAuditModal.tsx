@@ -74,7 +74,7 @@ function IntegrityAuditModal({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             onClick={exportCsv}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs font-semibold hover:bg-surface transition"
+            className="ms-auto inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs font-semibold hover:bg-surface transition"
           >
             <Download className="size-3.5" />
             Export CSV
