@@ -157,6 +157,9 @@ export function useLiveBalanceData(projectId: string | null) {
           from: i.service_period_from ?? null,
           to: i.service_period_to ?? null,
           purchaseOrderId: i.purchase_order_id ?? null,
+          // db/pending/201: pending / rejected / cancelled invoices are filtered out
+          // by serviceAccrualInputs (Live Balance counts approved invoices only).
+          approvalStatus: i.approval_status ?? null,
         }));
       const servicePos: ServicePo[] = poRows
         .filter((p) => !p.deleted_at && (p.service_period_from || p.service_period_to))

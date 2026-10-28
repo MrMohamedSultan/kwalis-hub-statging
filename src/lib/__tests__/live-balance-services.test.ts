@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeLiveBalance,
+  isApprovedInvoice,
   serviceAccrualInputs,
   weekendFromSettings,
   type ServiceInvoice,
@@ -85,6 +86,25 @@ describe("serviceAccrualInputs", () => {
       () => 0,
     );
     expect([rows[0].start, rows[0].end]).toEqual(["2026-10-03", "2026-10-03"]);
+  });
+  it("counts approved invoices only; the PO is net of approved invoices only (201)", () => {
+    const rows = serviceAccrualInputs(
+      [
+        inv({ id: "a", approvalStatus: "approved" }),
+        inv({ id: "p", approvalStatus: "pending", net: 1000 }),
+        inv({ id: "r", approvalStatus: "rejected", net: 1000 }),
+        inv({ id: "c", approvalStatus: "cancelled", net: 1000 }),
+      ],
+      [po],
+      () => 0,
+    );
+    expect(rows.filter((r) => r.source === "invoice").map((r) => r.id)).toEqual(["invoice:a"]);
+    expect(rows.find((r) => r.source === "po")!.value).toBe(6000);
+  });
+  it("treats an invoice without a status (server before 201) as approved", () => {
+    expect(isApprovedInvoice({})).toBe(true);
+    expect(isApprovedInvoice({ approvalStatus: null })).toBe(true);
+    expect(isApprovedInvoice({ approvalStatus: "pending" })).toBe(false);
   });
 });
 

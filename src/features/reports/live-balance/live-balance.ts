@@ -273,6 +273,17 @@ export interface ServiceInvoice {
   from: string | null;
   to: string | null;
   purchaseOrderId?: string | null;
+  /**
+   * invoices.approval_status (db/pending/201). Only an approved invoice is
+   * Actual; pending / rejected / cancelled ones accrue nothing and do not
+   * reduce their PO. Missing (server before 201) = approved.
+   */
+  approvalStatus?: string | null;
+}
+
+/** db/pending/201: an invoice counts once approved (no status = before 201 = approved). */
+export function isApprovedInvoice(i: { approvalStatus?: string | null }): boolean {
+  return (i.approvalStatus ?? "approved") === "approved";
 }
 export interface ServicePo {
   id: string;
@@ -291,7 +302,8 @@ const PO_NOT_COMMITTED = ["draft", "cancelled", "rejected", "closed"];
 /**
  * Live Balance rows for invoices and POs with a service period (pure, tested).
  * - An invoice without its own period takes the period of its PO.
- * - A PO accrues only its un-invoiced remainder, so nothing counts twice.
+ * - Only approved invoices count (db/pending/201); a PO accrues only its
+ *   remainder net of approved invoices, so nothing counts twice.
  * - Paid is put on the excl.-VAT basis (paid × net ÷ due) like contracts.
  */
 export function serviceAccrualInputs(
@@ -303,6 +315,7 @@ export function serviceAccrualInputs(
   const invoicedByPo = new Map<string, number>();
   const out: LiveBalanceInput[] = [];
   for (const i of invoices) {
+    if (!isApprovedInvoice(i)) continue;
     if (i.purchaseOrderId)
       invoicedByPo.set(
         i.purchaseOrderId,
