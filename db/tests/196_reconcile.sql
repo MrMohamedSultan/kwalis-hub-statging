@@ -48,10 +48,11 @@ SELECT t.eq('B28 funding keeps its currency, original amount and rate', (SELECT 
 SELECT t.eq('funding: the kind is in the ledger description', (SELECT description FROM v_journal_lines WHERE project_id=:'P' AND event_type='funding' AND line_no=1), 'Funding — Capital — Financier — TRF-1');
 
 -- invoices: I1 paid through its request · I2 paid by hand first, then its request · I3 paid in cash
-INSERT INTO invoices(id,description,budget_code,price,vat_amount,wht_amount,date,vendor_name,invoice_no,organization_id,project_id) VALUES
- (:'I1','Lighting kit','1403',10000,1500,500,'2026-09-05','Gaffer Co','INV-77',:'O1',:'P'),
- (:'I2','Catering','1403',2000,0,0,'2026-09-06','Food Co','INV-78',:'O1',:'P'),
- (:'I3','Taxi','1403',300,0,0,'2026-09-07','Taxi Co','INV-79',:'O1',:'P');
+-- 203: these invoices are approved (201: a server-written invoice otherwise starts pending)
+INSERT INTO invoices(id,description,budget_code,price,vat_amount,wht_amount,date,vendor_name,invoice_no,organization_id,project_id,approval_status) VALUES
+ (:'I1','Lighting kit','1403',10000,1500,500,'2026-09-05','Gaffer Co','INV-77',:'O1',:'P','approved'),
+ (:'I2','Catering','1403',2000,0,0,'2026-09-06','Food Co','INV-78',:'O1',:'P','approved'),
+ (:'I3','Taxi','1403',300,0,0,'2026-09-07','Taxi Co','INV-79',:'O1',:'P','approved');
 INSERT INTO payment_requests(id,organization_id,project_id,source_type,source_id,source_label,total_amount,requested_amount,currency,status,approved_at) VALUES
  (:'RI',:'O1',:'P','invoice',:'I1','Gaffer Co · INV-77',11000,11000,'SAR','approved','2026-09-08');
 SELECT t.eq('A2 an approved request is no payment yet', (SELECT count(*) FROM payments WHERE source_id=:'I1'), 0::bigint);

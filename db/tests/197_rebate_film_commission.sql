@@ -38,13 +38,14 @@ INSERT INTO payroll(id,ref_id,ref_no,name,kind,total_amount,budget_code,organiza
  ('f1970000-0000-0000-0000-0000000000f4','f1970000-0000-0000-0000-0000000000e4','RB197-CRW-0004','Saudi Writer','crew',50000,'1101',:'O1',:'P'),
  ('f1970000-0000-0000-0000-0000000000f5','f1970000-0000-0000-0000-0000000000e5','RB197-CRW-0005','Unknown Nat','crew',10000,'3101',:'O1',:'P'),
  ('f1970000-0000-0000-0000-0000000000f6','f1970000-0000-0000-0000-0000000000e6','RB197-CST-0001','Saudi Lead','cast',100000,'1403',:'O1',:'P');
-INSERT INTO invoices(id,ref_no,invoice_no,description,department,budget_code,price,vatable,vat_amount,date,vendor_name,organization_id,project_id,invoice_url,rebate_manual_override,rebate_eligible) VALUES
- ('f1970000-0000-0000-0000-0000000000b1','RB197-INV-0001','S-100','ARRI camera package','Camera','3101',20000,true,3000,'2026-07-01','Riyadh Rentals',:'O1',:'P','u1',false,false),
- ('f1970000-0000-0000-0000-0000000000b2','RB197-INV-0002','S-200','Grip truck','Grip','3101',5000,false,0,'2026-07-02','No CR Trading',:'O1',:'P','u2',false,false),
- ('f1970000-0000-0000-0000-0000000000b3','RB197-INV-0003','S-300','Grip package','Grip','3101',7000,false,0,'2026-07-03','Dubai Grip LLC',:'O1',:'P','u3',false,false),
- ('f1970000-0000-0000-0000-0000000000b4','RB197-INV-0004','S-400','Camera prep','Camera','3101',3000,false,0,'2025-12-01','Riyadh Rentals',:'O1',:'P','u4',false,false),
- ('f1970000-0000-0000-0000-0000000000b5','RB197-INV-0005','S-500','Ads','Marketing','5501',1000,false,0,'2026-07-05','Riyadh Rentals',:'O1',:'P','u5',false,false),
- ('f1970000-0000-0000-0000-0000000000b6','RB197-INV-0006','S-600','Filters','Camera','3101',500,false,0,'2026-07-06','Riyadh Rentals',:'O1',:'P','u6',true,true);
+-- 203: these invoices are approved (201: a server-written invoice otherwise starts pending)
+INSERT INTO invoices(id,ref_no,invoice_no,description,department,budget_code,price,vatable,vat_amount,date,vendor_name,organization_id,project_id,invoice_url,rebate_manual_override,rebate_eligible,approval_status) VALUES
+ ('f1970000-0000-0000-0000-0000000000b1','RB197-INV-0001','S-100','ARRI camera package','Camera','3101',20000,true,3000,'2026-07-01','Riyadh Rentals',:'O1',:'P','u1',false,false,'approved'),
+ ('f1970000-0000-0000-0000-0000000000b2','RB197-INV-0002','S-200','Grip truck','Grip','3101',5000,false,0,'2026-07-02','No CR Trading',:'O1',:'P','u2',false,false,'approved'),
+ ('f1970000-0000-0000-0000-0000000000b3','RB197-INV-0003','S-300','Grip package','Grip','3101',7000,false,0,'2026-07-03','Dubai Grip LLC',:'O1',:'P','u3',false,false,'approved'),
+ ('f1970000-0000-0000-0000-0000000000b4','RB197-INV-0004','S-400','Camera prep','Camera','3101',3000,false,0,'2025-12-01','Riyadh Rentals',:'O1',:'P','u4',false,false,'approved'),
+ ('f1970000-0000-0000-0000-0000000000b5','RB197-INV-0005','S-500','Ads','Marketing','5501',1000,false,0,'2026-07-05','Riyadh Rentals',:'O1',:'P','u5',false,false,'approved'),
+ ('f1970000-0000-0000-0000-0000000000b6','RB197-INV-0006','S-600','Filters','Camera','3101',500,false,0,'2026-07-06','Riyadh Rentals',:'O1',:'P','u6',true,true,'approved');
 INSERT INTO cash_advances(id,holder,total_advance,organization_id,project_id,status) VALUES ('f1970000-0000-0000-0000-0000000000c0','Runner',10000,:'O1',:'P','open');
 INSERT INTO cash_advance_receipts(id,ref_no,advance_id,recipient,department,amount,date,organization_id,project_id,budget_code,status,attachment_path) VALUES
  ('f1970000-0000-0000-0000-0000000000c1','RB197-PC-0001','f1970000-0000-0000-0000-0000000000c0','Local shop','Camera',600,'2026-07-02',:'O1',:'P','3101','approved','a1'),
