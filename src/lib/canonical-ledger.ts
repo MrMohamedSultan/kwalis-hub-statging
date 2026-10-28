@@ -38,6 +38,9 @@ export function ledgerSourceLabel(sourceType: string): string {
       return "PO";
     case "payroll":
       return "Payroll";
+    case "payroll_wht":
+      // decision 12 (db/pending/201): company-borne WHT of a contract, code 7099
+      return "Payroll (company WHT)";
     case "petty_cash":
     case "cash_advance":
     case "cash_advance_receipt":
