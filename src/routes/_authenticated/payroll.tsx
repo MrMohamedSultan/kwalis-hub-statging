@@ -44,6 +44,7 @@ import {
   type PayrollKind,
 } from "@/lib/payrollImport";
 import { useCan } from "@/lib/rbac";
+import { useCanExportPersonalData } from "@/lib/use-personal-export";
 import { usePermissionCheck, PermissionDeniedBanner } from "@/lib/permission-guard";
 import { useGlAccounts } from "@/lib/gl-accounts";
 import { useSupportingDocUrl, useSupportingDocsSync } from "@/lib/supporting-docs";
@@ -617,6 +618,8 @@ type LedgerRow = {
 
 function PayrollLedgerPanel({ kind }: { kind: PayrollKind }) {
   const { t } = useTranslation();
+  // IBAN / bank in the CSV: same rule as the crew / cast export (crewcast-csv)
+  const canExportPersonal = useCanExportPersonalData();
   const fetchOrgs = useServerFn(listMyOrganizations);
   const fetchRows = useServerFn(listPayrollPayments);
   const doImport = useServerFn(importPayrollPayments);
@@ -863,8 +866,9 @@ function PayrollLedgerPanel({ kind }: { kind: PayrollKind }) {
                     scheduled_total_sar: r.scheduled_total_sar,
                     paid_total_sar: r.paid_total_sar,
                     remaining_sar: r.remaining_sar,
-                    iban: r.iban ?? "",
-                    bank: r.bank_name ?? "",
+                    ...(canExportPersonal(r.kind)
+                      ? { iban: r.iban ?? "", bank: r.bank_name ?? "" }
+                      : {}),
                   })),
                 );
                 toast.success(`Exported ${filteredRows.length} row(s)`);

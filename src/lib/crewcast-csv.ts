@@ -70,3 +70,17 @@ export function buildCrewCastCsv(
   for (const r of rows) lines.push(cols.map((c) => csvEscape(r[c.key])).join(","));
   return lines.join("\n");
 }
+
+/**
+ * Who may export contact / ID / bank / money data of a contract (pure; same
+ * rule as get_crew_cast_list, db/pending/197): a Film Commission settings
+ * admin, or a user with edit rights on that kind of contract. Vendor-kind
+ * payroll rows follow the crew rule.
+ */
+export function canExportPersonalData(
+  access: { rebateAdmin: boolean; canEditCrew: boolean; canEditCast: boolean },
+  kind: string | null | undefined,
+): boolean {
+  if (access.rebateAdmin) return true;
+  return String(kind ?? "").toLowerCase() === "cast" ? access.canEditCast : access.canEditCrew;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCrewCastCsv } from "@/lib/crewcast-csv";
+import { buildCrewCastCsv, canExportPersonalData } from "@/lib/crewcast-csv";
 
 const row = {
   fullName: "Sara, A.",
@@ -44,5 +44,20 @@ describe("crew / cast list CSV", () => {
       label: (k) => `[${k}]`,
     });
     expect(csv.startsWith("[full_name],[position]")).toBe(true);
+  });
+});
+
+describe("canExportPersonalData", () => {
+  const none = { rebateAdmin: false, canEditCrew: false, canEditCast: false };
+  it("allows a rebate settings admin for every kind", () => {
+    for (const k of ["crew", "cast", "vendor", null])
+      expect(canExportPersonalData({ ...none, rebateAdmin: true }, k)).toBe(true);
+  });
+  it("needs edit rights on that kind of contract (vendor follows crew)", () => {
+    expect(canExportPersonalData({ ...none, canEditCrew: true }, "crew")).toBe(true);
+    expect(canExportPersonalData({ ...none, canEditCrew: true }, "cast")).toBe(false);
+    expect(canExportPersonalData({ ...none, canEditCast: true }, "Cast")).toBe(true);
+    expect(canExportPersonalData({ ...none, canEditCrew: true }, "vendor")).toBe(true);
+    expect(canExportPersonalData(none, "crew")).toBe(false);
   });
 });

@@ -77,9 +77,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/date-format";
-import { usePermissions } from "@/lib/permissions/usePermissions";
-import { fetchCanAdminRebateSettings } from "@/lib/rebate-settings";
 import { buildCrewCastCsv } from "@/lib/crewcast-csv";
+import { useCanExportPersonalData } from "@/lib/use-personal-export";
 import { RefFilterInput, useRefMap } from "@/components/refs/RefListTools";
 import { refMatches } from "@/lib/document-refs";
 import { useTranslation } from "react-i18next";
@@ -425,19 +424,8 @@ export function PeoplePage({
   // Contact / bank / money columns of the CSV export: same rule as the DB's
   // get_crew_cast_list contact data (197) — rebate settings admin, or edit
   // rights on these contracts.
-  const perms = usePermissions();
-  const [rebateAdmin, setRebateAdmin] = useState(false);
-  useEffect(() => {
-    let live = true;
-    setRebateAdmin(false);
-    if (activeProjectId)
-      void fetchCanAdminRebateSettings(activeProjectId).then((v) => live && setRebateAdmin(v));
-    return () => {
-      live = false;
-    };
-  }, [activeProjectId]);
-  const canExportSensitive =
-    rebateAdmin || perms.canEdit(kind === "cast" ? "cast-contracts" : "crew-contracts");
+  const canExportPersonal = useCanExportPersonalData();
+  const canExportSensitive = canExportPersonal(kind);
   // G08: the contract's Kwalis reference (CRW / CST, on its payroll row)
   const refs = useRefMap(payroll.length);
   const [refQuery, setRefQuery] = useState("");

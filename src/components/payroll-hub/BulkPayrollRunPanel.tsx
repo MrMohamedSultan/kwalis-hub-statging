@@ -31,6 +31,7 @@ import {
 import { TableSkeleton } from "@/components/ui/table-skeleton";
 import { PayrollHubField as Field, payrollHubInput as inputCls } from "./RateCardsPanel";
 import { downloadCSV } from "@/lib/export-csv";
+import { useCanExportPersonalData } from "@/lib/use-personal-export";
 import { checkBudgetCodes, hasBlockingIssue, type MappingIssue } from "@/lib/budget-mapping-check";
 import { BudgetMappingWarning } from "@/components/BudgetMappingWarning";
 
@@ -237,16 +238,22 @@ function RunRow({
     };
   }, [run.organization_id, run.project_id]);
 
+  // IBAN / bank only for users allowed to export that contract's personal data
+  const canExportPersonal = useCanExportPersonalData();
   const exportCsv = () => {
     if (items.length === 0) {
       toast.error(t("bulkpayrollrunpanel.no_items_to_export"));
       return;
     }
+    const bankAllowed = items.map((it) =>
+      canExportPersonal(people.find((p) => p.id === it.person_id)?.kind),
+    );
+    const withBank = bankAllowed.some(Boolean);
     const rows = items.map((it, idx) => {
       const person = people.find((p) => p.id === it.person_id);
-      const iban = person?.iban || "";
-      const bank = person?.bank || "";
-      return {
+      const iban = bankAllowed[idx] ? person?.iban || "" : "";
+      const bank = bankAllowed[idx] ? person?.bank || "" : "";
+      const row: Record<string, unknown> = {
         "#": idx + 1,
         Beneficiary: it.beneficiary_name ?? "",
         Role: it.role ?? person?.position ?? person?.character ?? "",
@@ -262,9 +269,9 @@ function RunRow({
         "WHT Amount": Number(it.wht_amount ?? 0),
         Net: Number(it.net ?? it.gross ?? 0),
         Currency: it.currency ?? run.currency,
-        IBAN: iban,
-        Bank: bank,
       };
+      if (withBank) Object.assign(row, { IBAN: iban, Bank: bank });
+      return row;
     });
     const totalsRow = {
       "#": "",
@@ -282,9 +289,8 @@ function RunRow({
       "WHT Amount": wht,
       Net: net || gross,
       Currency: run.currency,
-      IBAN: "",
-      Bank: "",
     } as Record<string, unknown>;
+    if (withBank) Object.assign(totalsRow, { IBAN: "", Bank: "" });
     const safeLabel = (run.label || "payroll-run").replace(/[^\w-]+/g, "_");
     downloadCSV(`${safeLabel}_${run.period_start}_${run.period_end}.csv`, [
       ...rows,
