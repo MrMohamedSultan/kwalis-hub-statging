@@ -5318,7 +5318,31 @@
     "budget": {
       "change_reason": "سبب التعديل",
       "change_reason_placeholder": "سبب التعديل (اختياري)",
-      "change_reason_hint": "بيظهر في سجل تعديلات الميزانية"
+      "change_reason_hint": "يظهر في سجل تعديلات الميزانية"
+    },
+    "crewcast_csv": {
+      "full_name": "الاسم الكامل",
+      "position": "الوظيفة",
+      "character": "الشخصية",
+      "nationality": "الجنسية",
+      "id_type": "نوع الهوية",
+      "id_number": "رقم الهوية",
+      "phone": "رقم الجوال",
+      "email": "البريد الإلكتروني",
+      "iban": "رقم الآيبان",
+      "bank": "البنك",
+      "start": "البداية",
+      "end": "النهاية",
+      "currency": "العملة",
+      "days": "الأيام",
+      "daily": "اليومية",
+      "per_diem": "البدل اليومي",
+      "contract_value": "قيمة العقد (إجمالي)",
+      "wht_treatment": "معاملة ضريبة الاستقطاع",
+      "tax_residency": "الإقامة الضريبية",
+      "status": "الحالة",
+      "exported": "تم تصدير {{count}} سجل",
+      "limited": "تم استبعاد أعمدة التواصل والبيانات البنكية والمبالغ (تتطلب صلاحية)."
     }
   }
 }

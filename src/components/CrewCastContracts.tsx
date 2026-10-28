@@ -74,6 +74,9 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { usePermissions } from "@/lib/permissions/usePermissions";
+import { fetchCanAdminRebateSettings } from "@/lib/rebate-settings";
+import { buildCrewCastCsv } from "@/lib/crewcast-csv";
 import { useTranslation } from "react-i18next";
 import { checkInstalmentSchedule } from "@/lib/instalments";
 import { DateInput } from "@/components/ui/date-input";
@@ -413,6 +416,22 @@ export function PeoplePage({
   const storeReady = useStore((s) => s.ready);
   const activeProject = useStore((s) => s.projects.find((p) => p.id === s.activeProjectId) ?? null);
   const baseCurrency = useBaseCurrency();
+  // Contact / bank / money columns of the CSV export: same rule as the DB's
+  // get_crew_cast_list contact data (197) — rebate settings admin, or edit
+  // rights on these contracts.
+  const perms = usePermissions();
+  const [rebateAdmin, setRebateAdmin] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setRebateAdmin(false);
+    if (activeProjectId)
+      void fetchCanAdminRebateSettings(activeProjectId).then((v) => live && setRebateAdmin(v));
+    return () => {
+      live = false;
+    };
+  }, [activeProjectId]);
+  const canExportSensitive =
+    rebateAdmin || perms.canEdit(kind === "cast" ? "cast-contracts" : "crew-contracts");
   const list = useMemo(() => people.filter((p) => p.kind === kind), [people, kind]);
   // Only one page of contracts is mounted at a time — selection and filtering
   // still operate on the full `list`.
@@ -551,64 +570,44 @@ export function PeoplePage({
   const onBulkExport = () => {
     const rows = list.filter((p) => selected.has(p.id));
     if (rows.length === 0) return;
-    const headers = [
-      "Full Name",
-      kind === "cast" ? "Character" : "Position",
-      "Nationality",
-      "ID Type",
-      "ID",
-      "Phone Number",
-      "Email",
-      "IBAN",
-      "Bank",
-      "Start",
-      "End",
-      "Currency",
-      "Days",
-      "Daily",
-      "Per Diem",
-      "Contract Value (Gross)",
-      "WHT Treatment",
-      "Tax Residency",
-      "Status",
-    ];
-    const esc = (v: unknown) => {
-      const s = v == null ? "" : String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const lines = [headers.join(",")];
-    for (const p of rows) {
-      // Contract value = base rate only (wages), gross of WHT. Per diem/housing are itemized separately.
-      const fig = contractFigures(p);
-      lines.push(
-        [
-          p.fullName,
-          kind === "cast" ? p.character || p.position : p.position,
-          p.nationality,
-          p.idType ?? "",
-          p.idNumber,
-          p.phoneNumber ?? "",
-          p.email ?? "",
-          p.iban,
-          p.bank,
-          p.startDate,
-          p.endDate,
-          p.ccy ?? "",
-          fig.days,
-          fig.daily,
-          p.perDiem,
-          fig.gross,
-          p.whtTreatment ?? "inclusive",
-          p.taxResidency ?? "",
-          p.contractStatus ?? "Pending Contract",
-        ]
-          .map(esc)
-          .join(","),
-      );
-    }
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    // Contract value = base rate only (wages), gross of WHT. Per diem/housing are itemized separately.
+    const csv = buildCrewCastCsv(
+      rows.map((p) => {
+        const fig = contractFigures(p);
+        return {
+          fullName: p.fullName,
+          role: (kind === "cast" ? p.character || p.position : p.position) ?? "",
+          nationality: p.nationality,
+          idType: p.idType ?? "",
+          idNumber: p.idNumber,
+          phoneNumber: p.phoneNumber ?? "",
+          email: p.email ?? "",
+          iban: p.iban,
+          bank: p.bank,
+          startDate: p.startDate,
+          endDate: p.endDate,
+          currency: p.ccy ?? "",
+          days: fig.days,
+          daily: fig.daily,
+          perDiem: p.perDiem,
+          gross: fig.gross,
+          whtTreatment: p.whtTreatment ?? "inclusive",
+          taxResidency: p.taxResidency ?? "",
+          status: p.contractStatus ?? "Pending Contract",
+        };
+      }),
+      {
+        kind,
+        includeSensitive: canExportSensitive,
+        label: (id) => t(`polish.crewcast_csv.${id}`),
+      },
+    );
+    // BOM so Excel opens the Arabic headers as UTF-8.
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     downloadBlob(`${kind}-selected-${new Date().toISOString().slice(0, 10)}.csv`, blob);
-    toast.success(`Exported ${rows.length} ${kind} record(s)`);
+    toast.success(t("polish.crewcast_csv.exported", { count: rows.length }), {
+      description: canExportSensitive ? undefined : t("polish.crewcast_csv.limited"),
+    });
     clearSelection();
   };
 

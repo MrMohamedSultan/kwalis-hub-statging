@@ -5299,6 +5299,30 @@
       "change_reason": "Reason for change",
       "change_reason_placeholder": "Reason for change (optional)",
       "change_reason_hint": "Shown in the Budget Change Log"
+    },
+    "crewcast_csv": {
+      "full_name": "Full Name",
+      "position": "Position",
+      "character": "Character",
+      "nationality": "Nationality",
+      "id_type": "ID Type",
+      "id_number": "ID",
+      "phone": "Phone Number",
+      "email": "Email",
+      "iban": "IBAN",
+      "bank": "Bank",
+      "start": "Start",
+      "end": "End",
+      "currency": "Currency",
+      "days": "Days",
+      "daily": "Daily",
+      "per_diem": "Per Diem",
+      "contract_value": "Contract Value (Gross)",
+      "wht_treatment": "WHT Treatment",
+      "tax_residency": "Tax Residency",
+      "status": "Status",
+      "exported": "Exported {{count}} record(s)",
+      "limited": "Contact, bank and amount columns were left out (permission required)."
     }
   }
 }
