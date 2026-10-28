@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { formatAmount } from "@/lib/format-number";
 import { assertUploadAllowed, safeStorageName } from "@/lib/upload-policy";
 import { storageAudited } from "@/lib/storage-audit";
 import { CurrencySymbol } from "@/components/ui/currency";
@@ -44,7 +45,7 @@ import {
 import { useCan } from "@/lib/rbac";
 import { usePermissionCheck, PermissionDeniedBanner } from "@/lib/permission-guard";
 import { useGlAccounts } from "@/lib/gl-accounts";
-import { useSupportingDocUrl } from "@/lib/supporting-docs";
+import { useSupportingDocUrl, useSupportingDocsSync } from "@/lib/supporting-docs";
 import { SupportingDocField } from "@/components/SupportingDocField";
 import { AuditHistoryPanel } from "@/components/AuditHistoryPanel";
 import { useLedgerSync } from "@/lib/ledger-sync";
@@ -67,6 +68,7 @@ export const Route = createFileRoute("/_authenticated/payroll")({
 type EditTarget = { rowId: string; idx: number } | null;
 
 function PayrollPage() {
+  useSupportingDocsSync(useStore((st) => st.activeProjectId)); // D08
   const { t } = useTranslation();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -253,7 +255,7 @@ function PaymentEditDialog({ target, onClose }: { target: EditTarget; onClose: (
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Upcoming">{t("people.status.Upcoming")}</SelectItem>
-                <SelectItem value="Due">Due</SelectItem>
+                <SelectItem value="Due">{t("platform.ui.due")}</SelectItem>
                 <SelectItem value="Paid" disabled={!canApprove}>
                   {t("people.paid")} {!canApprove && "(needs payroll.approve)"}
                 </SelectItem>
@@ -432,9 +434,17 @@ function VendorDrawer({ row, onEdit }: { row: PayrollRow; onEdit: (idx: number) 
       </SheetHeader>
 
       <div className="grid grid-cols-3 gap-3 mb-6">
-        <StatCard label="Invoice Total" value={formatUSD(invoiceTotal)} />
-        <StatCard label="Total Paid" value={formatUSD(totalPaid)} accent="text-success" />
-        <StatCard label="Remaining" value={formatUSD(remaining)} accent="text-destructive" />
+        <StatCard label={t("platform.ui.invoiceTotal")} value={formatUSD(invoiceTotal)} />
+        <StatCard
+          label={t("platform.ui.totalPaid")}
+          value={formatUSD(totalPaid)}
+          accent="text-success"
+        />
+        <StatCard
+          label={t("platform.ui.remaining")}
+          value={formatUSD(remaining)}
+          accent="text-destructive"
+        />
       </div>
 
       <div className="mb-2 text-sm font-semibold text-muted-foreground">
@@ -500,17 +510,17 @@ function PersonDrawer({ row, onEdit }: { row: PayrollRow; onEdit: (idx: number) 
       {/* Strict accounting itemisation — wages vs. per diem vs. housing */}
       <div className="grid grid-cols-4 gap-3 mb-4">
         <StatCard
-          label="Base Gross Pay"
+          label={t("platform.ui.baseGrossPay")}
           value={formatUSD(baseGross)}
           hint={`${shootingDays}d × ${formatUSD(perDay)} — Wages GL`}
         />
         <StatCard
-          label="Total Per Diem"
+          label={t("platform.ui.totalPerDiem")}
           value={formatUSD(totalPerDiem)}
           hint="Meals/Per Diem GL — not in Total Deal"
         />
         <StatCard
-          label="Housing Allowance"
+          label={t("platform.ui.housingAllowance")}
           value={formatUSD(housingProrated)}
           hint={
             person && person.housingAllowance
@@ -519,7 +529,7 @@ function PersonDrawer({ row, onEdit }: { row: PayrollRow; onEdit: (idx: number) 
           }
         />
         <StatCard
-          label="Net Payable"
+          label={t("platform.ui.netPayable")}
           value={formatUSD(netPayable)}
           accent="text-success"
           hint={whtAmt > 0 ? `After 5% WHT (${formatUSD(whtAmt)})` : "Base − WHT"}
@@ -527,20 +537,34 @@ function PersonDrawer({ row, onEdit }: { row: PayrollRow; onEdit: (idx: number) 
       </div>
 
       <div className="grid grid-cols-4 gap-3 mb-4">
-        <StatCard label="Per Day" value={formatUSD(perDay)} />
-        <StatCard label="On-Set Per Diem" value={formatUSD(person?.onSetPerDiem ?? 0)} />
-        <StatCard label="Off-Set Per Diem" value={formatUSD(person?.offSetPerDiem ?? 0)} />
-        <StatCard label="Shooting Days" value={String(shootingDays)} />
+        <StatCard label={t("platform.ui.perDay")} value={formatUSD(perDay)} />
+        <StatCard
+          label={t("platform.ui.onSetPerDiem")}
+          value={formatUSD(person?.onSetPerDiem ?? 0)}
+        />
+        <StatCard
+          label={t("platform.ui.offSetPerDiem")}
+          value={formatUSD(person?.offSetPerDiem ?? 0)}
+        />
+        <StatCard label={t("platform.ui.shootingDays")} value={String(shootingDays)} />
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-6">
         <StatCard
-          label="Contract Total (Wages)"
+          label={t("platform.ui.contractTotalWages")}
           value={formatUSD(row.totalAmount)}
           hint="Payment schedule % applies to this only"
         />
-        <StatCard label="Total Paid" value={formatUSD(totalPaid)} accent="text-success" />
-        <StatCard label="Remaining" value={formatUSD(remaining)} accent="text-destructive" />
+        <StatCard
+          label={t("platform.ui.totalPaid")}
+          value={formatUSD(totalPaid)}
+          accent="text-success"
+        />
+        <StatCard
+          label={t("platform.ui.remaining")}
+          value={formatUSD(remaining)}
+          accent="text-destructive"
+        />
       </div>
 
       <div className="mb-2 text-sm font-semibold text-muted-foreground">
@@ -895,10 +919,10 @@ function PayrollLedgerPanel({ kind }: { kind: PayrollKind }) {
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-3">
-            <Tile label="Total" v={preview.data.rows.length} />
-            <Tile label="Vendor" v={preview.data.counts.vendor} />
-            <Tile label="Crew" v={preview.data.counts.crew} />
-            <Tile label="Cast" v={preview.data.counts.cast} />
+            <Tile label={t("platform.ui.total")} v={preview.data.rows.length} />
+            <Tile label={t("platform.ui.vendor")} v={preview.data.counts.vendor} />
+            <Tile label={t("platform.ui.crew")} v={preview.data.counts.crew} />
+            <Tile label={t("platform.ui.cast")} v={preview.data.counts.cast} />
           </div>
           {preview.data.mismatches.length > 0 && (
             <div className="max-h-32 overflow-auto rounded border border-warning/30 bg-warning/5 text-xs">
@@ -1245,7 +1269,7 @@ function Tile({ label, v }: { label: string; v: number }) {
 function fmtN(v: number | null | undefined): string {
   const n = Number(v ?? 0);
   if (!Number.isFinite(n) || n === 0) return "—";
-  return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  return formatAmount(n, 0);
 }
 
 // =====================================================================

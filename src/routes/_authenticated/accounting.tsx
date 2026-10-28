@@ -1,4 +1,4 @@
-import { formatDateTime } from "@/lib/date-format";
+import { formatDateTime, formatDate } from "@/lib/date-format";
 import { assertUploadAllowed } from "@/lib/upload-policy";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
@@ -331,11 +331,12 @@ function PillTabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
 /* ---------------- Vendor Tab ---------------- */
 
 export function VendorTab() {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<"new" | "list">("new");
   const [editing, setEditing] = useState<Vendor | null>(null);
   return (
     <>
-      <h2 className="text-2xl font-semibold mb-3">Suppliers</h2>
+      <h2 className="text-2xl font-semibold mb-3">{t("platform.ui.suppliers")}</h2>
       <div className="rounded-2xl bg-surface/60 border border-border p-4 inline-flex flex-col gap-2 mb-6">
         <RadioCard
           checked={mode === "new"}
@@ -343,9 +344,13 @@ export function VendorTab() {
             setMode("new");
             setEditing(null);
           }}
-          label="New Vendor"
+          label={t("platform.ui.newVendor")}
         />
-        <RadioCard checked={mode === "list"} onClick={() => setMode("list")} label="Vendor List" />
+        <RadioCard
+          checked={mode === "list"}
+          onClick={() => setMode("list")}
+          label={t("platform.ui.vendorList")}
+        />
       </div>
       {mode === "new" ? (
         <NewVendorForm
@@ -462,13 +467,13 @@ function VendorCategoryEditor({ onDone }: { onDone: () => void }) {
                       }
                     }}
                   >
-                    Save
+                    {t("platform.ui.save")}
                   </button>
                   <button
                     className="text-xs px-2 py-1 rounded bg-surface-2"
                     onClick={() => setEditing(null)}
                   >
-                    Cancel
+                    {t("platform.ui.cancel")}
                   </button>
                 </>
               ) : (
@@ -492,7 +497,7 @@ function VendorCategoryEditor({ onDone }: { onDone: () => void }) {
                         toast.error(e?.message ?? "Failed to delete.");
                       }
                     }}
-                    title="Delete"
+                    title={t("platform.ui.delete")}
                   >
                     <Trash2 className="size-3.5" />
                   </button>
@@ -717,7 +722,7 @@ function NewVendorForm({ initial, onDone }: { initial?: Vendor | null; onDone: (
       <Panel>
         <h3 className="text-xl font-semibold mb-4">{isEdit ? "Edit Vendor" : "New Vendor"}</h3>
         <form onSubmit={submit} className="grid grid-cols-2 gap-4">
-          <Field label="Company Name" required error={errors.name}>
+          <Field label={t("platform.ui.companyName")} required error={errors.name}>
             <input
               value={f.name}
               onChange={(e) => {
@@ -729,7 +734,7 @@ function NewVendorForm({ initial, onDone }: { initial?: Vendor | null; onDone: (
               aria-invalid={!!errors.name}
             />
           </Field>
-          <Field label="Contact Name">
+          <Field label={t("platform.ui.contactName")}>
             <input
               value={f.contactName ?? ""}
               onChange={(e) => setF({ ...f, contactName: e.target.value })}
@@ -737,7 +742,7 @@ function NewVendorForm({ initial, onDone }: { initial?: Vendor | null; onDone: (
               className={inputCls}
             />
           </Field>
-          <Field label="Services / Products Category">
+          <Field label={t("platform.ui.servicesProductsCategory")}>
             <div className="flex gap-2">
               <select
                 value={f.category}
@@ -759,7 +764,7 @@ function NewVendorForm({ initial, onDone }: { initial?: Vendor | null; onDone: (
               </button>
             </div>
           </Field>
-          <Field label="Position">
+          <Field label={t("platform.ui.position")}>
             <input
               value={f.position ?? ""}
               onChange={(e) => setF({ ...f, position: e.target.value })}
@@ -774,7 +779,7 @@ function NewVendorForm({ initial, onDone }: { initial?: Vendor | null; onDone: (
               className={inputCls}
             />
           </Field>
-          <Field label="Mobile">
+          <Field label={t("platform.ui.mobile")}>
             <input
               value={f.mobile ?? ""}
               onChange={(e) => setF({ ...f, mobile: e.target.value })}
@@ -788,7 +793,7 @@ function NewVendorForm({ initial, onDone }: { initial?: Vendor | null; onDone: (
               className={inputCls}
             />
           </Field>
-          <Field label="Email">
+          <Field label={t("platform.ui.email")}>
             <input
               type="email"
               value={f.email}
@@ -807,7 +812,7 @@ function NewVendorForm({ initial, onDone }: { initial?: Vendor | null; onDone: (
               aria-invalid={!!errors.iban}
             />
           </Field>
-          <Field label="Vendor Scope">
+          <Field label={t("platform.ui.vendorScope")}>
             <div className="flex gap-2">
               {(["Local", "International"] as const).map((s) => (
                 <label
@@ -833,7 +838,7 @@ function NewVendorForm({ initial, onDone }: { initial?: Vendor | null; onDone: (
               ))}
             </div>
           </Field>
-          <Field label="Company Nationality / Country of Registration">
+          <Field label={t("platform.ui.companyNationalityCountryOfRegistration")}>
             <CountryCombo
               value={f.companyNationality ?? ""}
               onChange={(c) => setF({ ...f, companyNationality: c })}
@@ -853,7 +858,7 @@ function NewVendorForm({ initial, onDone }: { initial?: Vendor | null; onDone: (
             errors={{ bankCountry: errors.bankCountry, bankName: errors.bankName }}
           />
 
-          <Field label="Payment Terms">
+          <Field label={t("platform.ui.paymentTerms")}>
             <select
               value={f.paymentTerms ?? ""}
               onChange={(e) => setF({ ...f, paymentTerms: e.target.value as any })}
@@ -905,7 +910,7 @@ function NewVendorForm({ initial, onDone }: { initial?: Vendor | null; onDone: (
               </div>
             )}
           </div>
-          <Field label="Shared Drive Link (optional — secondary)">
+          <Field label={t("platform.ui.sharedDriveLinkOptionalSecondary")}>
             <div className="flex items-center gap-2">
               <input
                 type="url"
@@ -986,7 +991,7 @@ function VendorList({ onEdit }: { onEdit: (v: Vendor) => void }) {
                 <button
                   onClick={() => onEdit(v)}
                   className="p-1.5 rounded-lg hover:bg-muted"
-                  title="Edit"
+                  title={t("platform.ui.edit")}
                 >
                   <Pencil className="size-4" />
                 </button>
@@ -1001,7 +1006,7 @@ function VendorList({ onEdit }: { onEdit: (v: Vendor) => void }) {
                     }
                   }}
                   className="p-1.5 rounded-lg hover:bg-destructive/20 text-destructive"
-                  title="Delete"
+                  title={t("platform.ui.delete")}
                 >
                   <Trash2 className="size-4" />
                 </button>
@@ -1484,9 +1489,9 @@ function VendorLedgerModal({ vendor, onClose }: { vendor: Vendor; onClose: () =>
               className="bg-transparent border border-border rounded-md px-2 py-1 text-xs"
             >
               <option value="All">{t("accounting.stage_all")}</option>
-              <option>Unpaid</option>
-              <option>Partial</option>
-              <option>Paid</option>
+              <option>{t("platform.ui.unpaid")}</option>
+              <option>{t("platform.ui.partial")}</option>
+              <option>{t("platform.ui.paid")}</option>
             </select>
             <select
               value={payMethod}
@@ -1519,12 +1524,12 @@ function VendorLedgerModal({ vendor, onClose }: { vendor: Vendor; onClose: () =>
                   <thead className="bg-surface text-muted-foreground">
                     <tr>
                       <th className="text-start p-2">PO #</th>
-                      <th className="text-start p-2">Description</th>
+                      <th className="text-start p-2">{t("platform.ui.description")}</th>
                       <th className="text-start p-2">{t("accounting.date")}</th>
                       <th className="text-start p-2">{t("accounting.status")}</th>
-                      <th className="text-start p-2">Stage</th>
+                      <th className="text-start p-2">{t("platform.ui.stage")}</th>
                       <th className="text-end p-2">{t("accounting.amount")}</th>
-                      <th className="text-end p-2">Paid</th>
+                      <th className="text-end p-2">{t("platform.ui.paid")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1535,7 +1540,9 @@ function VendorLedgerModal({ vendor, onClose }: { vendor: Vendor; onClose: () =>
                         <tr key={p.id} className="border-t border-border">
                           <td className="p-2 font-mono">{p.poNumber}</td>
                           <td className="p-2">{p.description}</td>
-                          <td className="p-2 text-muted-foreground">{p.date}</td>
+                          <td className="p-2 text-muted-foreground">
+                            {formatDate(p.date) || p.date}
+                          </td>
                           <td className="p-2">{p.status}</td>
                           <td className="p-2">{stage}</td>
                           <td className="p-2 text-end">{formatUSD(Number(p.amount || 0))}</td>
@@ -1557,17 +1564,17 @@ function VendorLedgerModal({ vendor, onClose }: { vendor: Vendor; onClose: () =>
 
             <div>
               <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                <FileText className="size-4" /> Invoices
+                <FileText className="size-4" /> {t("platform.ui.invoices")}
               </h4>
               <div className="rounded-xl border border-border overflow-hidden">
                 <table className="w-full text-xs">
                   <thead className="bg-surface text-muted-foreground">
                     <tr>
                       <th className="text-start p-2">{t("accounting.invoice")}</th>
-                      <th className="text-start p-2">Description</th>
+                      <th className="text-start p-2">{t("platform.ui.description")}</th>
                       <th className="text-start p-2">{t("accounting.date")}</th>
-                      <th className="text-end p-2">Total</th>
-                      <th className="text-end p-2">Paid</th>
+                      <th className="text-end p-2">{t("platform.ui.total")}</th>
+                      <th className="text-end p-2">{t("platform.ui.paid")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1577,7 +1584,9 @@ function VendorLedgerModal({ vendor, onClose }: { vendor: Vendor; onClose: () =>
                         <tr key={i.id} className="border-t border-border">
                           <td className="p-2 font-mono">{i.invoiceNo || i.id.slice(0, 6)}</td>
                           <td className="p-2">{i.description}</td>
-                          <td className="p-2 text-muted-foreground">{i.date}</td>
+                          <td className="p-2 text-muted-foreground">
+                            {formatDate(i.date) || i.date}
+                          </td>
                           <td className="p-2 text-end">{formatUSD(Number(i.price || 0))}</td>
                           <td className="p-2 text-end text-success">{formatUSD(paid)}</td>
                         </tr>
@@ -1604,7 +1613,7 @@ function VendorLedgerModal({ vendor, onClose }: { vendor: Vendor; onClose: () =>
                   <thead className="bg-surface text-muted-foreground">
                     <tr>
                       <th className="text-start p-2">{t("accounting.date")}</th>
-                      <th className="text-start p-2">Source</th>
+                      <th className="text-start p-2">{t("platform.ui.source")}</th>
                       <th className="text-start p-2">{t("accounting.method")}</th>
                       <th className="text-end p-2">{t("accounting.amount")}</th>
                     </tr>
@@ -2197,7 +2206,8 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
       };
       console.log("SUBMIT PAYLOAD:", invoicePayload);
       await addInvoice(invoicePayload);
-      if (supportingUrl.trim()) setSupportingDocUrl("invoice", id, supportingUrl);
+      if (supportingUrl.trim())
+        void setSupportingDocUrl("invoice", id, supportingUrl).catch(() => undefined);
 
       // Audit trail: capture manual QFE overrides so approvers can reconcile
       // any deviation from the rules engine.
@@ -2298,7 +2308,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
   return (
     <Panel>
       <div className="flex justify-between items-center mb-4 gap-3 flex-wrap">
-        <h3 className="text-xl font-semibold">Invoices</h3>
+        <h3 className="text-xl font-semibold">{t("platform.ui.invoices")}</h3>
         <div className="flex gap-2 items-center">
           <label className="text-xs uppercase tracking-wider text-muted-foreground">
             {t("accounting.qfe_rule")}
@@ -2310,9 +2320,9 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
             title={t("accounting.filter_invoices_by_which_qfe_rule_or_manual")}
           >
             <option value="all">{t("accounting.all_rules")}</option>
-            <option value="A">Rule A — Beneficiary residency</option>
-            <option value="B">Rule B — Vendor nationality</option>
-            <option value="C">Rule C — Outside KSA</option>
+            <option value="A">{t("platform.ui.ruleABeneficiaryResidency")}</option>
+            <option value="B">{t("platform.ui.ruleBVendorNationality")}</option>
+            <option value="C">{t("platform.ui.ruleCOutsideKsa")}</option>
             <option value="override">{t("accounting.manual_overrides")}</option>
           </select>
           <span className="text-[11px] text-muted-foreground whitespace-nowrap">
@@ -2388,7 +2398,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                             rate: vatRate,
                           })}
                     </Cell>
-                    <Cell>{i.date}</Cell>
+                    <Cell>{formatDate(i.date) || i.date}</Cell>
                     <Cell className="whitespace-nowrap">{i.dueDate ?? "—"}</Cell>
                     <Cell className="font-mono">
                       {i.invoiceNo}
@@ -2576,19 +2586,19 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
       {open && (
         <Modal title={t("accounting.new_invoice")} onClose={() => setOpen(false)}>
           <form onSubmit={submit} className="grid grid-cols-2 gap-3">
-            <Field label="Vendor Name">
+            <Field label={t("platform.ui.vendorName")}>
               <select
                 value={f.vendorName}
                 onChange={(e) => setF({ ...f, vendorName: e.target.value })}
                 className={inputCls}
               >
-                <option value="Cash">Cash</option>
+                <option value="Cash">{t("platform.ui.cash")}</option>
                 {vendors.map((v) => (
                   <option key={v.id}>{v.name}</option>
                 ))}
               </select>
             </Field>
-            <Field label="Date">
+            <Field label={t("platform.ui.date")}>
               <DateInput
                 value={f.date}
                 onChange={(iso) => setF({ ...f, date: iso })}
@@ -2626,7 +2636,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 </p>
               )}
             </Field>
-            <Field label="International / Non-Saudi Vendor (5% WHT)">
+            <Field label={t("platform.ui.internationalNonSaudiVendor5Wht")}>
               <select
                 value={f.vatable ? "No" : f.isNonSaudiVendor ? "Yes" : "No"}
                 onChange={(e) => setF({ ...f, isNonSaudiVendor: e.target.value === "Yes" })}
@@ -2638,8 +2648,8 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                     : undefined
                 }
               >
-                <option>No</option>
-                <option>Yes</option>
+                <option>{t("platform.ui.no")}</option>
+                <option>{t("platform.ui.yes")}</option>
               </select>
               {f.vatable && (
                 <p className="mt-1 text-[11px] text-muted-foreground">
@@ -2671,10 +2681,10 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                   })
                 }
                 className={inputCls}
-                title="Auto-calculated from beneficiary residency, vendor nationality, and service location. Editing this field locks it against future auto-updates."
+                title={t("platform.ui.autoCalculatedFromBeneficiaryResidencyVendorNati")}
               >
-                <option>No</option>
-                <option>Yes</option>
+                <option>{t("platform.ui.no")}</option>
+                <option>{t("platform.ui.yes")}</option>
               </select>
               {f.rebateManualOverride && (
                 <button
@@ -2788,7 +2798,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
               </div>
             </div>
 
-            <Field label="Description">
+            <Field label={t("platform.ui.description")}>
               <input
                 required
                 value={f.description}
@@ -2796,7 +2806,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 className={inputCls}
               />
             </Field>
-            <Field label="Invoice # ">
+            <Field label={t("platform.ui.invoice")}>
               <input
                 required
                 value={f.invoiceNo}
@@ -3061,7 +3071,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
               <div className="rounded-xl border border-border bg-surface-2 p-3 space-y-2">
                 <div className="grid grid-cols-[1fr_110px_140px_36px] gap-2 text-[10px] uppercase tracking-wider text-muted-foreground px-1">
                   <span>{t("accounting.date")}</span>
-                  <span>Percent</span>
+                  <span>{t("platform.ui.percent")}</span>
                   <span className="text-right">{t("accounting.amount")}</span>
                   <span />
                 </div>
@@ -3140,7 +3150,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 </div>
               </div>
             </div>
-            <Field label="Invoice PDF (optional)">
+            <Field label={t("platform.ui.invoicePdfOptional")}>
               <label className="flex items-center gap-2 bg-surface-2 border border-border rounded-xl px-3 py-2 cursor-pointer hover:bg-muted">
                 <Paperclip className="size-4" />
                 <span className="truncate text-xs">
@@ -3155,7 +3165,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 />
               </label>
             </Field>
-            <Field label="Receipt PDF (optional)">
+            <Field label={t("platform.ui.receiptPdfOptional")}>
               <label className="flex items-center gap-2 bg-surface-2 border border-border rounded-xl px-3 py-2 cursor-pointer hover:bg-muted">
                 <Paperclip className="size-4" />
                 <span className="truncate text-xs">
@@ -3170,7 +3180,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 />
               </label>
             </Field>
-            <Field label="Invoice Attachment Link (e.g., Google Drive URL)">
+            <Field label={t("platform.ui.invoiceAttachmentLinkEGGoogleDriveUrl")}>
               <div className="flex items-center gap-2 bg-surface-2 border border-border rounded-xl px-3 py-2 focus-within:ring-1 focus-within:ring-brand/40">
                 <LinkIcon className="size-4 text-muted-foreground" />
                 <input
@@ -3183,7 +3193,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 />
               </div>
             </Field>
-            <Field label="Receipt Attachment Link (e.g., Google Drive URL)">
+            <Field label={t("platform.ui.receiptAttachmentLinkEGGoogleDriveUrl")}>
               <div className="flex items-center gap-2 bg-surface-2 border border-border rounded-xl px-3 py-2 focus-within:ring-1 focus-within:ring-brand/40">
                 <LinkIcon className="size-4 text-muted-foreground" />
                 <input
@@ -3356,17 +3366,17 @@ function EditInvoiceModal({
             ))}
           </select>
         </Field>
-        <Field label="Invoice #">
+        <Field label={t("platform.ui.invoice")}>
           <input
             value={invoiceNo}
             onChange={(e) => setInvoiceNo(e.target.value)}
             className={inputCls}
           />
         </Field>
-        <Field label="Date">
+        <Field label={t("platform.ui.date")}>
           <DateInput value={date} onChange={setDate} className={inputCls} />
         </Field>
-        <Field label="Description">
+        <Field label={t("platform.ui.description")}>
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -3412,7 +3422,7 @@ function EditInvoiceModal({
             />
           )}
         </Field>
-        <Field label="Invoice URL">
+        <Field label={t("platform.ui.invoiceUrl")}>
           <input
             type="url"
             value={invoiceUrl}
@@ -3421,7 +3431,7 @@ function EditInvoiceModal({
             placeholder="https://…"
           />
         </Field>
-        <Field label="Receipt URL">
+        <Field label={t("platform.ui.receiptUrl")}>
           <input
             type="url"
             value={receiptUrl}
@@ -3446,7 +3456,7 @@ function EditInvoiceModal({
             onClick={onClose}
             className="px-4 py-2 rounded-xl bg-surface-2 border border-border hover:bg-muted"
           >
-            Cancel
+            {t("platform.ui.cancel")}
           </button>
           <button
             type="submit"
@@ -3631,15 +3641,15 @@ function AdvanceCards() {
               </div>
               <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
                 <div>
-                  <div className="text-muted-foreground">Total</div>
+                  <div className="text-muted-foreground">{t("platform.ui.total")}</div>
                   <div className="font-semibold mt-1">{formatUSD(a.totalAdvance)}</div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground">Spent</div>
+                  <div className="text-muted-foreground">{t("platform.ui.spent")}</div>
                   <div className="font-semibold mt-1">{formatUSD(spent)}</div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground">Remaining</div>
+                  <div className="text-muted-foreground">{t("platform.ui.remaining")}</div>
                   <div className="font-semibold mt-1 text-success">{formatUSD(remaining)}</div>
                 </div>
               </div>
@@ -3745,7 +3755,7 @@ function AdvanceCards() {
             }}
             className="grid grid-cols-2 gap-3"
           >
-            <Field label="Holder" className="col-span-2">
+            <Field label={t("platform.ui.holder")} className="col-span-2">
               <select
                 required
                 value={f.holder}
@@ -3760,7 +3770,7 @@ function AdvanceCards() {
                 ))}
               </select>
             </Field>
-            <Field label="Total Advance" className="col-span-2">
+            <Field label={t("platform.ui.totalAdvance")} className="col-span-2">
               <input
                 type="number"
                 min={0}
@@ -3886,7 +3896,8 @@ function AddReceiptForm() {
     try {
       const newId = generateId();
       await addReceipt({ ...f, id: newId });
-      if (supportingUrl.trim()) setSupportingDocUrl("receipt", newId, supportingUrl);
+      if (supportingUrl.trim())
+        void setSupportingDocUrl("receipt", newId, supportingUrl).catch(() => undefined);
       toast.success(t("accounting.petty_cash_receipt_recorded_holder_balances_and_cost"));
       setF(initial());
       setFile(null);
@@ -3900,7 +3911,7 @@ function AddReceiptForm() {
     <Panel>
       <h3 className="text-xl font-semibold mb-4">{t("accounting.add_receipt")}</h3>
       <form onSubmit={onSubmit} className="grid grid-cols-2 gap-4">
-        <Field label="Active Cash Advance (required)">
+        <Field label={t("platform.ui.activeCashAdvanceRequired")}>
           <select
             required
             value={f.advanceId ?? ""}
@@ -3935,14 +3946,14 @@ function AddReceiptForm() {
             </div>
           )}
         </Field>
-        <Field label="Date">
+        <Field label={t("platform.ui.date")}>
           <DateInput
             value={f.date ?? ""}
             onChange={(iso) => setF({ ...f, date: iso })}
             className={inputCls}
           />
         </Field>
-        <Field label="Advance Recipient">
+        <Field label={t("platform.ui.advanceRecipient")}>
           <select
             value={f.recipient}
             onChange={(e) => setF({ ...f, recipient: e.target.value })}
@@ -3956,7 +3967,7 @@ function AddReceiptForm() {
             ))}
           </select>
         </Field>
-        <Field label="Receipt attachment">
+        <Field label={t("platform.ui.receiptAttachment")}>
           <label className="flex cursor-pointer items-center gap-2 bg-surface-2 border border-border rounded-xl px-3 py-2 hover:bg-muted">
             <Paperclip className="size-4 shrink-0" />
             <span
@@ -3978,7 +3989,7 @@ function AddReceiptForm() {
             />
           </label>
         </Field>
-        <Field label="Department">
+        <Field label={t("platform.ui.department")}>
           <select
             value={f.department ?? ""}
             onChange={(e) => setF({ ...f, department: e.target.value })}
@@ -4009,15 +4020,15 @@ function AddReceiptForm() {
               ))}
           </select>
         </Field>
-        <Field label="Method">
+        <Field label={t("platform.ui.method")}>
           <select
             value={f.method}
             onChange={(e) => setF({ ...f, method: e.target.value as any })}
             className={inputCls}
           >
-            <option>Cash</option>
-            <option>Bank</option>
-            <option>Card</option>
+            <option>{t("platform.ui.cash")}</option>
+            <option>{t("platform.ui.bank")}</option>
+            <option>{t("platform.ui.card")}</option>
           </select>
         </Field>
         <Field label={`Amount${selectedAdv ? ` (max ${formatUSD(remainingOnSelected)})` : ""}`}>
@@ -4110,7 +4121,7 @@ function ReceiptsList() {
   return (
     <Panel>
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <h3 className="text-xl font-semibold">Receipts</h3>
+        <h3 className="text-xl font-semibold">{t("platform.ui.receipts")}</h3>
         <div className="flex items-center gap-2 flex-wrap">
           <input
             value={query}
@@ -4158,7 +4169,7 @@ function ReceiptsList() {
                   {r.glAccountId ? (
                     (glMap.get(r.glAccountId) ?? "—")
                   ) : (
-                    <span className="text-destructive">Missing</span>
+                    <span className="text-destructive">{t("platform.ui.missing")}</span>
                   )}
                 </Cell>
                 <Cell>{r.method}</Cell>
@@ -4296,32 +4307,32 @@ function EditReceiptModal({
         }}
         className="grid grid-cols-2 gap-3"
       >
-        <Field label="Date">
+        <Field label={t("platform.ui.date")}>
           <DateInput
             value={f.date ?? ""}
             onChange={(iso) => setF({ ...f, date: iso })}
             className={inputCls}
           />
         </Field>
-        <Field label="Method">
+        <Field label={t("platform.ui.method")}>
           <select
             value={f.method}
             onChange={(e) => setF({ ...f, method: e.target.value as any })}
             className={inputCls}
           >
-            <option>Cash</option>
-            <option>Bank</option>
-            <option>Card</option>
+            <option>{t("platform.ui.cash")}</option>
+            <option>{t("platform.ui.bank")}</option>
+            <option>{t("platform.ui.card")}</option>
           </select>
         </Field>
-        <Field label="Recipient" className="col-span-2">
+        <Field label={t("platform.ui.recipient")} className="col-span-2">
           <input
             value={f.recipient}
             onChange={(e) => setF({ ...f, recipient: e.target.value })}
             className={inputCls}
           />
         </Field>
-        <Field label="Department">
+        <Field label={t("platform.ui.department")}>
           <select
             value={f.department ?? ""}
             onChange={(e) => setF({ ...f, department: e.target.value })}
@@ -4351,7 +4362,7 @@ function EditReceiptModal({
               ))}
           </select>
         </Field>
-        <Field label="Amount" className="col-span-2">
+        <Field label={t("platform.ui.amount")} className="col-span-2">
           <input
             type="number"
             min={0}
@@ -4393,7 +4404,7 @@ function AdvanceReport() {
     <Panel>
       <h3 className="text-xl font-semibold mb-4">{t("accounting.cash_advance_report")}</h3>
       <div className="grid gap-4 max-w-xl">
-        <Field label="Advance Recipient">
+        <Field label={t("platform.ui.advanceRecipient")}>
           <select
             value={advanceId}
             onChange={(e) => setAdvanceId(e.target.value)}
@@ -4420,10 +4431,13 @@ function AdvanceReport() {
             </span>
           </div>
         )}
-        <ReportCard label="Total Advance" value={formatUSD(adv?.totalAdvance ?? 0)} />
-        <ReportCard label="Total Receipts" value={formatUSD(totalExpenses)} />
         <ReportCard
-          label="Remaining Balance"
+          label={t("platform.ui.totalAdvance")}
+          value={formatUSD(adv?.totalAdvance ?? 0)}
+        />
+        <ReportCard label={t("platform.ui.totalReceipts")} value={formatUSD(totalExpenses)} />
+        <ReportCard
+          label={t("platform.ui.remainingBalance")}
           value={formatUSD(remaining)}
           tone={remaining < 0 ? "danger" : "good"}
         />
@@ -4737,7 +4751,7 @@ function PurchaseOrderTab() {
                 <Cell>
                   <PaymentStatusPill paid={paidTotal} total={p.amount} />
                 </Cell>
-                <Cell>{p.date}</Cell>
+                <Cell>{formatDate(p.date) || p.date}</Cell>
                 <Cell>
                   <div className="flex items-center gap-1">
                     <button
@@ -4818,14 +4832,14 @@ function PurchaseOrderTab() {
                 className={inputCls}
               />
             </Field>
-            <Field label="Date">
+            <Field label={t("platform.ui.date")}>
               <DateInput
                 value={f.date}
                 onChange={(iso) => setF({ ...f, date: iso })}
                 className={inputCls}
               />
             </Field>
-            <Field label="Vendor">
+            <Field label={t("platform.ui.vendor")}>
               <select
                 required
                 value={f.vendorName}
@@ -4840,7 +4854,7 @@ function PurchaseOrderTab() {
                 ))}
               </select>
             </Field>
-            <Field label="Status">
+            <Field label={t("platform.ui.status")}>
               <select
                 value={f.status}
                 onChange={(e) => setF({ ...f, status: e.target.value as PurchaseOrderStatus })}
@@ -4853,7 +4867,7 @@ function PurchaseOrderTab() {
                 ))}
               </select>
             </Field>
-            <Field label="Description" className="col-span-2">
+            <Field label={t("platform.ui.description")} className="col-span-2">
               <input
                 required
                 value={f.description}
@@ -4862,7 +4876,7 @@ function PurchaseOrderTab() {
                 className={inputCls}
               />
             </Field>
-            <Field label="Link to Budget Item" className="col-span-2">
+            <Field label={t("platform.ui.linkToBudgetItem")} className="col-span-2">
               <BudgetCodeSelector
                 value={f.budgetCode}
                 onChange={(code) => setF({ ...f, budgetCode: code })}
@@ -4873,7 +4887,7 @@ function PurchaseOrderTab() {
               />
               <BudgetReadout budgetCode={f.budgetCode} pendingAmount={Number(f.amount) || 0} />
             </Field>
-            <Field label="Amount" className="col-span-2">
+            <Field label={t("platform.ui.amount")} className="col-span-2">
               <input
                 required
                 type="number"
@@ -4884,7 +4898,7 @@ function PurchaseOrderTab() {
                 className={inputCls}
               />
             </Field>
-            <Field label="Notes" className="col-span-2">
+            <Field label={t("platform.ui.notes")} className="col-span-2">
               <textarea
                 value={f.notes ?? ""}
                 onChange={(e) => setF({ ...f, notes: e.target.value })}
@@ -4898,7 +4912,7 @@ function PurchaseOrderTab() {
                 onClick={() => setOpen(false)}
                 className="px-4 py-2 rounded-xl border border-border hover:bg-muted"
               >
-                Cancel
+                {t("platform.ui.cancel")}
               </button>
               <button
                 type="submit"
