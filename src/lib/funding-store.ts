@@ -135,7 +135,7 @@ function useProjectScope() {
   return { pid, orgId };
 }
 
-const fromFundingRow = (r: any): FundingEntry => ({
+export const fromFundingRow = (r: any): FundingEntry => ({
   id: r.id,
   date: r.funding_date,
   source: r.source ?? "",
@@ -153,7 +153,7 @@ const fromFundingRow = (r: any): FundingEntry => ({
   createdAt: r.created_at,
 });
 
-const toFundingRow = (e: Partial<FundingEntry>) => {
+export const toFundingRow = (e: Partial<FundingEntry>) => {
   const out: Record<string, unknown> = {};
   if (e.date !== undefined) out.funding_date = e.date;
   if (e.source !== undefined) out.source = e.source.slice(0, 200);
