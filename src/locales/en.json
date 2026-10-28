@@ -5293,5 +5293,12 @@
       "employee": "Company employee",
       "employeeHint": "Monthly cost and allocation % — Company Overhead, no payments or cash"
     }
+  },
+  "polish": {
+    "budget": {
+      "change_reason": "Reason for change",
+      "change_reason_placeholder": "Reason for change (optional)",
+      "change_reason_hint": "Shown in the Budget Change Log"
+    }
   }
 }

@@ -5313,5 +5313,12 @@
       "employee": "موظف بالشركة",
       "employeeHint": "كلفة شهرية ونسبة تخصيص — تكاليف عامة، بدون دفعات ولا نقد"
     }
+  },
+  "polish": {
+    "budget": {
+      "change_reason": "سبب التعديل",
+      "change_reason_placeholder": "سبب التعديل (اختياري)",
+      "change_reason_hint": "بيظهر في سجل تعديلات الميزانية"
+    }
   }
 }

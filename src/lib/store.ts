@@ -516,7 +516,12 @@ type State = {
   setProjectStatus: (status: ProjectStatus) => void;
   addBudgetLine: (l: BudgetLine) => Promise<BudgetLine | undefined>;
   addBudgetLines: (lines: BudgetLine[]) => Promise<void>;
-  updateBudgetLine: (id: string, patch: Partial<BudgetLine>) => Promise<BudgetLine | undefined>;
+  /** opts.changeReason is saved to budget_lines.change_reason with the edit (Budget Change Log, N10). */
+  updateBudgetLine: (
+    id: string,
+    patch: Partial<BudgetLine>,
+    opts?: { changeReason?: string },
+  ) => Promise<BudgetLine | undefined>;
 
   removeBudgetLine: (id: string) => Promise<void>;
   clearProjectBudget: () => Promise<number>;
@@ -653,6 +658,17 @@ const toBudgetRow = (l: BudgetLine) => ({
   // version when this is null.
   version_id: selectedVersionIdSync(activePid()),
 });
+
+/**
+ * Adds the "reason for change" (db/pending/184 budget_lines.change_reason,
+ * max 500 chars) to an update row when the user typed one.
+ */
+export const withChangeReason = <T extends Record<string, unknown>>(row: T, reason?: string) => {
+  const r = String(reason ?? "")
+    .trim()
+    .slice(0, 500);
+  return (r ? { ...row, change_reason: r } : row) as T;
+};
 
 /** Never blank an existing line's version on update. */
 const stripNullVersion = (row: any) => {
@@ -1659,7 +1675,7 @@ export const useStore = create<State>()(
         }
         invalidateBudgetCaches(pid, "lines");
       },
-      updateBudgetLine: async (id, patch) => {
+      updateBudgetLine: async (id, patch, opts) => {
         const pid = get().activeProjectId;
         const prev = get().budget.find((b) => b.id === id) ?? null;
         set((s) =>
@@ -1677,7 +1693,7 @@ export const useStore = create<State>()(
           // authoritative row so the UI can never diverge from what persisted.
           const { data, error } = await supabase
             .from("budget_lines")
-            .update(stripNullVersion(toBudgetRow(updated)))
+            .update(withChangeReason(stripNullVersion(toBudgetRow(updated)), opts?.changeReason))
             .eq("id", id)
             .select("*")
             .single();

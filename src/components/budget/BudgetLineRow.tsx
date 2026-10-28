@@ -60,14 +60,15 @@ export type BudgetLineRowProps = {
   isEdit: boolean;
   /** Only meaningful while `isEdit` is true. */
   draft: Partial<BudgetLine>;
-  selected: boolean;
+  /** "Reason for change" typed while editing (saved to budget_lines.change_reason). */
+  changeReason?: string;
+  onChangeReasonChange?: (value: string) => void;
   actuals?: LineActuals;
   linked?: LinkedNames;
   topsheetAccounts: TopsheetAccountLike[];
   unitOptions: readonly string[];
   currencyOptions: readonly string[];
   t: (key: string, opts?: Record<string, unknown>) => string;
-  onToggleSelect: (id: string) => void;
   onUpdate: (id: string, patch: Partial<BudgetLine>) => void;
   onRemove: (id: string) => void;
   onStartEdit: (line: BudgetLine) => void;
@@ -89,14 +90,14 @@ function BudgetLineRowInner({
   line: l,
   isEdit,
   draft,
-  selected,
+  changeReason,
+  onChangeReasonChange,
   actuals: a,
   linked,
   topsheetAccounts,
   unitOptions,
   currencyOptions,
   t,
-  onToggleSelect,
   onUpdate,
   onRemove,
   onStartEdit,
@@ -110,19 +111,7 @@ function BudgetLineRowInner({
   const setDraft = onDraftChange;
 
   return (
-    <tr
-      className={`border-b border-border ${l.excluded ? "opacity-40" : ""} ${selected ? "bg-success/5" : ""}`}
-    >
-      <Td className="w-10 min-w-10 max-w-10 bg-card group-hover:bg-card">
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={() => onToggleSelect(l.id)}
-          className="accent-emerald-500 size-4 cursor-pointer"
-          title={t("budget.select_for_bulk_actions")}
-          aria-label={t("budget.select_line_for_bulk_actions")}
-        />
-      </Td>
+    <tr className={`border-b border-border ${l.excluded ? "opacity-40" : ""}`}>
       <Td className="w-[72px] min-w-[72px] max-w-[72px] bg-card group-hover:bg-card">
         <div className="flex items-center gap-2">
           <input
@@ -132,18 +121,6 @@ function BudgetLineRowInner({
             className="accent-brand size-4 cursor-pointer"
             title={l.excluded ? "Include in totals" : "Exclude from totals (keeps row visible)"}
           />
-          <label
-            className="inline-flex items-center gap-1 text-[10px] font-semibold text-success"
-            title={t("budget.rebate_eligible_qfe")}
-          >
-            <input
-              type="checkbox"
-              checked={!!l.rebateEligible}
-              onChange={(e) => onUpdate(l.id, { rebateEligible: e.target.checked })}
-              className="accent-emerald-500 size-3.5 cursor-pointer"
-            />
-            R
-          </label>
         </div>
       </Td>
       <Td className="w-28 min-w-28 max-w-28 bg-card group-hover:bg-card">
@@ -315,11 +292,24 @@ function BudgetLineRowInner({
       </Td>
       <Td className="min-w-[180px]">
         {isEdit ? (
-          <input
-            value={v.notes ?? ""}
-            onChange={(e) => setDraft({ notes: e.target.value })}
-            className="bg-input border border-border rounded px-2 py-1 text-foreground w-40 outline-none"
-          />
+          <div className="flex flex-col gap-1">
+            <input
+              value={v.notes ?? ""}
+              onChange={(e) => setDraft({ notes: e.target.value })}
+              className="bg-input border border-border rounded px-2 py-1 text-foreground w-40 outline-none"
+            />
+            {onChangeReasonChange && (
+              <input
+                value={changeReason ?? ""}
+                maxLength={500}
+                onChange={(e) => onChangeReasonChange(e.target.value)}
+                placeholder={t("polish.budget.change_reason_placeholder")}
+                aria-label={t("polish.budget.change_reason")}
+                title={t("polish.budget.change_reason_hint")}
+                className="bg-input border border-border rounded px-2 py-1 text-foreground w-40 outline-none text-[11px]"
+              />
+            )}
+          </div>
         ) : (
           <span
             className="text-xs text-muted-foreground truncate inline-block max-w-[10rem]"
@@ -389,7 +379,7 @@ export const BudgetLineRow = memo(BudgetLineRowInner, (prev, next) => {
   if (prev.line !== next.line) return false;
   if (prev.isEdit !== next.isEdit) return false;
   if (next.isEdit && prev.draft !== next.draft) return false;
-  if (prev.selected !== next.selected) return false;
+  if (next.isEdit && prev.changeReason !== next.changeReason) return false;
   if (prev.linked !== next.linked) return false;
   if (prev.topsheetAccounts !== next.topsheetAccounts) return false;
   if (!sameActuals(prev.actuals, next.actuals)) return false;

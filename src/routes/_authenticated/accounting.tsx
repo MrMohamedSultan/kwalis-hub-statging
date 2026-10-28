@@ -2048,8 +2048,9 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
     };
   }, [f.budgetCode, glAccounts, glManual, activeProject?.organizationId]);
 
-  // Smart QFE auto-calculator. Runs on every relevant input change UNLESS the
-  // user has manually overridden the field — in which case we respect their choice.
+  // Legacy invoices.rebate_eligible is still filled from the QFE rules so the
+  // column stays consistent; the UI no longer shows or edits it (eligibility
+  // comes from the rebate module's single source, db/pending/197).
   useEffect(() => {
     if (f.rebateManualOverride) return;
     const beneficiary = f.beneficiaryId ? people.find((p) => p.id === f.beneficiaryId) : null;
@@ -2076,32 +2077,6 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
     f.department,
     f.budgetCode,
     f.rebateManualOverride,
-    people,
-    vendors,
-  ]);
-
-  const qfeExplain = useMemo(() => {
-    const beneficiary = f.beneficiaryId ? people.find((p) => p.id === f.beneficiaryId) : null;
-    const vendor = f.vendorName ? vendors.find((v) => v.name === f.vendorName) : undefined;
-    return explainAutoQfe({
-      serviceInsideKsa: f.serviceInsideKsa !== false,
-      description: f.description,
-      department: f.department,
-      budgetCode: f.budgetCode,
-      beneficiaryNationality: beneficiary?.nationality ?? null,
-      beneficiaryMotherSaudi: beneficiary?.motherSaudi ?? null,
-      vendorNationality: vendor?.companyNationality ?? null,
-      vendorCrNo: vendor?.crNo ?? null,
-      isNonSaudiVendor: !!f.isNonSaudiVendor,
-    });
-  }, [
-    f.beneficiaryId,
-    f.serviceInsideKsa,
-    f.vendorName,
-    f.isNonSaudiVendor,
-    f.description,
-    f.department,
-    f.budgetCode,
     people,
     vendors,
   ]);
@@ -2267,29 +2242,6 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
       await addInvoice(invoicePayload);
       if (supportingUrl.trim())
         void setSupportingDocUrl("invoice", id, supportingUrl).catch(() => undefined);
-
-      // Audit trail: capture manual QFE overrides so approvers can reconcile
-      // any deviation from the rules engine.
-      if (f.rebateManualOverride && qfeExplain.value !== !!f.rebateEligible) {
-        recordAudit({
-          category: "other",
-          action: "invoice.qfe.manual_override",
-          severity: "warning",
-          entity: `invoice:${id}`,
-          organization_id: activeProject?.organizationId ?? null,
-          project_id: activeProjectId ?? null,
-          summary: `Manual QPE override on invoice #${f.invoiceNo} — auto="${qfeExplain.value ? "Yes" : "No"}" (Rule ${qfeExplain.rule}), manual="${f.rebateEligible ? "Yes" : "No"}"`,
-          details: {
-            invoice_id: id,
-            invoice_no: f.invoiceNo,
-            vendor: f.vendorName,
-            auto_value: qfeExplain.value,
-            auto_rule: qfeExplain.rule,
-            auto_reason: qfeExplain.reason,
-            manual_value: !!f.rebateEligible,
-          },
-        });
-      }
 
       // Inject one scheduled liability per future milestone (based on Total incl. VAT)
       for (let i = 0; i < dueLater.length; i++) {
@@ -2718,58 +2670,6 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                   Locked to “No” because the invoice is vatable (local KSA supply).
                 </p>
               )}
-            </Field>
-
-            <Field
-              label={
-                <span className="flex items-center gap-1.5">
-                  Rebate Eligible (QPE)
-                  {f.rebateManualOverride && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning">
-                      <Lock className="size-3" />
-                      {t("accounting.manual_override")}
-                    </span>
-                  )}
-                </span>
-              }
-            >
-              <select
-                value={f.rebateEligible ? "Yes" : "No"}
-                onChange={(e) =>
-                  setF({
-                    ...f,
-                    rebateEligible: e.target.value === "Yes",
-                    rebateManualOverride: true,
-                  })
-                }
-                className={inputCls}
-                title={t("platform.ui.autoCalculatedFromBeneficiaryResidencyVendorNati")}
-              >
-                <option>{t("platform.ui.no")}</option>
-                <option>{t("platform.ui.yes")}</option>
-              </select>
-              {f.rebateManualOverride && (
-                <button
-                  type="button"
-                  onClick={() => setF({ ...f, rebateManualOverride: false })}
-                  className="mt-1 text-[11px] text-brand hover:underline"
-                >
-                  {t("accounting.reset_to_autocalculation")}
-                </button>
-              )}
-              <div
-                className="mt-1 flex items-start gap-1 text-[11px] text-muted-foreground"
-                title={qfeExplain.reason}
-              >
-                <span className="inline-flex shrink-0 items-center rounded-full border border-border bg-surface-2 px-1.5 py-0.5 font-semibold uppercase tracking-wider">
-                  Rule {qfeExplain.rule}
-                </span>
-                <span className="leading-snug">
-                  {f.rebateManualOverride
-                    ? `Auto would be “${qfeExplain.value ? "Yes" : "No"}” — ${qfeExplain.reason}`
-                    : `Why this QPE? ${qfeExplain.reason}`}
-                </span>
-              </div>
             </Field>
 
             <Field label={t("ap.payment_method")}>

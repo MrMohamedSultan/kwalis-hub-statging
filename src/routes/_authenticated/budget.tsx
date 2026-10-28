@@ -811,22 +811,6 @@ export function ExcelBudgetCreator({ onCreated }: { onCreated: () => void }) {
     toast.success(`Updated Name on ${selected.size} row(s)`);
   };
 
-  const [pendingBulkRebate, setPendingBulkRebate] = useState<null | boolean>(null);
-  const requestBulkRebate = (value: boolean) => {
-    if (selected.size === 0) {
-      toast.error(t("budget.select_at_least_one_row"));
-      return;
-    }
-    setPendingBulkRebate(value);
-  };
-  const confirmBulkRebate = () => {
-    const value = pendingBulkRebate;
-    setPendingBulkRebate(null);
-    if (value === null) return;
-    setRows((rs) => rs.map((r) => (selected.has(r.key) ? { ...r, rebateEligible: value } : r)));
-    toast.success(`${value ? "Tagged" : "Cleared"} Rebate on ${selected.size} row(s)`);
-  };
-
   const grouped = useMemo(() => {
     const map: Record<MacroCategory, DraftRow[]> = {
       ATL: [],
@@ -1037,26 +1021,6 @@ export function ExcelBudgetCreator({ onCreated }: { onCreated: () => void }) {
         >
           Clear
         </button>
-        <span className="mx-1 h-5 w-px bg-surface-2" aria-hidden />
-        <span className="text-xs uppercase tracking-wider text-success">
-          {t("budget.rebate_qfe")}
-        </span>
-        <button
-          type="button"
-          onClick={() => requestBulkRebate(true)}
-          className="px-3 py-1.5 rounded bg-success/20 text-success border border-success/40 text-xs font-semibold disabled:opacity-50"
-          disabled={selected.size === 0}
-        >
-          {t("budget.mark_eligible")}
-        </button>
-        <button
-          type="button"
-          onClick={() => requestBulkRebate(false)}
-          className="px-3 py-1.5 rounded border border-border text-white text-xs disabled:opacity-50"
-          disabled={selected.size === 0}
-        >
-          {t("budget.remove_tag")}
-        </button>
 
         <span className="mx-1 h-5 w-px bg-surface-2" aria-hidden />
         <button
@@ -1220,7 +1184,7 @@ export function ExcelBudgetCreator({ onCreated }: { onCreated: () => void }) {
                             return (
                               <tr
                                 key={r.key}
-                                className={`border-t border-border ${r.hidden ? "opacity-40" : ""} ${r.rebateEligible ? "bg-success/5" : ""}`}
+                                className={`border-t border-border ${r.hidden ? "opacity-40" : ""}`}
                               >
                                 <td className="px-2 py-1.5">
                                   <input
@@ -1242,19 +1206,6 @@ export function ExcelBudgetCreator({ onCreated }: { onCreated: () => void }) {
                                       className="accent-brand size-4"
                                       title={t("budget.select_for_bulk_actions_name_rebate")}
                                     />
-                                    <label
-                                      className="inline-flex items-center text-[10px] font-semibold text-success"
-                                      title={t("budget.rebate_eligible_qfe")}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={!!r.rebateEligible}
-                                        onChange={(e) =>
-                                          updateRow(r.key, { rebateEligible: e.target.checked })
-                                        }
-                                        className="accent-emerald-500 size-3"
-                                      />
-                                    </label>
                                     {r.key.startsWith("custom::") && (
                                       <button
                                         type="button"
@@ -1434,15 +1385,6 @@ export function ExcelBudgetCreator({ onCreated }: { onCreated: () => void }) {
           {submitting ? "Creating…" : "Create Budget"}
         </button>
       </div>
-      <ConfirmDialog
-        open={pendingBulkRebate !== null}
-        title={t("budget.confirm_bulk_rebate_qfe_update")}
-        tone={pendingBulkRebate ? "success" : "default"}
-        message={`Are you sure you want to ${pendingBulkRebate ? "MARK" : "REMOVE"} the Rebate (QPE) tag on ${selected.size} selected row(s)? This affects rebate reporting.`}
-        confirmLabel={pendingBulkRebate ? "Mark Eligible" : "Remove Tag"}
-        onConfirm={confirmBulkRebate}
-        onCancel={() => setPendingBulkRebate(null)}
-      />
     </Panel>
   );
 }
@@ -3550,44 +3492,10 @@ export function ViewEditBudget() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Partial<BudgetLine>>({});
+  const [editReason, setEditReason] = useState("");
   const [adding, setAdding] = useState(false);
   const [showAuditLog, setShowAuditLog] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [bulkSelected, setBulkSelected] = useState<Set<string>>(() => new Set());
-  const [bulkRebateSaving, setBulkRebateSaving] = useState(false);
-  const toggleBulkSelected = (id: string) =>
-    setBulkSelected((s) => {
-      const n = new Set(s);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
-    });
-  const [pendingViewRebate, setPendingViewRebate] = useState<null | boolean>(null);
-  const requestBulkRebateTag = (value: boolean) => {
-    if (bulkSelected.size === 0) return;
-    setPendingViewRebate(value);
-  };
-  const applyBulkRebateTag = async (value: boolean) => {
-    if (bulkSelected.size === 0) return;
-    setBulkRebateSaving(true);
-    try {
-      await Promise.all(
-        Array.from(bulkSelected).map((id) => updateBudgetLine(id, { rebateEligible: value })),
-      );
-      toast.success(`${value ? "Tagged" : "Cleared"} Rebate on ${bulkSelected.size} line(s)`);
-      setBulkSelected(new Set());
-    } catch (e: any) {
-      toast.error(t("budget.bulk_rebate_update_failed") + (e?.message ?? "unknown"));
-    } finally {
-      setBulkRebateSaving(false);
-    }
-  };
-  const confirmBulkRebateTag = async () => {
-    const value = pendingViewRebate;
-    setPendingViewRebate(null);
-    if (value === null) return;
-    await applyBulkRebateTag(value);
-  };
 
   const reloadScoped = useStore((s) => s.reloadScopedData);
   const [editingHeader, setEditingHeader] = useState<string | null>(null);
@@ -3876,6 +3784,7 @@ export function ViewEditBudget() {
   const startEdit = (l: BudgetLine) => {
     setEditingId(l.id);
     setDraft(l);
+    setEditReason("");
   };
   const fmtNum = (n: unknown) => {
     const v = Number(n ?? 0);
@@ -3889,9 +3798,10 @@ export function ViewEditBudget() {
     const original = budget.find((b) => b.id === editingId);
     if (original) merged.x = totalPeriods({ ...original, ...merged });
     try {
-      const saved = await updateBudgetLine(editingId, merged);
+      const saved = await updateBudgetLine(editingId, merged, { changeReason: editReason });
       setEditingId(null);
       setDraft({});
+      setEditReason("");
       if (saved) {
         toast.success(`Saved ${saved.mainCode} — ${saved.description}`, {
           description: savedToastDesc(saved),
@@ -3910,6 +3820,7 @@ export function ViewEditBudget() {
   const cancelEdit = () => {
     setEditingId(null);
     setDraft({});
+    setEditReason("");
   };
 
   const submitNew = async () => {
@@ -4776,39 +4687,6 @@ export function ViewEditBudget() {
           </div>
         )}
 
-        {bulkSelected.size > 0 && (
-          <div className="sticky top-2 z-30 mb-3 flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg border border-success/40 bg-success/10 backdrop-blur">
-            <span className="text-xs font-semibold uppercase tracking-wider text-success">
-              {bulkSelected.size} selected
-            </span>
-            <span className="mx-1 h-4 w-px bg-surface-2" aria-hidden />
-            <button
-              type="button"
-              disabled={bulkRebateSaving}
-              onClick={() => requestBulkRebateTag(true)}
-              className="px-3 py-1.5 rounded bg-success text-white text-xs font-semibold disabled:opacity-50"
-            >
-              {t("budget.mark_rebate_eligible_qfe")}
-            </button>
-            <button
-              type="button"
-              disabled={bulkRebateSaving}
-              onClick={() => requestBulkRebateTag(false)}
-
-              className="px-3 py-1.5 rounded border border-border text-white text-xs disabled:opacity-50"
-            >
-              {t("budget.remove_rebate_tag")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setBulkSelected(new Set())}
-              className="ms-auto px-3 py-1.5 rounded border border-border text-foreground text-xs"
-            >
-              {t("budget.clear_selection")}
-            </button>
-          </div>
-        )}
-
         {budget.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
             {t("budget.no_budget_lines_yet_create_or_upload_a")}
@@ -4928,25 +4806,6 @@ export function ViewEditBudget() {
                         >
                           <thead className="text-start text-muted-foreground">
                             <tr className="border-b border-border">
-                              <Th className="w-10 min-w-10 max-w-10">
-                                <input
-                                  type="checkbox"
-                                  aria-label={t("budget.select_all_lines_in_section")}
-                                  title={t("budget.select_clear_all_lines_in_this_section")}
-                                  checked={
-                                    lines.length > 0 && lines.every((ll) => bulkSelected.has(ll.id))
-                                  }
-                                  onChange={(e) => {
-                                    setBulkSelected((s) => {
-                                      const n = new Set(s);
-                                      if (e.target.checked) lines.forEach((ll) => n.add(ll.id));
-                                      else lines.forEach((ll) => n.delete(ll.id));
-                                      return n;
-                                    });
-                                  }}
-                                  className="accent-emerald-500 size-3.5 cursor-pointer"
-                                />
-                              </Th>
                               <Th className="w-[72px] min-w-[72px] max-w-[72px]"></Th>
                               <Th className="w-28 min-w-28 max-w-28">{t("budget.columns.code")}</Th>
                               <Th className="w-60 min-w-60 max-w-60">
@@ -4975,14 +4834,14 @@ export function ViewEditBudget() {
                                 line={l}
                                 isEdit={editingId === l.id}
                                 draft={draft}
-                                selected={bulkSelected.has(l.id)}
+                                changeReason={editingId === l.id ? editReason : undefined}
+                                onChangeReasonChange={setEditReason}
                                 actuals={actuals[l.id]}
                                 linked={linkedNames[l.id]}
                                 topsheetAccounts={topsheetAccounts}
                                 unitOptions={UNIT_OPTIONS}
                                 currencyOptions={CURRENCY_OPTIONS}
                                 t={t}
-                                onToggleSelect={toggleBulkSelected}
                                 onUpdate={updateBudgetLineDebounced}
                                 onRemove={removeBudgetLine}
                                 onStartEdit={startEdit}
@@ -5453,15 +5312,6 @@ export function ViewEditBudget() {
           onClose={() => setBreakdown(null)}
         />
       )}
-      <ConfirmDialog
-        open={pendingViewRebate !== null}
-        title={t("budget.confirm_bulk_rebate_qfe_update")}
-        tone={pendingViewRebate ? "success" : "default"}
-        message={`Are you sure you want to ${pendingViewRebate ? "MARK" : "REMOVE"} the Rebate (QPE) tag on ${bulkSelected.size} selected line(s)? This will be saved immediately and affects rebate reporting.`}
-        confirmLabel={pendingViewRebate ? "Mark Eligible" : "Remove Tag"}
-        onConfirm={confirmBulkRebateTag}
-        onCancel={() => setPendingViewRebate(null)}
-      />
     </>
   );
 }
