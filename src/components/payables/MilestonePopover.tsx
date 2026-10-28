@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { supabase } from "@/integrations/supabase/client";
 import { STATUS_CONFIG, fmt, useStatusLabel } from "./payables-utils";
 import { MilestoneCell } from "./MilestoneCell";
+import { InstalmentDetails } from "./InstalmentDetails";
 import type { PayableMilestone } from "./payables-types";
 
 const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
@@ -602,6 +603,9 @@ export function MilestonePopover({
             </div>
           </div>
         )}
+
+        {/* R15: due date, requester, approver and the instalment history */}
+        {!isEditing && !showPayForm && <InstalmentDetails milestone={milestone} />}
 
         {milestone.milestone_status === "pending" &&
           (milestone.payment_request_status === "rejected" ||

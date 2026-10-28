@@ -122,7 +122,12 @@ export function CompanyOverheadReport() {
   );
 
   const remove = async (l: OverheadLine) => {
-    if (!confirm(t("taxlive.oh.removeConfirm", { name: l.label }))) return;
+    if (
+      !confirm(
+        t("taxlive.oh.removeConfirm", { name: l.label, interpolation: { escapeValue: false } }),
+      )
+    )
+      return;
     try {
       await m.remove(l.kind, l.id);
       toast.success(t("taxlive.oh.removed"));

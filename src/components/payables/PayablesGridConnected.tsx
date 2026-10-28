@@ -72,7 +72,11 @@ export function PayablesGridConnected({ category }: { category: PayableCategory 
       if (row.kind !== category) continue;
       const person = personById.get(row.refId);
       const vendor = vendorById.get(row.refId);
-      const total = Number(row.netPayable ?? row.totalAmount) || 0;
+      // R14: Contract Value = gross (the budget figure); instalments are paid on the net.
+      const gross = Number(row.totalAmount) || 0;
+      const wht = Number(row.whtAmount) || 0;
+      // same base as the database (payroll_milestone_amount): net payable, else the contract value
+      const total = Number(row.netPayable ?? gross) || 0;
       const schedule = Array.isArray(row.paymentSchedule) ? row.paymentSchedule : [];
 
       schedule.forEach((m, i) => {
@@ -95,6 +99,8 @@ export function PayablesGridConnected({ category }: { category: PayableCategory 
                 ""),
           department: person?.department ?? undefined,
           contract_total: total,
+          contract_gross: gross,
+          contract_wht: wht,
           currency: "SAR",
           milestone_number: i + 1,
           milestone_label: m.label || undefined,

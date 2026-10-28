@@ -122,6 +122,7 @@ import { findDuplicateAttachmentUrl, type AttachmentUrlRecord } from "@/lib/clou
 import { StoredFileBadge } from "@/components/StoredFileBadge";
 import { downloadBlob } from "@/lib/download";
 import { formatAmount } from "@/lib/format-number";
+import { PersonTypeNewButton } from "@/features/reports/company-overhead/PersonTypeNewButton";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/;
 const PHONE_RE = /^\+?[0-9][0-9\s()-]{6,19}$/;
@@ -625,13 +626,11 @@ export function PeoplePage({
             >
               {t("people.profiles_button")}
             </button>
-            <button
-              onClick={openNew}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand text-brand-foreground font-semibold"
-            >
-              <Plus className="size-4" />
-              {t("crewcastcontracts.new_contract")}
-            </button>
+            {/* E04: project freelancer (contract) or company employee (overhead) */}
+            <PersonTypeNewButton
+              label={t("crewcastcontracts.new_contract")}
+              onFreelancer={openNew}
+            />
           </div>
         }
       />
