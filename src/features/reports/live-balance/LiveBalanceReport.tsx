@@ -28,6 +28,7 @@ import {
   computeLiveBalance,
   groupLiveBalance,
   paidOnValueBasis,
+  serviceAccrualInputs,
   sumLiveBalance,
   type AccrualMethod,
   type LiveBalanceGrouping,
@@ -51,7 +52,7 @@ export function LiveBalanceReport() {
   const rows = useMemo(() => {
     const d = q.data;
     if (!d) return [];
-    return d.contracts.map((c) =>
+    const contracts = d.contracts.map((c) =>
       computeLiveBalance(
         {
           id: c.id,
@@ -72,8 +73,18 @@ export function LiveBalanceReport() {
         },
         asOf,
         { dates: d.shootDates, fallbackDays: c.shootingDays || d.projectShootDays },
+        { weekend: d.weekend },
       ),
     );
+    // N02: vendor invoices / POs with a service period, evenly over the period.
+    const paidBy = (kind: "invoice" | "po", id: string) =>
+      (d.docPayments.get(`${kind}:${id}`) ?? [])
+        .filter((p) => p.date && p.date <= asOf)
+        .reduce((a, p) => a + p.amount, 0);
+    const services = serviceAccrualInputs(d.invoices, d.pos, paidBy).map((c) =>
+      computeLiveBalance(c, asOf, { dates: null }, { weekend: d.weekend }),
+    );
+    return [...contracts, ...services];
   }, [q.data, asOf]);
   const personOf = useMemo(
     () => new Map((q.data?.contracts ?? []).map((c) => [c.id, c.personId])),
@@ -137,7 +148,9 @@ export function LiveBalanceReport() {
               ],
               rows: g.rows.map((r) => [
                 r.ref,
-                r.party,
+                r.source && r.source !== "contract"
+                  ? `${r.party} (${t(`leftovers.live.source_${r.source}`)})`
+                  : r.party,
                 r.budgetCode ?? "",
                 r.value,
                 methodLabel(r.method),
@@ -299,6 +312,11 @@ export function LiveBalanceReport() {
                       <td className={`${txtCls} font-mono text-xs`}>{r.ref}</td>
                       <td className={`${txtCls} font-medium`}>
                         {r.party}
+                        {r.source && r.source !== "contract" && (
+                          <span className="ms-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            {t(`leftovers.live.source_${r.source}`)}
+                          </span>
+                        )}
                         {r.cancelledAt && (
                           <span className="ms-1.5 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive">
                             {t("glossary.contract.cancelled")}
@@ -399,6 +417,7 @@ export function LiveBalanceReport() {
             <p className="mt-2 text-xs text-muted-foreground">{t("taxlive.live.missingDates")}</p>
           )}
           <p className="mt-2 text-xs text-muted-foreground">{t("taxlive.live.paidNote")}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t("leftovers.live.services_note")}</p>
         </div>
       )}
     </Panel>

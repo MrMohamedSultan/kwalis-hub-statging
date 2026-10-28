@@ -10,23 +10,53 @@ import {
   toBaseAmount,
 } from "@/lib/ap-calc";
 import type { LogisticsCommitment } from "@/lib/budget-position";
+import { useStore } from "@/lib/store";
 
-/** Standard VAT rate (percent) from platform_settings.vat_standard_rate_pct; 15 when unset. */
+const validPct = (v: unknown): number | null => {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
+};
+
+/** E10: the project's VAT rate wins; the platform setting, then 15 %, are the fallbacks. */
+export function resolveVatRate(projectPct: unknown, platformPct: unknown): number {
+  return validPct(projectPct) ?? validPct(platformPct) ?? DEFAULT_VAT_RATE_PCT;
+}
+
+/**
+ * Standard VAT rate (percent) for the active project: its Film Commission
+ * settings (project_rebate_settings.vat_rate_pct, E10) when the project has
+ * them, else platform_settings.vat_standard_rate_pct, else 15.
+ */
 export function useVatStandardRate(): number {
-  const q = useQuery({
+  const projectId = useStore((s) => s.activeProjectId);
+  const platform = useQuery({
     queryKey: ["platform-setting", "vat_standard_rate_pct"],
     queryFn: async () => {
       const { data, error } = await (supabase.from as any)("platform_settings")
         .select("value")
         .eq("key", "vat_standard_rate_pct")
         .maybeSingle();
-      if (error || !data) return DEFAULT_VAT_RATE_PCT;
-      const n = Number((data as { value: string | null }).value);
-      return Number.isFinite(n) && n >= 0 && n <= 100 ? n : DEFAULT_VAT_RATE_PCT;
+      if (error || !data) return null;
+      return validPct((data as { value: string | null }).value);
     },
     staleTime: 10 * 60_000,
   });
-  return q.data ?? DEFAULT_VAT_RATE_PCT;
+  const project = useQuery({
+    // same prefix as rebateSettingsKey: saving the settings refreshes it
+    queryKey: ["project-rebate-settings", projectId, "vat"],
+    enabled: !!projectId,
+    queryFn: async () => {
+      const { data, error } = await (supabase.from as any)("project_rebate_settings")
+        .select("vat_rate_pct")
+        .eq("project_id", projectId)
+        .maybeSingle();
+      if (error || !data) return null;
+      return validPct((data as { vat_rate_pct: unknown }).vat_rate_pct);
+    },
+    staleTime: 5 * 60_000,
+  });
+  return resolveVatRate(project.data, platform.data);
 }
 
 /**

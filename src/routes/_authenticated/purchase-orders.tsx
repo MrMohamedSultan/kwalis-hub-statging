@@ -14,6 +14,7 @@ import { CurrencyFxFields, useProjectFx } from "@/components/ap/CurrencyFxFields
 import { useHasColumn } from "@/lib/persons";
 import type { FxRateSource } from "@/lib/fx-dated";
 import { toBaseAmount } from "@/lib/ap-calc";
+import { DateInput } from "@/components/ui/date-input";
 import { invoicedOnPo, poIsCommitment, poOpenCommitment } from "@/lib/budget-position";
 import { humanizeDbError } from "@/lib/db-errors";
 import { parseOpenParam, refMatches, refNoOf } from "@/lib/document-refs";
@@ -383,6 +384,13 @@ function PurchaseOrdersPage() {
               ...(v.fx_rate_source !== undefined
                 ? { fx_rate_source: v.fx_rate_source, fx_rate_date: v.fx_rate_date ?? null }
                 : {}),
+              // N02 (db/pending/202): service period for Live Balance accruals
+              ...(v.service_period_from !== undefined
+                ? {
+                    service_period_from: v.service_period_from,
+                    service_period_to: v.service_period_to ?? null,
+                  }
+                : {}),
             };
             if (showForm !== "new" && showForm) {
               const { error } = await supabase
@@ -439,6 +447,8 @@ function POForm({
     notes: string;
     fx_rate_source?: string | null;
     fx_rate_date?: string | null;
+    service_period_from?: string | null;
+    service_period_to?: string | null;
   }) => void;
 }) {
   const { t } = useTranslation();
@@ -452,6 +462,13 @@ function POForm({
   const [fxRate, setFxRate] = useState<number>(Number(initial?.fx_rate ?? 1) || 1);
   // D03 (db/pending/190): source and date of the rate
   const po190 = useHasColumn("purchase_orders", "fx_rate_source");
+  const po202 = useHasColumn("purchase_orders", "service_period_from");
+  const [periodFrom, setPeriodFrom] = useState<string>(
+    (initial as { service_period_from?: string | null } | null)?.service_period_from ?? "",
+  );
+  const [periodTo, setPeriodTo] = useState<string>(
+    (initial as { service_period_to?: string | null } | null)?.service_period_to ?? "",
+  );
   const activeProjectId = useStore((s) => s.activeProjectId);
   const poDate =
     (initial as { date?: string | null } | null)?.date ?? new Date().toISOString().slice(0, 10);
@@ -499,6 +516,8 @@ function POForm({
             if (!desc) return toast.error(t("purchase_orders.description_required"));
             if (original <= 0) return toast.error(t("ap.amount_positive"));
             if (!isBase && !(fxRate > 0)) return toast.error(t("ap.fx_rate_required"));
+            if (periodFrom && periodTo && periodTo < periodFrom)
+              return toast.error(t("leftovers.po.period_order"));
             onSave({
               vendor_id: vendorId,
               vendor_name: vendors.find((v) => v.id === vendorId)?.name ?? "",
@@ -515,6 +534,9 @@ function POForm({
                     fx_rate_source: isBase ? null : (fxSource ?? "manual"),
                     fx_rate_date: isBase ? null : fxDate,
                   }
+                : {}),
+              ...(po202
+                ? { service_period_from: periodFrom || null, service_period_to: periodTo || null }
                 : {}),
             });
           }}
@@ -613,6 +635,19 @@ function POForm({
               </div>
             )}
           </Field>
+          {po202 && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={t("ap.service_period_from")}>
+                <DateInput value={periodFrom} onChange={setPeriodFrom} className={inputCls} />
+              </Field>
+              <Field label={t("ap.service_period_to")}>
+                <DateInput value={periodTo} onChange={setPeriodTo} className={inputCls} />
+              </Field>
+              <p className="col-span-2 text-[11px] text-muted-foreground">
+                {t("leftovers.po.period_hint")}
+              </p>
+            </div>
+          )}
           <Field label={t("common.notes")}>
             <textarea
               value={notes}

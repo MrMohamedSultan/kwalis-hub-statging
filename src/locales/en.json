@@ -5354,6 +5354,15 @@
     },
     "gl": {
       "qpe_review": "Review"
+    },
+    "live": {
+      "source_invoice": "Invoice",
+      "source_po": "PO",
+      "services_note": "Vendor invoices and purchase orders with a service period accrue evenly over that period (amount excl. VAT). A PO accrues only the part not yet invoiced; an invoice without its own period uses its PO's period. Working days follow the project's working week (Film Commission settings)."
+    },
+    "po": {
+      "period_order": "The service period ends before it starts.",
+      "period_hint": "Optional. With a service period the PO accrues evenly over it in Live Balance (only the part not yet invoiced)."
     }
   }
 }

@@ -3,7 +3,9 @@
 //
 // Incurred to date = the contract value spread over time by the contract's
 // accrual method, as of a date:
-//   work_days   working days (Sun–Thu) of the contract period
+//   work_days   working days of the contract period (the project's working
+//               week, project_rebate_settings.weekly_off_days; KSA Fri+Sat
+//               when the project has no settings)
 //   shoot_days  shoot days of the shooting schedule inside the period
 //   weekly      week rate ÷ working days = the same working-day spread
 //   monthly     days of each month (a full month = 1 month)
@@ -12,6 +14,8 @@
 // Never above the contract value; stops at the cancellation date.
 // Live Balance = Incurred − Paid: positive = Accrued, negative = Prepaid.
 // Amounts are SAR on the contract-value (gross) basis.
+// Vendor invoices and purchase orders with a service period accrue evenly
+// over that period (package method), on the amount excl. VAT.
 // =====================================================================
 
 export const ACCRUAL_METHODS = [
@@ -46,6 +50,22 @@ export function suggestAccrualMethod(dealType: string | null | undefined): Accru
 
 /** Saudi working week: Friday and Saturday off (UTC day numbers). */
 export const KSA_WEEKEND = [5, 6] as const;
+
+/**
+ * The project's weekly off days (0 = Sunday … 6 = Saturday) from
+ * project_rebate_settings (E10); the Saudi week when unset or invalid.
+ */
+export function weekendFromSettings(
+  s: { weekly_off_days?: number[] | null; work_days_per_week?: number | null } | null | undefined,
+): readonly number[] {
+  const days = Array.isArray(s?.weekly_off_days)
+    ? Array.from(new Set(s!.weekly_off_days.map(Number))).filter(
+        (d) => Number.isInteger(d) && d >= 0 && d <= 6,
+      )
+    : null;
+  if (!days || days.length >= 7) return KSA_WEEKEND;
+  return days.sort((a, b) => a - b);
+}
 
 const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
 
@@ -106,6 +126,8 @@ export function monthsBetween(a: string, b: string): number {
 
 export interface LiveBalanceInput {
   id: string;
+  /** What accrues: a crew / cast contract (default), a vendor invoice or a PO. */
+  source?: "contract" | "invoice" | "po";
   /** Kwalis reference (or the contract id when none). */
   ref: string;
   party: string;
@@ -154,7 +176,9 @@ export function computeLiveBalance(
   c: LiveBalanceInput,
   asOf: string,
   schedule: ShootSchedule = { dates: null },
+  opts: { weekend?: readonly number[] } = {},
 ): LiveBalanceRow {
+  const weekend = opts.weekend ?? KSA_WEEKEND;
   const value = Math.max(0, Number(c.value) || 0);
   const paid = round2(Number(c.paid) || 0);
   const cancel = c.cancelledAt ? c.cancelledAt.slice(0, 10) : null;
@@ -173,8 +197,8 @@ export function computeLiveBalance(
     switch (c.method) {
       case "work_days":
       case "weekly":
-        totalDays = workingDays(start, end);
-        elapsedDays = started ? workingDays(start, upTo) : 0;
+        totalDays = workingDays(start, end, weekend);
+        elapsedDays = started ? workingDays(start, upTo, weekend) : 0;
         fraction = totalDays > 0 ? elapsedDays / totalDays : 0;
         break;
       case "monthly": {
@@ -231,6 +255,94 @@ export function computeLiveBalance(
     estimated,
     missingDates,
   };
+}
+
+// ── Vendor invoices / POs with a service period (N02) ────────────────
+
+export interface ServiceInvoice {
+  id: string;
+  ref: string;
+  party: string;
+  budgetCode: string | null;
+  /** Amount excl. VAT, SAR. */
+  net: number;
+  /** What the vendor is paid (incl. VAT − WHT), SAR. */
+  due: number;
+  from: string | null;
+  to: string | null;
+  purchaseOrderId?: string | null;
+}
+export interface ServicePo {
+  id: string;
+  ref: string;
+  party: string;
+  budgetCode: string | null;
+  /** PO amount, SAR. */
+  amount: number;
+  status: string;
+  from: string | null;
+  to: string | null;
+}
+
+const PO_NOT_COMMITTED = ["draft", "cancelled", "rejected", "closed"];
+
+/**
+ * Live Balance rows for invoices and POs with a service period (pure, tested).
+ * - An invoice without its own period takes the period of its PO.
+ * - A PO accrues only its un-invoiced remainder, so nothing counts twice.
+ * - Paid is put on the excl.-VAT basis (paid × net ÷ due) like contracts.
+ */
+export function serviceAccrualInputs(
+  invoices: ServiceInvoice[],
+  pos: ServicePo[],
+  paidBy: (kind: "invoice" | "po", id: string) => number,
+): LiveBalanceInput[] {
+  const poById = new Map(pos.map((p) => [p.id, p]));
+  const invoicedByPo = new Map<string, number>();
+  const out: LiveBalanceInput[] = [];
+  for (const i of invoices) {
+    if (i.purchaseOrderId)
+      invoicedByPo.set(
+        i.purchaseOrderId,
+        (invoicedByPo.get(i.purchaseOrderId) ?? 0) + (Number(i.net) || 0),
+      );
+    const po = i.purchaseOrderId ? poById.get(i.purchaseOrderId) : undefined;
+    const start = i.from ?? (i.to ? null : (po?.from ?? null));
+    const end = i.to ?? (i.from ? null : (po?.to ?? null));
+    if (!start && !end) continue;
+    out.push({
+      id: `invoice:${i.id}`,
+      source: "invoice",
+      ref: i.ref,
+      party: i.party,
+      budgetCode: i.budgetCode,
+      value: round2(Number(i.net) || 0),
+      method: "package",
+      start: start ?? end,
+      end: end ?? start,
+      paid: paidOnValueBasis(paidBy("invoice", i.id), i.net, i.due),
+    });
+  }
+  for (const p of pos) {
+    if (!p.from && !p.to) continue;
+    if (PO_NOT_COMMITTED.includes((p.status ?? "").trim().toLowerCase())) continue;
+    const remainder = round2(Math.max(0, (Number(p.amount) || 0) - (invoicedByPo.get(p.id) ?? 0)));
+    const paid = round2(paidBy("po", p.id));
+    if (remainder <= 0 && paid <= 0) continue;
+    out.push({
+      id: `po:${p.id}`,
+      source: "po",
+      ref: p.ref,
+      party: p.party,
+      budgetCode: p.budgetCode,
+      value: remainder,
+      method: "package",
+      start: p.from ?? p.to,
+      end: p.to ?? p.from,
+      paid,
+    });
+  }
+  return out;
 }
 
 /** Paid net → contract-value basis (gross ÷ net). */
