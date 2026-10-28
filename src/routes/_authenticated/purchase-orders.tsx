@@ -607,7 +607,7 @@ function POForm({
             {!isBase && (
               <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
                 {t("ap.equals_base", {
-                  amount: baseAmount.toLocaleString("en-US", { minimumFractionDigits: 2 }),
+                  amount: formatAmount(baseAmount, 2),
                   base: fx.baseCurrency,
                 })}
               </div>

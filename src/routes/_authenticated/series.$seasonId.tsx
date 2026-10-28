@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/date-format";
 import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
@@ -297,7 +298,7 @@ function SeasonDetail() {
                       <td className="py-2 px-2 font-medium align-top">E{ep.episode_number}</td>
                       <td className="py-2 px-2 align-top">{ep.title}</td>
                       <td className="py-2 px-2 text-muted-foreground align-top">
-                        {ep.shooting_date ?? "—"}
+                        {formatDate(ep.shooting_date) || "—"}
                       </td>
                       <td className="py-2 px-2 text-end tabular-nums align-top">
                         {unallocated ? (
@@ -391,7 +392,9 @@ function SeasonDetail() {
               ) : (
                 txns.map((t) => (
                   <tr key={t.id} className="border-b border-border">
-                    <td className="py-2 px-2 text-muted-foreground">{t.entry_date ?? "—"}</td>
+                    <td className="py-2 px-2 text-muted-foreground">
+                      {formatDate(t.entry_date) || "—"}
+                    </td>
                     <td className="py-2 px-2">{t.description ?? "—"}</td>
                     <td className="py-2 px-2 text-muted-foreground">{t.reference_no ?? "—"}</td>
                     <td className="py-2 px-2 text-end tabular-nums">

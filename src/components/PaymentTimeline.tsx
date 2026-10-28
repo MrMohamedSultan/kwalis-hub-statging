@@ -1,4 +1,4 @@
-import { formatDateTime } from "@/lib/date-format";
+import { formatDateTime, formatDate } from "@/lib/date-format";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
@@ -135,7 +135,7 @@ export function PaymentTimeline({
       label: t("approvals.timeline.paid", { name: nameOf(request.executed_by) }),
       at: request.executed_at,
       detail: request.payment_method
-        ? `${t(`approvals.method.${request.payment_method}`, { defaultValue: request.payment_method })} · ${request.payment_date ?? ""}`
+        ? `${t(`approvals.method.${request.payment_method}`, { defaultValue: request.payment_method })} · ${formatDate(request.payment_date)}`
         : null,
       tone: "success",
     });

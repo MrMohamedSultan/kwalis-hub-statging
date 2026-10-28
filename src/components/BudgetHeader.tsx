@@ -1,4 +1,4 @@
-import { formatDateTime } from "@/lib/date-format";
+import { formatDateTime, formatDate } from "@/lib/date-format";
 import { useState, KeyboardEvent } from "react";
 import { DateInput } from "@/components/ui/date-input";
 import {
@@ -59,7 +59,7 @@ export function BudgetHeader({
             <GitBranch className="size-3.5" /> {meta.version || "—"}
           </div>
           <div className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-muted border border-border text-foreground">
-            <CalendarClock className="size-3.5" /> {meta.versionDate || "—"}
+            <CalendarClock className="size-3.5" /> {formatDate(meta.versionDate) || "—"}
           </div>
           <button
             onClick={() => setShowHistory(true)}
@@ -164,7 +164,7 @@ function BudgetHeaderHistoryModal({ onClose }: { onClose: () => void }) {
                     )}
                   </div>
                   <div className="text-end text-xs text-muted-foreground shrink-0">
-                    <div>{h.versionDate}</div>
+                    <div>{formatDate(h.versionDate) || "—"}</div>
                     <div className="opacity-70">{formatDateTime(h.savedAt)}</div>
                   </div>
                 </li>

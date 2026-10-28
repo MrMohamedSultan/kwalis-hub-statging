@@ -1,5 +1,5 @@
 import i18n from "i18next";
-import { formatAmount, formatStaticSAR, formatStaticUSD } from "@/lib/format-number";
+import { formatAmount, formatStaticSAR, formatStaticUSD, numberLocale } from "@/lib/format-number";
 import { useTranslation } from "react-i18next";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useMemo, useEffect, createContext, useContext } from "react";
@@ -2060,8 +2060,8 @@ export function UploadBudget() {
     const over = Object.entries(bySheet).filter(([, t]) => t > SHEET_TOTAL_CEILING);
     if (over.length > 0) {
       toast.error(
-        `Commit blocked — sheet total exceeds ${SHEET_TOTAL_CEILING.toLocaleString()}: ${over
-          .map(([s, t]) => `${s} (${Math.round(t).toLocaleString()})`)
+        `Commit blocked — sheet total exceeds ${formatAmount(SHEET_TOTAL_CEILING)}: ${over
+          .map(([s, t]) => `${s} (${formatAmount(t)})`)
           .join(", ")}. Check your column mappings.`,
       );
       setShowCommitSummary(false);
@@ -3788,7 +3788,9 @@ export function ViewEditBudget() {
   };
   const fmtNum = (n: unknown) => {
     const v = Number(n ?? 0);
-    return Number.isFinite(v) ? v.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "0";
+    return Number.isFinite(v)
+      ? v.toLocaleString(numberLocale(), { maximumFractionDigits: 2 })
+      : "0";
   };
   const savedToastDesc = (r: BudgetLine) =>
     `Prep ${fmtNum(r.prep)} • Shoot ${fmtNum(r.shooting)} • Wrap ${fmtNum(r.wrap)} • Periods ${fmtNum(r.x)} • Qty ${fmtNum(r.amount)} • Rate ${fmtNum(r.rate)} ${r.currency ?? ""}`.trim();

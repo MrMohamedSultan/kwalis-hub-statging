@@ -4,6 +4,7 @@
 // Also records the bank movements that have no document of their own
 // (A10 petty cash return, A11 WHT remittance, VAT recovery, bank charges).
 // =====================================================================
+import { formatDate } from "@/lib/date-format";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -205,7 +206,7 @@ export function BankReconciliationReport() {
                 <tbody>
                   {data.unmatched_book.map((b) => (
                     <tr key={b.event_key} className="border-b border-border/50">
-                      <td className={txtCls}>{b.entry_date}</td>
+                      <td className={txtCls}>{formatDate(b.entry_date)}</td>
                       <td className="px-3 py-2">{b.description}</td>
                       <td className={numCls}>
                         <Money v={b.amount} />
@@ -235,7 +236,7 @@ export function BankReconciliationReport() {
                 <tbody>
                   {data.unmatched_statement.map((s) => (
                     <tr key={s.id} className="border-b border-border/50">
-                      <td className={txtCls}>{s.value_date}</td>
+                      <td className={txtCls}>{formatDate(s.value_date)}</td>
                       <td className="px-3 py-2">
                         {[s.reference, s.narrative].filter(Boolean).join(" · ") || "—"}
                       </td>
@@ -258,7 +259,8 @@ export function BankReconciliationReport() {
                           <option value="">{t("journal.choose_entry")}</option>
                           {data.unmatched_book.map((b) => (
                             <option key={b.event_key} value={b.event_key}>
-                              {b.entry_date} · {formatAmount(b.amount, 2)} · {b.party ?? ""}
+                              {formatDate(b.entry_date)} · {formatAmount(b.amount, 2)} ·{" "}
+                              {b.party ?? ""}
                             </option>
                           ))}
                         </select>

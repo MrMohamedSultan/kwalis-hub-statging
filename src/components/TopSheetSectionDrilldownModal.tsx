@@ -3,6 +3,7 @@
 // transactions behind each figure. Rows are sourced from the SAME inputs
 // the report was built with (canonical ledger + payments ledger + shared
 // makeTxnResolver), so the modal can never disagree with the report.
+import { formatDate } from "@/lib/date-format";
 import { useMemo, useState } from "react";
 import {
   ChevronDown,
@@ -318,7 +319,7 @@ export function TopSheetSectionDrilldownModal({
                     {txns.map((r) => (
                       <tr key={r.key} className="border-t border-border/60">
                         <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground">
-                          {r.date ?? "—"}
+                          {formatDate(r.date) || "—"}
                         </td>
                         <td className="px-3 py-1.5">{r.source}</td>
                         <td className="px-3 py-1.5">{r.reference || "—"}</td>

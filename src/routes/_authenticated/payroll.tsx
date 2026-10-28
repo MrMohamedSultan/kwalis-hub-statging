@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/date-format";
 import { createFileRoute } from "@tanstack/react-router";
 import { formatAmount } from "@/lib/format-number";
 import { assertUploadAllowed, safeStorageName } from "@/lib/upload-policy";
@@ -394,7 +395,7 @@ function PaymentChip({
       <div className="mt-2 flex items-center gap-3 text-xs opacity-80 flex-wrap">
         <span className="inline-flex items-center gap-1">
           <Calendar className="size-3" />
-          {entry?.date || "—"}
+          {formatDate(entry?.date) || "—"}
         </span>
         <span className="inline-flex items-center gap-1">
           {hasReceipt ? <FileCheck2 className="size-3" /> : <Paperclip className="size-3" />}

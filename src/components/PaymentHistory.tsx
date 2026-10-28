@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/date-format";
 import { useMemo, useState } from "react";
 import { storageAudited } from "@/lib/storage-audit";
 import { supabase } from "@/integrations/supabase/client";
@@ -57,7 +58,7 @@ export function PaymentHistory({
         <tbody>
           {rows.map((p) => (
             <tr key={p.id} className="border-b border-border">
-              <td className="px-3 py-2 tabular-nums">{p.paymentDate}</td>
+              <td className="px-3 py-2 tabular-nums">{formatDate(p.paymentDate) || "—"}</td>
               <td className="px-3 py-2 text-end font-semibold tabular-nums">
                 {formatUSD(Number(p.amount))}
               </td>

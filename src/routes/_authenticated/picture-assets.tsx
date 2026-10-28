@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/date-format";
 import { createFileRoute } from "@tanstack/react-router";
 import { formatAmount } from "@/lib/format-number";
 import { assertUploadAllowed } from "@/lib/upload-policy";
@@ -706,7 +707,7 @@ function PictureAssetsPage() {
                               </div>
                             )}
                             {row.paid_at && (
-                              <div className="text-muted-foreground">{row.paid_at}</div>
+                              <div className="text-muted-foreground">{formatDate(row.paid_at)}</div>
                             )}
                           </div>
                         ) : (

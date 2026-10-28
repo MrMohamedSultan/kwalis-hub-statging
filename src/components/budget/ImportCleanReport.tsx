@@ -1,3 +1,4 @@
+import { formatAmount } from "@/lib/format-number";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, CheckCircle2, Copy, Repeat } from "lucide-react";
@@ -65,8 +66,7 @@ export function useServerImportCheck(
   return state;
 }
 
-const fmt = (n: number) =>
-  n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = (n: number) => formatAmount(n, 2);
 
 export function ImportCleanReport({
   clean,

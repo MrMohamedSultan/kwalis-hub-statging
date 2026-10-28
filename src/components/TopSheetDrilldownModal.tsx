@@ -9,6 +9,7 @@
 //   paid      → payments ledger entries
 //   variance  → budget lines (+) and incurred actuals (−)
 // =====================================================================
+import { formatDate } from "@/lib/date-format";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore, lineTotalSAR } from "@/lib/store";
@@ -189,7 +190,7 @@ export function TopSheetDrilldownModal({
               {rows.map((r) => (
                 <tr key={r.key} className="border-b border-border/60">
                   <td className="py-2 pr-3 whitespace-nowrap text-muted-foreground">
-                    {r.date ?? "—"}
+                    {formatDate(r.date) || "—"}
                   </td>
                   <td className="py-2 pr-3">{r.source}</td>
                   <td className="py-2 pr-3 font-mono text-xs">{r.reference ?? "—"}</td>

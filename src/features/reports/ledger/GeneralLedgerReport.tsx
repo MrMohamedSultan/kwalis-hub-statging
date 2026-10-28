@@ -5,6 +5,7 @@
 // Funding, petty cash and WHT remittances appear as their own entries.
 // Totals are Σ debit and Σ credit only — never a mixed "amount" total.
 // =====================================================================
+import { formatDate } from "@/lib/date-format";
 import { Fragment, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Panel } from "@/components/AppShell";
@@ -198,7 +199,7 @@ export function GeneralLedgerReport({
                         title={t("reconcile.gl.openHint")}
                         className={`cursor-pointer border-b border-border/50 hover:bg-muted/60 ${l.is_reversal ? "text-muted-foreground" : ""}`}
                       >
-                        <td className={txtCls}>{l.entry_date}</td>
+                        <td className={txtCls}>{formatDate(l.entry_date)}</td>
                         <td className={txtCls}>{l.entry_ref ?? eventLabel(l)}</td>
                         <td className="px-3 py-2 min-w-64">{l.description}</td>
                         <td className={txtCls}>{l.party ?? "—"}</td>

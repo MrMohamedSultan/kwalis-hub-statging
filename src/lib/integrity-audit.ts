@@ -9,6 +9,7 @@
  *  4. Missing Proof of Payment on ledger entries.
  */
 
+import { formatAmount } from "@/lib/format-number";
 import { useMemo } from "react";
 import { useStore, paidPayrollAmount } from "@/lib/store";
 import type { PayrollRow, Payment, Invoice, PurchaseOrder } from "@/lib/store";
@@ -73,7 +74,7 @@ export function runIntegrityAudit(input: {
         severity: "warning",
         category: "mapping",
         title: "Paid payroll row is not mapped to a Top Sheet code",
-        detail: `${r.name ?? "(unnamed)"} — ${paid.toLocaleString()} SAR paid without a topsheet_code. Actuals rollup will miss this row.`,
+        detail: `${r.name ?? "(unnamed)"} — ${formatAmount(paid, 2)} SAR paid without a topsheet_code. Actuals rollup will miss this row.`,
         refId: r.id,
         actual: paid,
       });
@@ -89,7 +90,7 @@ export function runIntegrityAudit(input: {
           severity: "warning",
           category: "proof",
           title: "Paid ledger entry missing Proof of Payment",
-          detail: `${r.name ?? "(unnamed)"} — ${Number(e.amount || 0).toLocaleString()} SAR marked Paid without an attached proof.`,
+          detail: `${r.name ?? "(unnamed)"} — ${formatAmount(Number(e.amount || 0), 2)} SAR marked Paid without an attached proof.`,
           refId: r.id,
           actual: Number(e.amount || 0),
         });
@@ -123,9 +124,9 @@ export function runIntegrityAudit(input: {
     severity: "info",
     category: "topsheet",
     title: `Actual Paid rollup mapped across ${Object.keys(byCode).length} Top Sheet codes`,
-    detail: `Total mapped = ${totalMapped.toLocaleString()} SAR. Codes: ${
+    detail: `Total mapped = ${formatAmount(totalMapped, 2)} SAR. Codes: ${
       Object.entries(byCode)
-        .map(([c, v]) => `${c}=${Math.round(v).toLocaleString()}`)
+        .map(([c, v]) => `${c}=${formatAmount(v, 0)}`)
         .join(", ") || "none"
     }.`,
     actual: totalMapped,

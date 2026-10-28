@@ -1,3 +1,4 @@
+import { formatAmount } from "@/lib/format-number";
 import { formatDateTime, formatDate } from "@/lib/date-format";
 import { assertUploadAllowed } from "@/lib/upload-policy";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
@@ -1641,7 +1642,9 @@ function VendorLedgerModal({ vendor, onClose }: { vendor: Vendor; onClose: () =>
                   <tbody>
                     {vendorPayments.map((pm) => (
                       <tr key={pm.id} className="border-t border-border">
-                        <td className="p-2 text-muted-foreground">{pm.paymentDate}</td>
+                        <td className="p-2 text-muted-foreground">
+                          {formatDate(pm.paymentDate) || "—"}
+                        </td>
                         <td className="p-2">{pm.label}</td>
                         <td className="p-2">{pm.method}</td>
                         <td className="p-2 text-end text-success">
@@ -2880,7 +2883,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
                   {t("ap.amounts_in_currency_hint", { ccy: f.currency, base: fx.baseCurrency })}{" "}
                   {t("ap.equals_base", {
-                    amount: priceBase.toLocaleString("en-US", { minimumFractionDigits: 2 }),
+                    amount: formatAmount(priceBase, 2),
                     base: fx.baseCurrency,
                   })}
                 </p>
@@ -4214,7 +4217,7 @@ function ReceiptsList() {
           >
             {pageRows.map((r) => (
               <tr key={r.id} className="border-t border-border">
-                <Cell className="whitespace-nowrap">{r.date || "—"}</Cell>
+                <Cell className="whitespace-nowrap">{formatDate(r.date) || "—"}</Cell>
                 <Cell>{advMap.get(r.advanceId ?? "") ?? r.receivedFrom ?? "—"}</Cell>
                 <Cell>{r.recipient}</Cell>
                 <Cell>{r.department || "—"}</Cell>

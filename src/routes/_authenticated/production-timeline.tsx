@@ -805,7 +805,9 @@ export function ProductionTimelinePage() {
             >
               <GitBranch className="size-3.5" />
               <span className="font-semibold">{activeVersion.label}</span>
-              <span className="text-muted-foreground">· {activeVersion.date}</span>
+              <span className="text-muted-foreground">
+                · {formatDate(activeVersion.date) || activeVersion.date}
+              </span>
               <span
                 className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] ${STATUS_BADGE[activeVersion.status]}`}
               >

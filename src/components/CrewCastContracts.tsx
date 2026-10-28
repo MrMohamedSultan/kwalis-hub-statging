@@ -2896,7 +2896,7 @@ function ContractForm({
               </div>
               <div className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 text-muted-foreground text-[12px] truncate">
                 {f.startDate && f.endDate
-                  ? `${f.startDate} → ${f.endDate}`
+                  ? `${formatDate(f.startDate)} → ${formatDate(f.endDate)}`
                   : "Set start / end dates"}
               </div>
             </div>

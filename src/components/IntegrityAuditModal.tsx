@@ -1,3 +1,4 @@
+import { formatAmount } from "@/lib/format-number";
 import { useMemo, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { ShieldCheck, AlertTriangle, Info, Download } from "lucide-react";
@@ -116,15 +117,21 @@ function IntegrityAuditModal({ onClose }: { onClose: () => void }) {
                     <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
                       <div>
                         <div className="opacity-70">Expected</div>
-                        <div className="font-mono">{f.expected?.toLocaleString() ?? "—"}</div>
+                        <div className="font-mono">
+                          {f.expected != null ? formatAmount(f.expected, 2) : "—"}
+                        </div>
                       </div>
                       <div>
                         <div className="opacity-70">Actual</div>
-                        <div className="font-mono">{f.actual?.toLocaleString() ?? "—"}</div>
+                        <div className="font-mono">
+                          {f.actual != null ? formatAmount(f.actual, 2) : "—"}
+                        </div>
                       </div>
                       <div>
                         <div className="opacity-70">Delta</div>
-                        <div className="font-mono">{f.delta?.toLocaleString() ?? "—"}</div>
+                        <div className="font-mono">
+                          {f.delta != null ? formatAmount(f.delta, 2) : "—"}
+                        </div>
                       </div>
                     </div>
                   )}
