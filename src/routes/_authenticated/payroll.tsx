@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { assertUploadAllowed, safeStorageName } from "@/lib/upload-policy";
 import { storageAudited } from "@/lib/storage-audit";
 import { CurrencySymbol } from "@/components/ui/currency";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
@@ -198,7 +199,10 @@ function PaymentEditDialog({ target, onClose }: { target: EditTarget; onClose: (
     try {
       let receiptPath: string | null | undefined = undefined;
       if (file) {
-        const path = `payroll/${row.id}/${target.idx}/${Date.now()}-${file.name}`;
+        assertUploadAllowed(file);
+        // X06: under the project folder so project-scoped storage policies apply.
+        const pid = useStore.getState().activeProjectId;
+        const path = `${pid ? `${pid}/` : ""}payroll/${row.id}/${target.idx}/${Date.now()}-${safeStorageName(file.name)}`;
         const { error } = await storageAudited
           .from("contracts")
           .upload(path, file, { upsert: false });

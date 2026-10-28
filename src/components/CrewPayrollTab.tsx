@@ -1,4 +1,5 @@
 import { formatDateTime } from "@/lib/date-format";
+import { assertUploadAllowed } from "@/lib/upload-policy";
 import { useMemo, useRef, useState, useCallback } from "react";
 import { loadXlsx } from "@/lib/lazy-export-libs";
 import { Modal } from "@/components/Modal";
@@ -1334,8 +1335,10 @@ function RecordPayrollPaymentModal({ row, onClose }: { row: PayrollRow; onClose:
     setSubmitting(true);
     try {
       // Upload proof to contracts bucket
+      assertUploadAllowed(proofFile);
       const ext = proofFile.name.split(".").pop() || "pdf";
-      const path = `payroll/${row.id}/${crypto.randomUUID()}.${ext}`;
+      // X06: under the project folder so project-scoped storage policies apply.
+      const path = `${activeProjectId ? `${activeProjectId}/` : ""}payroll/${row.id}/${crypto.randomUUID()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from("contracts")
         .upload(path, proofFile, { upsert: false });

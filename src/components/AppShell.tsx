@@ -1,4 +1,5 @@
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
+import { LegalLinks } from "@/components/LegalLinks";
 import { Search, Menu, FolderOpen, Sun, Moon, ArrowLeft, X, LogOut } from "lucide-react";
 import { signOut } from "@/lib/auth";
 import { PlatformSwitcher } from "@/components/PlatformSwitcher";
@@ -363,7 +364,7 @@ function AppShellChrome({
               <button
                 type="button"
                 onClick={openSidebar}
-                className="p-2 -ml-2 rounded-lg hover:bg-accent hover:text-accent-foreground text-foreground lg:hidden shrink-0"
+                className="p-2 -ms-2 rounded-lg hover:bg-accent hover:text-accent-foreground text-foreground lg:hidden shrink-0"
                 aria-label={t("appshell.open_menu")}
               >
                 <Menu className="size-5" />
@@ -473,6 +474,7 @@ function AppShellChrome({
               {tenantShell && !isGateway && <NoActiveProjectBanner />}
               {children ?? <Outlet />}
             </LayoutErrorBoundary>
+            <LegalLinks className="mt-10 pt-4 border-t border-border" />
           </div>
         </main>
         <WorkspacePanelModal />

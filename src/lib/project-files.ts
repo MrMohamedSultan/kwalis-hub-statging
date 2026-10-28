@@ -9,6 +9,7 @@
 // folder pathway derived from the source entity (e.g. Crew → "Crew Profiles
 // → {name}").
 import { storageAudited } from "@/lib/storage-audit";
+import { assertUploadAllowed } from "@/lib/upload-policy";
 import { supabase } from "@/integrations/supabase/client";
 
 export const BUCKET = "project-documents";
@@ -155,6 +156,7 @@ export async function uploadProjectFile(params: {
 
   // Storage keys must be ASCII. Use a UUID-based path so filenames with
   // Arabic/CJK characters or spaces don't produce "Invalid key" errors.
+  assertUploadAllowed(file);
   const ext = extractSafeExtension(file.name);
   const storagePath = `${projectId}/${crypto.randomUUID()}${ext}`;
 

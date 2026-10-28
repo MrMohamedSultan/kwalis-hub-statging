@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { assertUploadAllowed } from "@/lib/upload-policy";
 import { normalizeSubscriptionStatus } from "@/lib/subscription-status";
 
 export type Company = {
@@ -120,6 +121,7 @@ export async function uploadCompanyDocument(
   documentType: string,
   notes?: string,
 ) {
+  assertUploadAllowed(file);
   const safeName = file.name.replace(/[^\w.\-]+/g, "_").slice(0, 120);
   const path = `${orgId}/${Date.now()}_${safeName}`;
 

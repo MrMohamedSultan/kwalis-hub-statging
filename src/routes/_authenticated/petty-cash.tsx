@@ -1,4 +1,5 @@
 import { formatDate } from "@/lib/date-format";
+import { assertUploadAllowed } from "@/lib/upload-policy";
 import { createFileRoute } from "@tanstack/react-router";
 import { DateInput } from "@/components/ui/date-input";
 import { storageAudited } from "@/lib/storage-audit";
@@ -1013,6 +1014,7 @@ function PettyCashPage() {
             // Upload attachment (if any) then patch the row with the storage path
             if (v.attachment && projectId) {
               try {
+                assertUploadAllowed(v.attachment);
                 const safeName = v.attachment.name.replace(/[^\w.\-]+/g, "_");
                 const path = `${projectId}/petty-cash/${inserted.id}/${Date.now()}_${safeName}`;
                 const up = await storageAudited

@@ -1,4 +1,5 @@
 import { COUNTRIES } from "@/lib/countries";
+import { assertUploadAllowed } from "@/lib/upload-policy";
 import {
   WhtTreatmentSelector,
   type WhtTreatment,
@@ -2164,6 +2165,7 @@ function ContractForm({
       .slice(0, 10)
       .toLowerCase();
     const suffix = ext ? `.${ext}` : "";
+    assertUploadAllowed(file);
     const path = `${activeProjectId}/${kind}/${f.id}/${subfolder}/${crypto.randomUUID()}${suffix}`;
     const { error } = await storageAudited.from("contracts").upload(path, file, { upsert: false });
     if (error) throw error;

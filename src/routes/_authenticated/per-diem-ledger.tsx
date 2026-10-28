@@ -1,4 +1,5 @@
 import type React from "react";
+import { assertUploadAllowed, safeStorageName } from "@/lib/upload-policy";
 import { DateInput } from "@/components/ui/date-input";
 import { createFileRoute } from "@tanstack/react-router";
 import { storageAudited } from "@/lib/storage-audit";
@@ -683,7 +684,9 @@ function PerDiemLedgerPage() {
       if (!rowId) return;
       row = findRow(personId, rowId) ?? row;
     }
-    const path = `per-diem/${rowId}/${Date.now()}-${file.name}`;
+    assertUploadAllowed(file);
+    // X06: under the project folder so project-scoped storage policies apply.
+    const path = `${activeProjectId ? `${activeProjectId}/` : ""}per-diem/${rowId}/${Date.now()}-${safeStorageName(file.name)}`;
     const { error: upErr } = await storageAudited
       .from("contracts")
       .upload(path, file, { upsert: false });

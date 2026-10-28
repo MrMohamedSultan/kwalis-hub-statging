@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { openSignedFile } from "@/lib/signed-file";
+import { assertUploadAllowed } from "@/lib/upload-policy";
 import { DateInput } from "@/components/ui/date-input";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -211,12 +213,9 @@ function LocationsPage() {
               rows.map((r) => {
                 const line = budgetLines.find((l) => l.id === r.linked_budget_line_id);
                 const est = (Number(r.daily_rate) || 0) * (Number(r.shoot_days) || 0);
-                const contractHref =
-                  r.contract_doc_url ||
-                  (r.contract_doc_path
-                    ? supabase.storage.from("project-documents").getPublicUrl(r.contract_doc_path)
-                        .data.publicUrl
-                    : null);
+                // X06: the bucket is private — open the stored file through a signed URL.
+                const contractHref = r.contract_doc_url || null;
+                const contractPath = !contractHref ? r.contract_doc_path || null : null;
                 return (
                   <tr key={r.id} className="border-t border-border">
                     <td className="p-3 font-semibold">{r.name}</td>
@@ -277,8 +276,17 @@ function LocationsPage() {
                           className="inline-flex items-center gap-1 text-primary hover:underline"
                         >
                           <FileText className="size-3" />
-                          View
+                          {t("platform.common.view")}
                         </a>
+                      ) : contractPath ? (
+                        <button
+                          type="button"
+                          onClick={() => void openSignedFile("project-documents", contractPath)}
+                          className="inline-flex items-center gap-1 text-primary hover:underline"
+                        >
+                          <FileText className="size-3" />
+                          {t("platform.common.view")}
+                        </button>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
@@ -436,8 +444,10 @@ function LocationForm({
   async function handleFile(file: File) {
     setUploading(true);
     try {
+      assertUploadAllowed(file);
       const ext = file.name.split(".").pop() || "bin";
-      const key = `locations/${projectId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      // X06: the project-documents policies read the project from the FIRST folder.
+      const key = `${projectId}/locations/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const { error } = await supabase.storage
         .from("project-documents")
         .upload(key, file, { upsert: false });

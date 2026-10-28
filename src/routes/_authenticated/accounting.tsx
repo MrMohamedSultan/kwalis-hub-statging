@@ -1,4 +1,5 @@
 import { formatDateTime } from "@/lib/date-format";
+import { assertUploadAllowed } from "@/lib/upload-policy";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { LockGuard } from "@/components/chrome/LockGuard";
@@ -2140,6 +2141,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 .toLowerCase()
             : "";
         const safeExt = ext ? `.${ext}` : "";
+        assertUploadAllowed(file);
         const path = `${activeProjectId}/invoices/${id}/${kind}-${crypto.randomUUID()}${safeExt}`;
         const { error } = await supabase.storage
           .from("contracts")
