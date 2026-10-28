@@ -5323,6 +5323,11 @@
       "status": "Status",
       "exported": "Exported {{count}} record(s)",
       "limited": "Contact, bank and amount columns were left out (permission required)."
+    },
+    "invoice": {
+      "vendor": "Vendor",
+      "vendor_reinherited": "CR, VAT number, country, tax residency, bank and related-party flag will be taken from the new vendor's profile.",
+      "vendor_wht_differs": "The new vendor has a different WHT treatment. The saved WHT and net amounts are not recalculated — re-enter the invoice if WHT must change."
     }
   }
 }

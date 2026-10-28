@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { suggestTaxResidency } from "@/lib/contract-terms";
-import type { Vendor } from "@/lib/store";
+import type { Invoice, Vendor } from "@/lib/store";
 
 /**
  * E05 — what the vendor profile holds for tax and the Film Commission:
@@ -107,6 +107,44 @@ export function invoicePatchFromVendor(v: Vendor | undefined) {
     isRelatedParty: !!v.relatedParty,
     relatedPartyNote: v.relatedParty ? (v.relatedPartyNote ?? null) : null,
   };
+}
+
+const VENDOR_SNAPSHOT_190 = [
+  "vendorId",
+  "vendorCrNo",
+  "vendorVatNo",
+  "vendorCountry",
+  "vendorTaxResidency",
+  "vendorBankCountry",
+  "vendorBankName",
+] as const;
+
+/**
+ * Editing an invoice and picking another vendor: the invoice takes the new
+ * vendor's profile again, like on create (E05). The WHT flag is NOT changed
+ * here because the saved WHT / net amounts were computed with the old one;
+ * `whtDiffers` tells the form to warn instead. `has190` = the invoices table
+ * has the vendor snapshot columns (db/pending/190).
+ */
+export function invoiceVendorChangePatch(
+  invoice: Pick<Invoice, "vendorName" | "isNonSaudiVendor">,
+  vendor: Vendor | undefined,
+  has190: boolean,
+): { patch: Partial<Invoice>; whtDiffers: boolean } {
+  const { isNonSaudiVendor, ...rest } = invoicePatchFromVendor(vendor) as Partial<Invoice>;
+  const patch: Partial<Invoice> = {
+    vendorName: vendor?.name ?? invoice.vendorName,
+    ...rest,
+  };
+  if (!vendor) {
+    delete patch.isRelatedParty;
+    delete patch.relatedPartyNote;
+  }
+  if (patch.vendorTaxResidency === undefined) delete patch.vendorTaxResidency;
+  if (!has190) for (const k of VENDOR_SNAPSHOT_190) delete patch[k];
+  const whtDiffers =
+    !!vendor && isNonSaudiVendor !== undefined && !!isNonSaudiVendor !== !!invoice.isNonSaudiVendor;
+  return { patch, whtDiffers };
 }
 
 /** Read-only box on the invoice: what came from the vendor profile. */

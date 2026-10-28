@@ -124,6 +124,7 @@ import {
   VendorTaxFields,
   VendorInheritedSummary,
   invoicePatchFromVendor,
+  invoiceVendorChangePatch,
 } from "@/components/ap/VendorProfileFields";
 import { useHasColumn } from "@/lib/persons";
 
@@ -3252,6 +3253,31 @@ function EditInvoiceModal({
   const [relatedPartyNote, setRelatedPartyNote] = useState(invoice.relatedPartyNote ?? "");
   const [saving, setSaving] = useState(false);
   const activeProjectId = useStore((s) => s.activeProjectId);
+  // E05 on edit: another vendor → the invoice takes that vendor's profile again.
+  const vendors = useStore((s) => s.vendors);
+  const invoice190 = useHasColumn("invoices", "vendor_id");
+  const [vendorName, setVendorName] = useState(invoice.vendorName ?? "");
+  const vendorChange = useMemo(
+    () =>
+      vendorName === (invoice.vendorName ?? "")
+        ? null
+        : invoiceVendorChangePatch(
+            invoice,
+            vendors.find((v) => v.name === vendorName),
+            invoice190,
+          ),
+    [invoice, invoice190, vendorName, vendors],
+  );
+  const pickVendor = (name: string) => {
+    setVendorName(name);
+    const next = invoiceVendorChangePatch(
+      invoice,
+      vendors.find((v) => v.name === name),
+      invoice190,
+    ).patch;
+    if (next.isRelatedParty !== undefined) setIsRelatedParty(!!next.isRelatedParty);
+    if (next.relatedPartyNote !== undefined) setRelatedPartyNote(next.relatedPartyNote ?? "");
+  };
   const people = useStore((s) => s.people);
   const invoices = useStore((s) => s.invoices);
   const attachmentDuplicate = useMemo(
@@ -3285,6 +3311,7 @@ function EditInvoiceModal({
     setSaving(true);
     try {
       await onSave({
+        ...(vendorChange?.patch ?? {}),
         purchaserId,
         purchaserName: p?.fullName ?? invoice.purchaserName ?? "",
         invoiceNo,
@@ -3341,6 +3368,32 @@ function EditInvoiceModal({
               </option>
             ))}
           </select>
+        </Field>
+        <Field label={t("polish.invoice.vendor")} className="col-span-2">
+          <select
+            value={vendorName}
+            onChange={(e) => pickVendor(e.target.value)}
+            className={inputCls}
+          >
+            {!vendors.some((v) => v.name === vendorName) && (
+              <option value={vendorName}>{vendorName || "—"}</option>
+            )}
+            {vendors.map((v) => (
+              <option key={v.id} value={v.name}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+          {vendorChange && (
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {t("polish.invoice.vendor_reinherited")}
+            </p>
+          )}
+          {vendorChange?.whtDiffers && (
+            <p className="mt-1 text-[11px] text-warning">
+              {t("polish.invoice.vendor_wht_differs")}
+            </p>
+          )}
         </Field>
         <Field label={t("platform.ui.invoice")}>
           <input
