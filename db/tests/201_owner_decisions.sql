@@ -222,6 +222,168 @@ RESET ROLE;
 SELECT set_config('request.jwt.claim.sub', '', false);
 SELECT t.eq('phases match after the receipt cancellation', ledger_phases_match(:'P'), true);
 
+-- ================================================================ 2c. review fixes (sec_review2)
+\set I4 '60000000-0000-0000-0000-000000000204'
+\set I5 '60000000-0000-0000-0000-000000000205'
+\set I6 '60000000-0000-0000-0000-000000000206'
+\set I7 '60000000-0000-0000-0000-000000000207'
+\set I8 '60000000-0000-0000-0000-000000000208'
+\set I9 '60000000-0000-0000-0000-000000000209'
+\set RD '92000000-0000-0000-0000-000000000202'
+\set RL '92000000-0000-0000-0000-000000000203'
+\set RP '92000000-0000-0000-0000-000000000204'
+-- #1 the approver cannot change the invoice and approve it in one statement,
+--    nor approve figures they changed themselves
+SELECT t.as_user(:'A');
+INSERT INTO invoices(id,description,budget_code,price,date,vendor_name,invoice_no,organization_id,project_id)
+VALUES (:'I4','Lights','2101',400,'2026-10-10','Light Co','INV-204',:'O1',:'P');
+SELECT t.eq('#1 creator is the last editor', (SELECT last_edited_by FROM invoices WHERE id = :'I4'), :'A'::uuid);
+SELECT t.as_user(:'D');
+SELECT t.denied('#1 approve + change the price in one UPDATE refused', format($$UPDATE invoices SET approval_status = 'approved', price = 4000 WHERE id = %L$$, :'I4'));
+SELECT t.denied('#1 approve + change the vendor in one UPDATE refused', format($$UPDATE invoices SET approval_status = 'approved', vendor_name = 'Mine' WHERE id = %L$$, :'I4'));
+SELECT t.denied('#1 approve + move to another project refused', format($$UPDATE invoices SET approval_status = 'approved', project_id = %L WHERE id = %L$$, :'P1', :'I4'));
+UPDATE invoices SET price = 450 WHERE id = :'I4';
+SELECT t.eq('#1 an approver who edits a pending invoice becomes its last editor', (SELECT last_edited_by FROM invoices WHERE id = :'I4'), :'D'::uuid);
+SELECT t.denied('#1 ... and cannot approve it', format($$SELECT approve_invoice(%L)$$, :'I4'));
+SELECT t.denied('#1 ... nor reject it', format($$SELECT reject_invoice(%L, 'no')$$, :'I4'));
+UPDATE invoices SET last_edited_by = :'A' WHERE id = :'I4';
+SELECT t.eq('#1 last_edited_by is written by the database only', (SELECT last_edited_by FROM invoices WHERE id = :'I4'), :'D'::uuid);
+UPDATE invoices SET invoice_url = :'P' || '/invoices/' || :'I4' || '/scan.pdf' WHERE id = :'I4';
+SELECT t.eq('#1 an attachment is not an edit', (SELECT last_edited_by FROM invoices WHERE id = :'I4'), :'D'::uuid);
+SELECT t.as_user(:'E');
+SELECT approve_invoice(:'I4');
+SELECT t.eq('#1 legitimate: a third user approves the invoice as recorded', (SELECT approval_status||'|'||price||'|'||(approved_by = :'E'::uuid)::text FROM invoices WHERE id = :'I4'), 'approved|450|true');
+
+-- #3 the lock covers date, GL, PO, VAT / WHT treatment, invoice no and the Film Commission inputs
+SELECT t.as_user(:'A');
+SELECT t.denied('#3 approved: date locked', format($$UPDATE invoices SET date = '2026-01-01' WHERE id = %L$$, :'I4'));
+SELECT t.denied('#3 approved: GL account locked', format($$UPDATE invoices SET gl_account_id = %L WHERE id = %L$$, :'ap', :'I4'));
+SELECT t.denied('#3 approved: purchase order locked', format($$UPDATE invoices SET purchase_order_id = %L WHERE id = %L$$, :'PO', :'I4'));
+SELECT t.denied('#3 approved: VAT treatment locked', format($$UPDATE invoices SET vat_treatment = 'exempt', vatable = true WHERE id = %L$$, :'I4'));
+SELECT t.denied('#3 approved: WHT treatment locked', format($$UPDATE invoices SET wht_treatment = 'exclusive' WHERE id = %L$$, :'I4'));
+SELECT t.denied('#3 approved: invoice number locked', format($$UPDATE invoices SET invoice_no = 'INV-999' WHERE id = %L$$, :'I4'));
+SELECT t.denied('#3 approved: rebate eligibility locked', format($$UPDATE invoices SET rebate_eligible = true WHERE id = %L$$, :'I4'));
+SELECT t.denied('#3 approved: spend city locked', format($$UPDATE invoices SET spend_city = 'Riyadh' WHERE id = %L$$, :'I4'));
+SELECT t.denied('#3 approved: service inside KSA locked', format($$UPDATE invoices SET service_inside_ksa = false WHERE id = %L$$, :'I4'));
+SELECT t.denied('#3 approved: non-Saudi vendor flag locked', format($$UPDATE invoices SET is_non_saudi_vendor = true WHERE id = %L$$, :'I4'));
+SELECT t.denied('#3 approved: service period locked', format($$UPDATE invoices SET service_period_from = '2026-09-01' WHERE id = %L$$, :'I4'));
+SELECT t.denied('#3 approved: beneficiary locked', format($$UPDATE invoices SET beneficiary_id = %L WHERE id = %L$$, :'PX', :'I4'));
+SELECT (department IS NULL)::text||'|'||(rebate_eligible IS NULL)::text||'|'||(service_inside_ksa IS NULL)::text AS before_nulls FROM invoices WHERE id = :'I4' \gset
+-- the app saves the whole row back: unchanged values in the app's own form ('' / false / 0 for NULL) pass
+UPDATE invoices SET description = 'Lights (2 days)', department = COALESCE(department, ''), rebate_eligible = COALESCE(rebate_eligible, false),
+       service_inside_ksa = COALESCE(service_inside_ksa, true), is_related_party = COALESCE(is_related_party, false),
+       wht_percent = COALESCE(wht_percent, 0), vat_treatment = COALESCE(vat_treatment, CASE WHEN vatable THEN 'standard' ELSE 'exempt' END)
+ WHERE id = :'I4';
+SELECT t.eq('#3 legitimate: a description fix with the app''s round trip is accepted', (SELECT description FROM invoices WHERE id = :'I4'), 'Lights (2 days)');
+SELECT t.eq('#3 ... and the locked columns keep their stored values', (SELECT (department IS NULL)::text||'|'||(rebate_eligible IS NULL)::text||'|'||(service_inside_ksa IS NULL)::text FROM invoices WHERE id = :'I4'), :'before_nulls');
+
+-- #2 an approved invoice holding more than 2 decimals (legacy data) stays usable
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false);
+SET session_replication_role = replica;
+INSERT INTO invoices(id,description,budget_code,price,vat_amount,date,vendor_name,invoice_no,organization_id,project_id,approval_status,created_by)
+VALUES (:'I5','Legacy','2101',100.005,15.0007,'2026-10-11','Old Co','INV-205',:'O1',:'P','approved',:'A');
+SET session_replication_role = origin;
+SELECT t.as_user(:'A');
+UPDATE invoices SET description = 'Legacy (noted)', invoice_url = :'P' || '/invoices/legacy.pdf' WHERE id = :'I5';
+SELECT t.eq('#2 legitimate: attachment / description on a >2-decimal approved invoice', (SELECT description||'|'||price FROM invoices WHERE id = :'I5'), 'Legacy (noted)|100.005');
+SELECT t.denied('#2 its amount is still locked', format($$UPDATE invoices SET price = 101 WHERE id = %L$$, :'I5'));
+SELECT t.as_user(:'D');
+SELECT cancel_invoice(:'I5', 'Duplicate legacy row');
+SELECT t.eq('#2 legitimate: cancel_invoice works on it', (SELECT approval_status||'|'||price FROM invoices WHERE id = :'I5'), 'cancelled|100.005');
+
+-- #11 delete + restore from the trash keeps the original creator; the restorer cannot approve either
+SELECT t.as_user(:'A');
+INSERT INTO invoices(id,description,budget_code,price,date,vendor_name,invoice_no,organization_id,project_id)
+VALUES (:'I6','Dolly','2101',300,'2026-10-12','Grip Co','INV-206',:'O1',:'P');
+SELECT t.as_user(:'D');
+DELETE FROM invoices WHERE id = :'I6';
+SELECT restore_trash_item((SELECT id FROM trash_items WHERE record_id = :'I6' AND restored_at IS NULL)) IS NOT NULL AS restored \gset
+SELECT t.eq('#11 restored invoice keeps its creator, restorer is last editor', (SELECT approval_status||'|'||(created_by = :'A'::uuid)::text||'|'||(last_edited_by = :'D'::uuid)::text FROM invoices WHERE id = :'I6'), 'pending|true|true');
+SELECT t.denied('#11 the restorer cannot approve it', format($$SELECT approve_invoice(%L)$$, :'I6'));
+SELECT t.as_user(:'A');
+SELECT t.denied('#11 the original creator cannot approve it after the restore', format($$SELECT approve_invoice(%L)$$, :'I6'));
+SELECT t.as_user(:'E');
+SELECT approve_invoice(:'I6');
+SELECT t.eq('#11 legitimate: someone else approves the restored invoice', (SELECT approval_status FROM invoices WHERE id = :'I6'), 'approved');
+
+-- #12 a chain level applies only from its minimum amount
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false);
+INSERT INTO payment_approval_levels(organization_id, level_no, label, min_amount_sar, approver_kind, role_id)
+VALUES (:'O1', 1, 'Big spend', 10000, 'role', '30000000-0000-0000-0000-000000000001');
+SELECT t.as_user(:'C');
+INSERT INTO invoices(id,description,budget_code,price,date,vendor_name,invoice_no,organization_id,project_id)
+VALUES (:'I7','Small','2101',700,'2026-10-13','Grip Co','INV-207',:'O1',:'P'),
+       (:'I8','Large','2101',12000,'2026-10-13','Grip Co','INV-208',:'O1',:'P');
+SELECT t.as_user(:'A');
+SELECT t.denied('#12 a level from 10,000 SAR does not cover a 700 SAR invoice', format($$SELECT approve_invoice(%L)$$, :'I7'));
+SELECT approve_invoice(:'I8');
+SELECT t.eq('#12 legitimate: the level approver approves the 12,000 SAR invoice', (SELECT approval_status FROM invoices WHERE id = :'I8'), 'approved');
+SELECT t.eq('#12 can_approve_invoice by amount', can_approve_invoice(:'P', 700)::text||'|'||can_approve_invoice(:'P', 12000)::text, 'false|true');
+SELECT t.as_user(:'D');
+SELECT approve_invoice(:'I7');
+SELECT t.eq('#12 legitimate: below every level an org admin approves', (SELECT approval_status FROM invoices WHERE id = :'I7'), 'approved');
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false);
+DELETE FROM payment_approval_levels WHERE organization_id = :'O1' AND label = 'Big spend';
+
+-- #13 the delete guard does not depend on the caller seeing the project
+SELECT t.eq('#13 delete guard uses the DEFINER project_exists', position('project_exists' in pg_get_functiondef('public.guard_invoice_delete'::regproc)) > 0
+  AND position('project_exists' in pg_get_functiondef('public.guard_petty_receipt_delete'::regproc)) > 0, true);
+
+-- #8 petty cash receipts: maker-checker and an approver role
+SELECT t.as_user(:'D');
+INSERT INTO cash_advance_receipts(id,advance_id,recipient,amount,date,organization_id,project_id,budget_code,status,vendor)
+VALUES (:'RD',:'F1','Runner',120,'2026-10-03',:'O1',:'P','2101','pending','Kiosk');
+SELECT t.eq('#8 receipt creator stamped by the database', (SELECT created_by FROM cash_advance_receipts WHERE id = :'RD'), :'D'::uuid);
+SELECT t.denied('#8 the person who logged a receipt cannot approve it (even an org admin)', format($$UPDATE cash_advance_receipts SET status = 'approved' WHERE id = %L$$, :'RD'));
+SELECT t.denied('#8 created_by cannot be rewritten', format($$UPDATE cash_advance_receipts SET created_by = %L WHERE id = %L$$, :'C', :'RD'));
+SELECT t.as_user(:'C');
+SELECT t.denied('#8 a member without the petty cash approval role cannot approve', format($$UPDATE cash_advance_receipts SET status = 'approved' WHERE id = %L$$, :'RD'));
+SELECT t.as_user(:'A');
+SELECT t.denied('#8 A (no petty-cash edit permission yet) cannot approve', format($$UPDATE cash_advance_receipts SET status = 'approved' WHERE id = %L$$, :'RD'));
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false);
+INSERT INTO role_permissions(role_id,module_key,can_view,can_edit) VALUES ('30000000-0000-0000-0000-000000000001','petty-cash',true,true)
+  ON CONFLICT DO NOTHING;
+UPDATE role_permissions SET can_edit = true WHERE role_id = '30000000-0000-0000-0000-000000000001' AND module_key = 'petty-cash';
+SELECT t.as_user(:'A');
+SELECT t.denied('#8 approve + change the amount in one UPDATE refused', format($$UPDATE cash_advance_receipts SET status = 'approved', amount = 999 WHERE id = %L$$, :'RD'));
+UPDATE cash_advance_receipts SET status = 'approved' WHERE id = :'RD';
+SELECT t.eq('#8 legitimate: a petty cash approver approves someone else''s receipt', (SELECT status||'|'||(approved_by = :'A'::uuid)::text FROM cash_advance_receipts WHERE id = :'RD'), 'approved|true');
+-- a receipt logged before 201 (created_by NULL): submitted_by stands in
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false);
+SET session_replication_role = replica;
+INSERT INTO cash_advance_receipts(id,advance_id,recipient,amount,date,organization_id,project_id,budget_code,status,vendor,submitted_by,currency)
+VALUES (:'RL',:'F1','Runner',80,'2026-10-04',:'O1',:'P','2101','pending','Shop',:'A','SAR'),
+       (:'RP',:'F1','Runner',40.004,'2026-09-04',:'O1',:'P','2101','approved','Shop',:'A','SAR');
+SET session_replication_role = origin;
+SELECT t.as_user(:'A');
+SELECT t.denied('#8 legacy receipt: its submitter cannot approve it', format($$UPDATE cash_advance_receipts SET status = 'approved' WHERE id = %L$$, :'RL'));
+SELECT t.as_user(:'D');
+UPDATE cash_advance_receipts SET status = 'approved' WHERE id = :'RL';
+SELECT t.eq('#8 legitimate: someone else approves the legacy receipt', (SELECT status FROM cash_advance_receipts WHERE id = :'RL'), 'approved');
+-- #3 receipts: GL account and department locked once approved; #2 legacy decimals do not block
+SELECT t.denied('#3 approved receipt: GL account locked', format($$UPDATE cash_advance_receipts SET gl_account_id = %L WHERE id = %L$$, :'ap', :'RD'));
+SELECT t.denied('#3 approved receipt: department locked', format($$UPDATE cash_advance_receipts SET department = 'Art' WHERE id = %L$$, :'RD'));
+UPDATE cash_advance_receipts SET notes = 'checked' WHERE id = :'RP';
+SELECT t.eq('#2 legitimate: a note on a legacy approved receipt (amount stays as stored)', (SELECT notes||'|'||amount FROM cash_advance_receipts WHERE id = :'RP'), 'checked|40.004');
+SELECT t.denied('#2 ... its amount is still locked', format($$UPDATE cash_advance_receipts SET amount = 41 WHERE id = %L$$, :'RP'));
+-- #9 a receipt with a payment cannot be cancelled
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false);
+INSERT INTO payments(organization_id,project_id,source_type,source_id,amount,payment_date) VALUES (:'O1',:'P','cash_advance_receipt',:'RL',80,'2026-10-05');
+SELECT t.as_user(:'D');
+SELECT t.denied('#9 a receipt with payments cannot be cancelled', format($$SELECT cancel_petty_receipt(%L, 'oops')$$, :'RL'));
+SELECT cancel_petty_receipt(:'RD', 'Wrong float');
+SELECT t.eq('#9 legitimate: a receipt without payments is cancelled', (SELECT status FROM cash_advance_receipts WHERE id = :'RD'), 'cancelled');
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false);
+DELETE FROM role_permissions WHERE role_id = '30000000-0000-0000-0000-000000000001' AND module_key = 'petty-cash';
+SELECT t.eq('phases match after the review-fix scenarios', ledger_phases_match(:'P'), true);
+
 -- ================================================================ 3. regions
 SELECT t.eq('region normalise: city', ksa_region_normalize('Jeddah'), 'Makkah');
 SELECT t.eq('region normalise: Arabic', ksa_region_normalize('الرياض'), 'Riyadh');
@@ -279,9 +441,10 @@ DELETE FROM wht_rate_rules WHERE organization_id = :'O1' AND service_type = 'ren
 INSERT INTO payments(id,organization_id,project_id,source_type,source_id,amount,payment_date,proof_path)
 VALUES ('e2010000-0000-0000-0000-000000000001',:'O1',:'P','overtime','e2010000-0000-0000-0000-0000000000ff',1,'2026-10-20','payments/old-proof.pdf');
 UPDATE payroll SET payment_schedule = jsonb_set(payment_schedule, '{0,proofPath}', '"payroll/b04/m1.pdf"') WHERE id = :'PX';
-INSERT INTO storage.objects(bucket_id, name) VALUES
- ('contracts', 'payments/old-proof.pdf'), ('contracts', 'payroll/b04/m1.pdf'), ('contracts', 'old/orphan.pdf'),
- ('contracts', :'P' || '/invoices/x/already.pdf');
+-- (uploaded by A, a member of the organization that references them)
+INSERT INTO storage.objects(bucket_id, name, owner) VALUES
+ ('contracts', 'payments/old-proof.pdf', :'A'), ('contracts', 'payroll/b04/m1.pdf', :'A'), ('contracts', 'old/orphan.pdf', NULL),
+ ('contracts', :'P' || '/invoices/x/already.pdf', :'A');
 -- the live org-wide read policy (195 §2) as it exists there
 CREATE POLICY "Org members can read contracts" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'contracts');
 SELECT t.as_user(:'D');
@@ -310,7 +473,47 @@ SELECT t.eq('orphan still blocks the strict switch', switch_contracts_bucket_to_
 SELECT t.eq('switch with orphans allowed', switch_contracts_bucket_to_project_policy(true), 'switched');
 SELECT t.eq('org-wide read policy dropped', (SELECT count(*) FROM pg_policies WHERE schemaname = 'storage' AND policyname = 'Org members can read contracts'), 0::bigint);
 SELECT t.eq('project-scoped read policy in place', (SELECT count(*) FROM pg_policies WHERE schemaname = 'storage' AND policyname = 'Project members can read contract files by project'), 1::bigint);
+-- #5 the switch tells when the org-wide policy was not there (live: dropped by migration 20260722132616)
+SELECT t.eq('#5 switch when the org-wide policy is absent: not present', switch_contracts_bucket_to_project_policy(true), 'not present');
 RESET ROLE;
 SELECT set_config('request.jwt.claim.sub', '', false);
-DELETE FROM storage.objects WHERE bucket_id = 'contracts' AND (name LIKE :'P' || '/%' OR name = 'old/orphan.pdf');
+-- #4 project folders are readable by org admins / owners who are not project members
+\set F '00000000-0000-0000-0000-00000000000f'
+INSERT INTO auth.users(id,email) VALUES (:'F','admin2@org1.test') ON CONFLICT DO NOTHING;
+INSERT INTO profiles(id,display_name) VALUES (:'F','Org1 Admin without projects') ON CONFLICT DO NOTHING;
+INSERT INTO organization_members(organization_id,user_id,role) VALUES (:'O1',:'F','admin') ON CONFLICT DO NOTHING;
+GRANT SELECT, INSERT ON storage.objects TO authenticated;          -- as on Supabase
+SELECT t.as_user(:'F');
+SELECT t.eq('#4 org admin (not a project member) reads a moved file', (SELECT count(*) FROM storage.objects WHERE bucket_id = 'contracts' AND name = :'P' || '/payments/old-proof.pdf'), 1::bigint);
+INSERT INTO storage.objects(bucket_id, name, owner) VALUES ('contracts', :'P' || '/payments/new-proof.pdf', :'F');
+SELECT t.eq('#4 org admin (not a project member) uploads into the project folder', (SELECT count(*) FROM storage.objects WHERE bucket_id = 'contracts' AND name = :'P' || '/payments/new-proof.pdf'), 1::bigint);
+SELECT t.as_user(:'A');
+SELECT t.eq('#4 legitimate: a project member reads it', (SELECT count(*) FROM storage.objects WHERE bucket_id = 'contracts' AND name = :'P' || '/payments/old-proof.pdf'), 1::bigint);
+SELECT t.as_user(:'B');
+SELECT t.eq('#4 another tenant does not', (SELECT count(*) FROM storage.objects WHERE bucket_id = 'contracts' AND name LIKE :'P' || '/%'), 0::bigint);
+SELECT t.denied('#4 another tenant cannot upload into the project folder', format($$INSERT INTO storage.objects(bucket_id, name, owner) VALUES ('contracts', %L, %L)$$, :'P' || '/x/evil.pdf', :'B'));
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false);
+REVOKE SELECT, INSERT ON storage.objects FROM authenticated;
+-- #6 / #14 a reference written into a row never pulls a file into that row's project
+INSERT INTO storage.objects(bucket_id, name, owner) VALUES
+ ('contracts', 'invoices/60000000-0000-0000-0000-000000000001/claim.pdf', :'A'),   -- names an invoice of P1
+ ('contracts', 'misc/foreign.pdf', :'B'),                                           -- uploaded by another tenant
+ ('contracts', 'misc/noproject.pdf', :'A'),                                         -- also referenced without a project
+ ('contracts', 'invoices/' || :'I4' || '/ok.pdf', NULL);                            -- names an invoice of P
+INSERT INTO payments(id,organization_id,project_id,source_type,source_id,amount,payment_date,proof_path) VALUES
+ ('e2010000-0000-0000-0000-000000000002',:'O1',:'P','overtime','e2010000-0000-0000-0000-0000000000ff',1,'2026-10-20','invoices/60000000-0000-0000-0000-000000000001/claim.pdf'),
+ ('e2010000-0000-0000-0000-000000000003',:'O1',:'P','overtime','e2010000-0000-0000-0000-0000000000ff',1,'2026-10-20','misc/foreign.pdf'),
+ ('e2010000-0000-0000-0000-000000000004',:'O1',:'P','overtime','e2010000-0000-0000-0000-0000000000ff',1,'2026-10-20','misc/noproject.pdf'),
+ ('e2010000-0000-0000-0000-000000000005',:'O1',NULL,'overtime','e2010000-0000-0000-0000-0000000000ff',1,'2026-10-20','misc/noproject.pdf'),
+ ('e2010000-0000-0000-0000-000000000006',:'O1',:'P','overtime','e2010000-0000-0000-0000-0000000000ff',1,'2026-10-20','invoices/' || :'I4' || '/ok.pdf');
+SELECT t.as_user(:'E');
+SELECT t.eq('#6 path naming a record of another project: conflict', (SELECT action||'|'||note FROM move_contract_files_to_project_folders(true) WHERE object_name = 'invoices/60000000-0000-0000-0000-000000000001/claim.pdf'), 'conflict|other_project_record');
+SELECT t.eq('#6 file uploaded by another tenant: conflict', (SELECT action||'|'||note FROM move_contract_files_to_project_folders(true) WHERE object_name = 'misc/foreign.pdf'), 'conflict|uploader_outside_org');
+SELECT t.eq('#14 also referenced by a record without a project: conflict', (SELECT action||'|'||note FROM move_contract_files_to_project_folders(true) WHERE object_name = 'misc/noproject.pdf'), 'conflict|no_project');
+SELECT t.denied('#14 repoint refuses it too', $$SELECT repoint_contract_file('misc/noproject.pdf', '20000000-0000-0000-0000-000000000201/misc/noproject.pdf')$$);
+SELECT t.eq('#6 legitimate: a path naming a record of the same project moves', (SELECT action||'|'||new_name FROM move_contract_files_to_project_folders(true) WHERE object_name = 'invoices/' || :'I4' || '/ok.pdf'), 'move|' || :'P' || '/invoices/' || :'I4' || '/ok.pdf');
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false);
+DELETE FROM storage.objects WHERE bucket_id = 'contracts' AND (name LIKE :'P' || '/%' OR name IN ('old/orphan.pdf', 'misc/foreign.pdf', 'misc/noproject.pdf') OR name LIKE 'invoices/%');
 SELECT t.eq('final: phases match', ledger_phases_match(:'P'), true);

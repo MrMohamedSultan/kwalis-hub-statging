@@ -153,6 +153,12 @@ export function InvoiceApprovalActions({
   const [dialog, setDialog] = useState<"reject" | "cancel" | null>(null);
   const status = invoice.approvalStatus ?? "approved";
   const isCreator = !!userId && invoice.createdBy === userId;
+  // maker-checker (db/pending/201): the last editor cannot approve / reject either
+  const isLastEditor = !!userId && !isCreator && invoice.lastEditedBy === userId;
+  const isMaker = isCreator || isLastEditor;
+  const makerHint = isCreator
+    ? t("decisions.approval.makerChecker")
+    : t("decisions.approval.makerCheckerEditor");
   const id = z.string().uuid().safeParse(invoice.id);
 
   const run = async (
@@ -177,10 +183,8 @@ export function InvoiceApprovalActions({
       {status === "pending" && (
         <span className="inline-flex gap-1">
           <button
-            disabled={isCreator}
-            title={
-              isCreator ? t("decisions.approval.makerChecker") : t("decisions.approval.approve")
-            }
+            disabled={isMaker}
+            title={isMaker ? makerHint : t("decisions.approval.approve")}
             onClick={() =>
               void run(
                 "approve_invoice",
@@ -199,10 +203,8 @@ export function InvoiceApprovalActions({
             {t("decisions.approval.approve")}
           </button>
           <button
-            disabled={isCreator}
-            title={
-              isCreator ? t("decisions.approval.makerChecker") : t("decisions.approval.reject")
-            }
+            disabled={isMaker}
+            title={isMaker ? makerHint : t("decisions.approval.reject")}
             onClick={() => setDialog("reject")}
             className="inline-flex items-center gap-1 rounded-lg border border-destructive/30 bg-destructive/15 px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive/25 disabled:cursor-not-allowed disabled:opacity-40"
           >

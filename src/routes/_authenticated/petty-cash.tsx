@@ -94,6 +94,10 @@ type ReceiptRow = {
   created_at: string;
   attachment_path: string | null;
   attachment_name: string | null;
+  /** db/pending/201 maker-checker: who logged / last changed it (database-written). */
+  created_by?: string | null;
+  last_edited_by?: string | null;
+  submitted_by?: string | null;
 };
 type PerDiemPaid = {
   id: string;
@@ -136,6 +140,10 @@ function PettyCashPage() {
 
   const can = useCan();
   const roles = useAuthRoles();
+  // maker-checker (db/pending/201): whoever logged or last changed a receipt does not approve it
+  const isReceiptMaker = (r: ReceiptRow) =>
+    !!roles.userId &&
+    [r.created_by ?? r.submitted_by, r.last_edited_by].some((u) => !!u && u === roles.userId);
   const activeProject = useStore((s) => s.projects.find((p) => p.id === s.activeProjectId));
   const projectId = activeProject?.id ?? null;
   const orgId = activeProject?.organizationId ?? null;
@@ -815,6 +823,12 @@ function PettyCashPage() {
                       {canApprove && r.status === "pending" && (
                         <span className="inline-flex gap-1">
                           <button
+                            disabled={isReceiptMaker(r)}
+                            title={
+                              isReceiptMaker(r)
+                                ? t("decisions.receipt.makerChecker")
+                                : t("decisions.approval.approve")
+                            }
                             onClick={async () => {
                               const { error } = await supabase
                                 .from("cash_advance_receipts")
@@ -832,12 +846,18 @@ function PettyCashPage() {
                               toast.success(t("petty_cash.receipt_approved_actuals_updated"));
                               void reloadAll();
                             }}
-                            className="text-xs px-2 py-1 rounded-lg bg-success/15 hover:bg-success/25 text-success inline-flex items-center gap-1"
+                            className="text-xs px-2 py-1 rounded-lg bg-success/15 hover:bg-success/25 text-success inline-flex items-center gap-1 disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             <Check className="size-3" />
                             {t("decisions.approval.approve")}
                           </button>
                           <button
+                            disabled={isReceiptMaker(r)}
+                            title={
+                              isReceiptMaker(r)
+                                ? t("decisions.receipt.makerChecker")
+                                : t("decisions.approval.reject")
+                            }
                             onClick={async () => {
                               const { error } = await supabase
                                 .from("cash_advance_receipts")
@@ -850,7 +870,7 @@ function PettyCashPage() {
                                 void reloadAll();
                               }
                             }}
-                            className="text-xs px-2 py-1 rounded-lg bg-destructive/15 hover:bg-destructive/25 text-destructive inline-flex items-center gap-1"
+                            className="text-xs px-2 py-1 rounded-lg bg-destructive/15 hover:bg-destructive/25 text-destructive inline-flex items-center gap-1 disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             <XIcon className="size-3" />
                             {t("decisions.approval.reject")}

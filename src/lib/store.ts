@@ -132,6 +132,8 @@ export type Invoice = {
    */
   approvalStatus?: InvoiceApprovalStatus;
   createdBy?: string | null;
+  /** Last user who changed the content (database-written, db/pending/201): cannot approve / reject. */
+  lastEditedBy?: string | null;
   approvedBy?: string | null;
   approvedAt?: string | null;
   rejectionReason?: string | null;
@@ -784,6 +786,7 @@ const fromInvoiceRow = (r: any): Invoice => ({
     ? r.approval_status
     : "approved") as InvoiceApprovalStatus,
   createdBy: r.created_by ?? null,
+  lastEditedBy: r.last_edited_by ?? null,
   approvedBy: r.approved_by ?? null,
   approvedAt: r.approved_at ?? null,
   rejectionReason: r.rejection_reason ?? null,

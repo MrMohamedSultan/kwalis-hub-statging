@@ -45,34 +45,73 @@
 --        'pending'. Stamps: approved_by/at, rejected_by/at/rejection_reason,
 --        cancelled_by/at/cancellation_reason.
 --      * maker-checker (same rules as purchase orders in 174 and contracts in
---        176): the creator cannot approve or reject; the approver must be an
---        org admin / super admin, or — when the organization has an approval
---        chain (payment_approval_levels) — someone who matches one of its
---        levels. RPCs approve_invoice / reject_invoice / cancel_invoice.
+--        176): neither the creator nor the last editor (new column
+--        last_edited_by, written by the database on every content change
+--        except attachments) can approve or reject, and the approving /
+--        rejecting statement may change nothing but the status and reason;
+--        the approver must be an org admin / super admin, or — when the
+--        organization has an approval chain (payment_approval_levels) —
+--        someone who matches one of its levels whose min_amount_sar is
+--        reached by the invoice (price + VAT, SAR). A row restored from the
+--        trash keeps its original creator (read from trash_items) and the
+--        restorer becomes its last editor. RPCs approve_invoice /
+--        reject_invoice / cancel_invoice; can_approve_invoice(project[,
+--        amount]).
 --      * pending invoice = Commitment, approved invoice = Actual, rejected /
 --        cancelled = neither (a PO / car rental / accommodation it was
 --        raised on is a commitment again).
---      * approved invoices are locked (amount, VAT, WHT, net, currency, FX,
---        vendor, budget code, project); deleting one is refused — it is
---        cancelled instead (X08), with a reason, and only when no payment
---        and no open payment request exist on it. The ledger posts the
---        accrual on approval and the engine reverses it on cancellation.
---      * payment requests and payments on an invoice require it approved.
+--      * approved invoices are locked (invoice_lock_view): amount, VAT /
+--        WHT amounts, rates and treatments, net, currency / FX, vendor (and
+--        its tax snapshot once set), budget code, GL account, PO, project,
+--        date, invoice number, department and every Film Commission input
+--        (rebate flags, spend country / city, inside KSA, non-Saudi vendor,
+--        related party, service period, beneficiary — eligibility changes go
+--        through set_qpe_override, 197, with a reason). Still editable:
+--        description, attachments, payment terms / due date / method,
+--        purchaser, vendor bank details, the budget-line link (D12, same
+--        code only). Values sent back unchanged (the app's '' / false / 0
+--        for NULL, an amount stored with more than 2 decimals) are kept as
+--        stored, so legacy rows stay updatable and cancellable. Deleting an
+--        approved invoice is refused — it is cancelled instead (X08), with a
+--        reason, and only when no payment and no open payment request exist
+--        on it. The ledger posts the accrual on approval and the engine
+--        reverses it on cancellation.
+--      * payment requests and payments on an invoice require it approved
+--        (the check takes a FOR SHARE lock on the invoice, so it cannot race
+--        a cancellation).
 --      * get_funding_position (upcoming = approved unpaid invoices) and
 --        get_cash_flow (forecast leaves out rejected / cancelled invoices)
 --        are copies of 196 with that filter.
---    Petty cash receipts (already pending / approved / rejected): the
---    approval stamp is written by the database, an approved receipt is
---    locked (amount, currency, FX, code, vendor, float, date), cannot go
---    back to pending / rejected and cannot be deleted — it is cancelled
---    (new status 'cancelled', cancel_petty_receipt) by an org admin or by
---    the person who approved it.
+--    Petty cash receipts (already pending / approved / rejected): new
+--    columns created_by / last_edited_by (database-written; rows logged
+--    before 201 fall back on submitted_by); the person who logged or last
+--    changed a receipt cannot approve / reject it, and the approver must be
+--    an invoice approver or have edit rights on the petty-cash module in
+--    this organization (can_approve_petty_receipt). The approval stamp is
+--    written by the database, an approved receipt is locked (amount,
+--    currency, FX, code, GL account, department, vendor, recipient, float,
+--    date, spend place), cannot go back to pending / rejected and cannot
+--    be deleted — it is cancelled (new status 'cancelled',
+--    cancel_petty_receipt) by an org admin or by the person who approved
+--    it, and not while a payment / open payment request exists on it.
 --
 -- 3. Contracts storage bucket per project.
+--      * project-folder policies (applied by this file, before any move):
+--        "Project members can read / upload contract files by project" are
+--        re-created with contracts_folder_access(), which passes the
+--        project's own organization to can_access_project — the 20260716
+--        versions passed NULL, so org owners / admins who are not members of
+--        the project could not open moved files.
 --      * move_contract_files_to_project_folders(dry_run DEFAULT true)
 --        (super admin / service role): lists the objects of bucket
 --        'contracts' that are not under a <project_id>/ folder, with the
 --        record that owns each one and its new path <project_id>/<old path>.
+--        A file is only planned for a move when every reference has the same
+--        project and, if its legacy path names a record (invoices/<id>/…,
+--        payroll/<id>/…, per-diem/<id>/…, locations/<project>/… …), that
+--        record is of the same project — otherwise, when it names none, it
+--        must have been uploaded by a member of that organization. Anything
+--        else is a 'conflict' with a note (handled by hand).
 --        Moving the bytes needs the Storage API (an UPDATE of
 --        storage.objects.name does not move the file), so the move itself
 --        is done by the server function moveContractFilesToProjectFolders
@@ -84,8 +123,12 @@
 --      * switch_contracts_bucket_to_project_policy(): only when no
 --        unmoved file remains, makes sure "Project members can read
 --        contract files by project" exists and drops the org-wide
---        "Org members can read contracts" (195 §2). Called once below:
---        while files remain it raises a NOTICE and changes nothing.
+--        "Org members can read contracts" (195 §2) if it exists — returns
+--        'switched', or 'not present' when it is already gone (on the live
+--        database migration 20260722132616 dropped it and added the
+--        record-scoped "Contract … requires record access" policies, which
+--        stay). Called once below: while files remain it raises a NOTICE
+--        and changes nothing ('skipped').
 --
 -- 4. Budget regions (Film Commission budget by region).
 --      * budget_lines.region and projects.default_region: one of the 13
@@ -114,8 +157,11 @@
 --
 -- SECURITY: new SECURITY DEFINER functions (all derive organization /
 -- project from the row's own project, never from a client-sent column),
--- triggers on financial tables, a storage policy switch — per SECURITY.md
--- apply only after owner approval.
+-- triggers on financial tables, two re-created storage policies on
+-- storage.objects (contracts project folders, org-resolved) and the
+-- policy switch — per SECURITY.md apply only after owner approval.
+-- Deploy order: 200 first, and stop if public.project_org_mismatches()
+-- returns rows (201's backfill and repoint updates fire 200's trigger).
 --
 -- Owner steps after applying (after a backup):
 --   1. for every project initialised by 182:
@@ -134,6 +180,8 @@
 --   4. Review the WHT rates with the tax adviser (Settings → Organization).
 --
 -- Rollback (in this order):
+--   (storage) re-create the two 20260716141126 policies "Project members can
+--     read / upload contract files by project" (organization NULL) if wanted;
 --   DROP TRIGGER zz_trg_invoice_approval ON public.invoices;
 --   DROP TRIGGER trg_invoice_delete_guard ON public.invoices;
 --   DROP TRIGGER trg_payment_request_validate_zz_invoice ON public.payment_requests;
@@ -151,6 +199,10 @@
 --     cannot be removed with CREATE OR REPLACE);
 --   DROP FUNCTION public.approve_invoice(uuid), public.reject_invoice(uuid, text),
 --     public.cancel_invoice(uuid, text), public.can_approve_invoice(uuid),
+--     public.can_approve_invoice(uuid, numeric), public.can_approve_petty_receipt(uuid),
+--     public.approval_row_content(jsonb, text[], text[]), public.invoice_lock_view(jsonb),
+--     public.petty_receipt_lock_view(jsonb), public.trash_original_creator(text, uuid),
+--     public.contracts_folder_access(uuid, text), public.contract_path_record(text),
 --     public.enforce_invoice_approval(), public.guard_invoice_delete(),
 --     public.require_approved_invoice_for_request(), public.require_approved_invoice_for_payment(),
 --     public.cancel_petty_receipt(uuid, text), public.enforce_petty_receipt_approval(),
@@ -164,8 +216,9 @@
 --   ALTER TABLE public.cash_advance_receipts ADD CONSTRAINT cash_advance_receipts_status_chk
 --     CHECK (status = ANY (ARRAY['pending','approved','rejected']));   (after re-labelling cancelled rows)
 --   the new columns can stay or be dropped: invoices.approval_status, approved_by, approved_at,
---     rejected_by, rejected_at, rejection_reason, cancelled_by, cancelled_at, cancellation_reason;
---     cash_advance_receipts.cancelled_by, cancelled_at, cancellation_reason;
+--     rejected_by, rejected_at, rejection_reason, cancelled_by, cancelled_at, cancellation_reason,
+--     last_edited_by;
+--     cash_advance_receipts.cancelled_by, cancelled_at, cancellation_reason, created_by, last_edited_by;
 --     payroll_instalments.company_wht; budget_lines.region; projects.default_region;
 --     wht_rate_rules.label_en, label_ar, source_note, sort_order;
 --   DELETE FROM public.wht_rate_rules WHERE organization_id IS NULL AND notes = 'seed 201';
@@ -325,11 +378,87 @@ CREATE INDEX IF NOT EXISTS idx_invoices_project_approval ON public.invoices (pro
 COMMENT ON COLUMN public.invoices.approval_status IS
   'pending (recorded = Commitment) → approved (Actual, locked) | rejected; approved → cancelled (recorded cancellation instead of a delete). db/pending/201.';
 
+-- Last person who changed the invoice's content (amount, vendor, code, …).
+-- Stamped by the database only; maker-checker: neither the creator nor the
+-- last editor can approve / reject (an approver who edits a pending invoice
+-- hands the approval to someone else). Attachments do not count as edits.
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS last_edited_by uuid;
+COMMENT ON COLUMN public.invoices.last_edited_by IS
+  'Last signed-in user who changed the invoice content (not attachments / approval stamps); written by the database only. Maker-checker: cannot approve or reject. db/pending/201.';
+
+-- A row as jsonb without the given keys, money keys rounded to 2 decimals
+-- (trg_money_precision rounds NEW, so an untouched legacy amount with more
+-- decimals is not a change).
+CREATE OR REPLACE FUNCTION public.approval_row_content(j jsonb, p_drop text[], p_money text[])
+RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path = public AS $$
+  SELECT COALESCE(jsonb_object_agg(e.k,
+           CASE WHEN e.k = ANY (p_money) AND jsonb_typeof(e.v) = 'number'
+                THEN to_jsonb(round((e.v #>> '{}')::numeric, 2)) ELSE e.v END), '{}'::jsonb)
+    FROM jsonb_each(j - p_drop) e(k, v)
+$$;
+REVOKE ALL ON FUNCTION public.approval_row_content(jsonb, text[], text[]) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.approval_row_content(jsonb, text[], text[]) TO authenticated, service_role;
+
+-- X09: the columns of an approved invoice that are locked, normalised the
+-- way the app round-trips them ('' = NULL, NULL flags = their default,
+-- money rounded to 2 decimals). Amounts, tax, currency / FX, vendor,
+-- budget code / GL / budget line / PO, project, date, invoice number and
+-- every Film Commission input. Eligibility changes after approval go
+-- through set_qpe_override (197, reason required). The budget-line link
+-- (linked_budget_line_id, D12) stays editable: 040 only allows a line of
+-- the same code.
+CREATE OR REPLACE FUNCTION public.invoice_lock_view(j jsonb)
+RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path = public AS $$
+  SELECT jsonb_build_object(
+    'price',            round(COALESCE((j->>'price')::numeric, 0), 2),
+    'vat_amount',       round(COALESCE((j->>'vat_amount')::numeric, 0), 2),
+    'wht_amount',       round(COALESCE((j->>'wht_amount')::numeric, 0), 2),
+    'wht_percent',      COALESCE((j->>'wht_percent')::numeric, 0),
+    'net_payable',      round((j->>'net_payable')::numeric, 2),
+    'currency',         upper(COALESCE(NULLIF(btrim(j->>'currency'), ''), 'SAR')),
+    'fx_rate',          (j->>'fx_rate')::numeric,
+    'amount_original',  (j->>'amount_original')::numeric,
+    'fx_rate_source',   NULLIF(btrim(j->>'fx_rate_source'), ''),
+    'fx_rate_date',     j->>'fx_rate_date',
+    'vendor_name',      NULLIF(btrim(j->>'vendor_name'), ''),
+    'budget_code',      NULLIF(btrim(j->>'budget_code'), ''),
+    'department',       NULLIF(btrim(j->>'department'), ''),
+    'gl_account_id',    j->>'gl_account_id',
+    'purchase_order_id', j->>'purchase_order_id',
+    'project_id',       j->>'project_id',
+    'organization_id',  j->>'organization_id',
+    'date',             j->>'date',
+    'invoice_no',       NULLIF(btrim(j->>'invoice_no'), ''),
+    'vatable',          COALESCE((j->>'vatable')::boolean, false),
+    'vat_treatment',    COALESCE(NULLIF(j->>'vat_treatment', ''),
+                                 CASE WHEN COALESCE((j->>'vatable')::boolean, false) THEN 'standard' ELSE 'exempt' END),
+    'vat_rate',         (j->>'vat_rate')::numeric,
+    'wht_treatment',    NULLIF(j->>'wht_treatment', ''),
+    'wht_gl_code',      COALESCE(NULLIF(btrim(j->>'wht_gl_code'), ''),
+                                 CASE WHEN COALESCE((j->>'wht_amount')::numeric, 0) > 0 THEN '2140' END),
+    'rebate_eligible',  COALESCE((j->>'rebate_eligible')::boolean, false),
+    'rebate_manual_override', COALESCE((j->>'rebate_manual_override')::boolean, false),
+    'is_non_saudi_vendor', COALESCE((j->>'is_non_saudi_vendor')::boolean, false),
+    'service_inside_ksa', COALESCE((j->>'service_inside_ksa')::boolean, true),
+    'is_related_party', COALESCE((j->>'is_related_party')::boolean, false),
+    'spend_country',    NULLIF(btrim(j->>'spend_country'), ''),
+    'spend_city',       NULLIF(btrim(j->>'spend_city'), ''),
+    'service_period_from', j->>'service_period_from',
+    'service_period_to',   j->>'service_period_to',
+    'service_received_date', j->>'service_received_date',
+    'beneficiary_id',   j->>'beneficiary_id')
+$$;
+REVOKE ALL ON FUNCTION public.invoice_lock_view(jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.invoice_lock_view(jsonb) TO authenticated, service_role;
+
 -- Can the signed-in user approve / reject / cancel invoices of this project?
 -- Super admin, org admin, or — when the organization has an approval chain —
--- a person matching one of its levels (and a member of the project).
--- Only answers for the caller; the organization comes from the project.
-CREATE OR REPLACE FUNCTION public.can_approve_invoice(p_project uuid)
+-- a person matching one of its levels that applies to the amount
+-- (min_amount_sar ≤ amount, as payment_request_required_levels in 176; a
+-- NULL amount = any level, for the screens that only show the buttons) and
+-- a member of the project. Only answers for the caller; the organization
+-- comes from the project.
+CREATE OR REPLACE FUNCTION public.can_approve_invoice(p_project uuid, p_amount_sar numeric)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT auth.uid() IS NOT NULL AND EXISTS (
     SELECT 1 FROM public.projects pr
@@ -339,18 +468,43 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS
             OR (public.can_access_project(auth.uid(), pr.organization_id, pr.id)
                 AND EXISTS (SELECT 1 FROM public.payment_approval_levels l
                              WHERE l.organization_id = pr.organization_id
+                               AND (p_amount_sar IS NULL OR l.min_amount_sar <= p_amount_sar)
                                AND public.payment_approver_matches(auth.uid(), pr.organization_id, pr.id,
                                                                    l.approver_kind, l.role_id)))))
 $$;
-REVOKE ALL ON FUNCTION public.can_approve_invoice(uuid) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.can_approve_invoice(uuid) TO authenticated, service_role;
+CREATE OR REPLACE FUNCTION public.can_approve_invoice(p_project uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT public.can_approve_invoice(p_project, NULL::numeric)
+$$;
+REVOKE ALL ON FUNCTION public.can_approve_invoice(uuid), public.can_approve_invoice(uuid, numeric) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.can_approve_invoice(uuid), public.can_approve_invoice(uuid, numeric) TO authenticated, service_role;
+
+-- The creator of a row being restored from the trash (130), read from the
+-- trash row itself (never from the restored values).
+CREATE OR REPLACE FUNCTION public.trash_original_creator(p_table text, p_id uuid, OUT found boolean, OUT created_by uuid)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT count(*) > 0, (array_agg(NULLIF(ti.row_data->>'created_by', '')::uuid ORDER BY ti.deleted_at DESC))[1]
+    FROM public.trash_items ti
+   WHERE ti.table_name = p_table AND ti.record_id = p_id AND ti.restored_at IS NULL
+$$;
+REVOKE ALL ON FUNCTION public.trash_original_creator(text, uuid) FROM PUBLIC, anon, authenticated;
 
 CREATE OR REPLACE FUNCTION public.enforce_invoice_approval()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
-  v_uid uuid := auth.uid();
-  v_old text;
-  v_new text;
+  v_uid  uuid := auth.uid();
+  v_old  text;
+  v_new  text;
+  v_tr   record;
+  v_jn   jsonb;
+  v_jo   jsonb;
+  v_keep text[];
+  c_meta CONSTANT text[] := ARRAY['approval_status', 'approved_by', 'approved_at', 'rejected_by', 'rejected_at',
+                                  'rejection_reason', 'cancelled_by', 'cancelled_at', 'cancellation_reason',
+                                  'updated_by', 'updated_at', 'last_edited_by'];
+  c_files CONSTANT text[] := ARRAY['invoice_url', 'receipt_url', 'attachment_url'];
+  c_money CONSTANT text[] := ARRAY['price', 'vat_amount', 'wht_amount', 'net_payable'];
+  c_vendor CONSTANT text[] := ARRAY['vendor_id', 'vendor_cr_no', 'vendor_vat_no', 'vendor_country', 'vendor_tax_residency'];
 BEGIN
   IF TG_OP = 'INSERT' THEN
     IF v_uid IS NULL THEN                       -- server jobs / SQL editor / imports
@@ -362,7 +516,11 @@ BEGIN
         USING ERRCODE = '42501';
     END IF;
     NEW.approval_status := 'pending';           -- also a rejected row restored from the trash
-    NEW.created_by := v_uid;
+    -- a row restored from the trash keeps its original creator (read from the
+    -- trash row) and the restorer becomes its last editor: neither approves it
+    SELECT * INTO v_tr FROM public.trash_original_creator('invoices', NEW.id);
+    NEW.created_by := CASE WHEN v_tr.found THEN v_tr.created_by ELSE v_uid END;
+    NEW.last_edited_by := v_uid;
     NEW.approved_by := NULL;  NEW.approved_at := NULL;
     NEW.rejected_by := NULL;  NEW.rejected_at := NULL;  NEW.rejection_reason := NULL;
     NEW.cancelled_by := NULL; NEW.cancelled_at := NULL; NEW.cancellation_reason := NULL;
@@ -376,34 +534,46 @@ BEGIN
   IF NEW.created_by IS DISTINCT FROM OLD.created_by THEN
     RAISE EXCEPTION 'invoices: created_by cannot be changed' USING ERRCODE = '42501';
   END IF;
+  NEW.last_edited_by := OLD.last_edited_by;     -- written by the database only
 
-  -- X09: an approved (or cancelled) invoice is locked
-  IF v_old IN ('approved', 'cancelled') AND (
-       NEW.price IS DISTINCT FROM OLD.price
-    OR NEW.vat_amount IS DISTINCT FROM OLD.vat_amount
-    OR NEW.wht_amount IS DISTINCT FROM OLD.wht_amount
-    OR NEW.wht_percent IS DISTINCT FROM OLD.wht_percent
-    OR NEW.net_payable IS DISTINCT FROM OLD.net_payable
-    OR NEW.currency IS DISTINCT FROM OLD.currency
-    OR NEW.fx_rate IS DISTINCT FROM OLD.fx_rate
-    OR NEW.amount_original IS DISTINCT FROM OLD.amount_original
-    OR NEW.vendor_name IS DISTINCT FROM OLD.vendor_name
-    OR (OLD.vendor_id IS NOT NULL AND NEW.vendor_id IS DISTINCT FROM OLD.vendor_id)
-    OR NEW.budget_code IS DISTINCT FROM OLD.budget_code
-    OR NEW.project_id IS DISTINCT FROM OLD.project_id
-    OR NEW.organization_id IS DISTINCT FROM OLD.organization_id) THEN
-    RAISE EXCEPTION 'invoices: an approved invoice cannot be changed (amount, vendor, budget code) — cancel it and record a new one'
-      USING ERRCODE = '42501';
+  -- X09: an approved (or cancelled) invoice is locked. Values the app sends
+  -- back unchanged (normalised) are kept exactly as stored, so an untouched
+  -- legacy amount with more than 2 decimals never blocks an update.
+  IF v_old IN ('approved', 'cancelled') THEN
+    v_jn := to_jsonb(NEW); v_jo := to_jsonb(OLD);
+    IF public.invoice_lock_view(v_jn) IS DISTINCT FROM public.invoice_lock_view(v_jo)
+       OR (OLD.vendor_id IS NOT NULL AND NEW.vendor_id IS DISTINCT FROM OLD.vendor_id)
+       OR (NULLIF(btrim(OLD.vendor_cr_no), '') IS NOT NULL AND NEW.vendor_cr_no IS DISTINCT FROM OLD.vendor_cr_no)
+       OR (NULLIF(btrim(OLD.vendor_vat_no), '') IS NOT NULL AND NEW.vendor_vat_no IS DISTINCT FROM OLD.vendor_vat_no)
+       OR (NULLIF(btrim(OLD.vendor_country), '') IS NOT NULL AND NEW.vendor_country IS DISTINCT FROM OLD.vendor_country)
+       OR (OLD.vendor_tax_residency IS NOT NULL AND NEW.vendor_tax_residency IS DISTINCT FROM OLD.vendor_tax_residency) THEN
+      RAISE EXCEPTION 'invoices: an approved invoice cannot be changed (amount, tax, vendor, budget code, date, Film Commission inputs) — cancel it and record a new one'
+        USING ERRCODE = '42501';
+    END IF;
+    -- keep the stored values of the locked columns (vendor fields: only
+    -- where they were set — linking a vendor to an invoice without one is allowed)
+    SELECT array_agg(k) INTO v_keep
+      FROM jsonb_object_keys(public.invoice_lock_view(v_jo)) k;
+    v_keep := v_keep || ARRAY(SELECT k FROM unnest(c_vendor) k WHERE v_jo->>k IS NOT NULL);
+    NEW := jsonb_populate_record(NEW, (SELECT jsonb_object_agg(k, v_jo->k) FROM unnest(v_keep) k WHERE v_jo ? k));
   END IF;
 
   IF v_new IS DISTINCT FROM v_old THEN
     IF v_old = 'pending' AND v_new IN ('approved', 'rejected') THEN
-      IF OLD.created_by IS NOT NULL AND OLD.created_by = v_uid THEN
-        RAISE EXCEPTION 'Maker-checker: an invoice must be approved or rejected by someone other than the person who recorded it'
+      -- the decision is taken on the invoice as recorded: nothing else may
+      -- change in the same statement
+      IF public.approval_row_content(to_jsonb(NEW), c_meta, c_money)
+         IS DISTINCT FROM public.approval_row_content(to_jsonb(OLD), c_meta, c_money) THEN
+        RAISE EXCEPTION 'Maker-checker: approve or reject the invoice as recorded — save changes separately (another user then approves them)'
           USING ERRCODE = '42501';
       END IF;
-      IF NOT public.can_approve_invoice(OLD.project_id) THEN
-        RAISE EXCEPTION 'invoices: only an approver of this organization can approve or reject invoices'
+      IF (OLD.created_by IS NOT NULL AND OLD.created_by = v_uid)
+         OR (OLD.last_edited_by IS NOT NULL AND OLD.last_edited_by = v_uid) THEN
+        RAISE EXCEPTION 'Maker-checker: an invoice must be approved or rejected by someone other than the person who recorded or last changed it'
+          USING ERRCODE = '42501';
+      END IF;
+      IF NOT public.can_approve_invoice(OLD.project_id, COALESCE(OLD.price, 0) + COALESCE(OLD.vat_amount, 0)) THEN
+        RAISE EXCEPTION 'invoices: only an approver of this organization (for this amount) can approve or reject this invoice'
           USING ERRCODE = '42501';
       END IF;
       IF v_new = 'approved' THEN
@@ -417,11 +587,12 @@ BEGIN
         NEW.rejected_by := v_uid; NEW.rejected_at := now();
         NEW.approved_by := NULL;  NEW.approved_at := NULL;
       END IF;
+      RETURN NEW;
     ELSIF v_old = 'rejected' AND v_new = 'pending' THEN
       -- corrected and sent again
       NEW.rejected_by := NULL; NEW.rejected_at := NULL;
     ELSIF v_old = 'approved' AND v_new = 'cancelled' THEN
-      IF NOT public.can_approve_invoice(OLD.project_id) THEN
+      IF NOT public.can_approve_invoice(OLD.project_id, COALESCE(OLD.price, 0) + COALESCE(OLD.vat_amount, 0)) THEN
         RAISE EXCEPTION 'invoices: only an approver of this organization can cancel an approved invoice'
           USING ERRCODE = '42501';
       END IF;
@@ -443,6 +614,7 @@ BEGIN
       END IF;
       NEW.cancellation_reason := btrim(NEW.cancellation_reason);
       NEW.cancelled_by := v_uid; NEW.cancelled_at := now();
+      RETURN NEW;
     ELSE
       RAISE EXCEPTION 'invoices: the approval status cannot go from % to %', v_old, v_new
         USING ERRCODE = '42501';
@@ -457,6 +629,12 @@ BEGIN
       NEW.cancellation_reason := OLD.cancellation_reason;
     END IF;
   END IF;
+
+  -- a content change (not attachments) makes the caller the last editor
+  IF public.approval_row_content(to_jsonb(NEW), c_meta || c_files, c_money)
+     IS DISTINCT FROM public.approval_row_content(to_jsonb(OLD), c_meta || c_files, c_money) THEN
+    NEW.last_edited_by := v_uid;
+  END IF;
   RETURN NEW;
 END $$;
 REVOKE ALL ON FUNCTION public.enforce_invoice_approval() FROM PUBLIC, anon, authenticated;
@@ -466,13 +644,15 @@ CREATE TRIGGER zz_trg_invoice_approval BEFORE INSERT OR UPDATE ON public.invoice
   FOR EACH ROW EXECUTE FUNCTION public.enforce_invoice_approval();
 
 -- X08: an approved / cancelled invoice is never deleted (a project or
--- organization being deleted takes its invoices with it).
+-- organization being deleted takes its invoices with it). project_exists
+-- (176, SECURITY DEFINER) so the caller's RLS on projects cannot hide the
+-- project and let the delete through.
 CREATE OR REPLACE FUNCTION public.guard_invoice_delete()
 RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
   IF auth.uid() IS NOT NULL
      AND OLD.approval_status IN ('approved', 'cancelled')
-     AND EXISTS (SELECT 1 FROM public.projects p WHERE p.id = OLD.project_id) THEN
+     AND public.project_exists(OLD.project_id) THEN
     RAISE EXCEPTION 'invoices: an approved invoice cannot be deleted — cancel it instead (the cancellation is recorded)'
       USING ERRCODE = '42501';
   END IF;
@@ -523,7 +703,9 @@ GRANT EXECUTE ON FUNCTION public.approve_invoice(uuid), public.reject_invoice(uu
 
 -- A payment request on an invoice needs the invoice approved. Fires after
 -- trg_payment_request_validate_source (176, name order), which already
--- refused a document of another organization / project.
+-- refused a document of another organization / project. FOR SHARE: a
+-- concurrent cancel_invoice waits for this transaction (and the reverse),
+-- so a payment can never land on an invoice being cancelled.
 CREATE OR REPLACE FUNCTION public.require_approved_invoice_for_request()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
@@ -536,11 +718,13 @@ BEGIN
      AND NEW.source_type IS NOT DISTINCT FROM OLD.source_type THEN
     RETURN NEW;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM public.invoices i
-                  WHERE i.id = NEW.source_id
-                    AND i.organization_id = NEW.organization_id
-                    AND i.project_id IS NOT DISTINCT FROM COALESCE(NEW.project_id, i.project_id)
-                    AND i.approval_status = 'approved') THEN
+  PERFORM 1 FROM public.invoices i
+    WHERE i.id = NEW.source_id
+      AND i.organization_id = NEW.organization_id
+      AND i.project_id IS NOT DISTINCT FROM COALESCE(NEW.project_id, i.project_id)
+      AND i.approval_status = 'approved'
+    FOR SHARE;
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'Invoice not approved: a payment can be requested only after the invoice is approved'
       USING ERRCODE = '42501';
   END IF;
@@ -552,7 +736,7 @@ CREATE TRIGGER trg_payment_request_validate_zz_invoice
   BEFORE INSERT OR UPDATE OF status, source_type, source_id ON public.payment_requests
   FOR EACH ROW EXECUTE FUNCTION public.require_approved_invoice_for_request();
 
--- A payment recorded on an invoice needs the invoice approved too.
+-- A payment recorded on an invoice needs the invoice approved too (FOR SHARE as above).
 CREATE OR REPLACE FUNCTION public.require_approved_invoice_for_payment()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
@@ -561,10 +745,12 @@ BEGIN
      AND NEW.source_type IS NOT DISTINCT FROM OLD.source_type THEN
     RETURN NEW;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM public.invoices i
-                  WHERE i.id = NEW.source_id
-                    AND i.project_id IS NOT DISTINCT FROM NEW.project_id
-                    AND i.approval_status = 'approved') THEN
+  PERFORM 1 FROM public.invoices i
+    WHERE i.id = NEW.source_id
+      AND i.project_id IS NOT DISTINCT FROM NEW.project_id
+      AND i.approval_status = 'approved'
+    FOR SHARE;
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'Invoice not approved: a payment can be recorded only on an approved invoice of this project'
       USING ERRCODE = '42501';
   END IF;
@@ -582,7 +768,13 @@ CREATE TRIGGER trg_payments_invoice_approved
 ALTER TABLE public.cash_advance_receipts
   ADD COLUMN IF NOT EXISTS cancelled_by uuid,
   ADD COLUMN IF NOT EXISTS cancelled_at timestamptz,
-  ADD COLUMN IF NOT EXISTS cancellation_reason text;
+  ADD COLUMN IF NOT EXISTS cancellation_reason text,
+  ADD COLUMN IF NOT EXISTS created_by uuid,
+  ADD COLUMN IF NOT EXISTS last_edited_by uuid;
+COMMENT ON COLUMN public.cash_advance_receipts.created_by IS
+  'Signed-in user who logged the receipt (written by the database; NULL on rows logged before db/pending/201, where submitted_by stands in). Maker-checker: cannot approve or reject.';
+COMMENT ON COLUMN public.cash_advance_receipts.last_edited_by IS
+  'Last signed-in user who changed the receipt content (not attachments / notes / approval stamps); written by the database only. Maker-checker: cannot approve or reject. db/pending/201.';
 ALTER TABLE public.cash_advance_receipts DROP CONSTRAINT IF EXISTS cash_advance_receipts_status_chk;
 ALTER TABLE public.cash_advance_receipts ADD CONSTRAINT cash_advance_receipts_status_chk
   CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'cancelled'::text]));
@@ -590,9 +782,61 @@ ALTER TABLE public.cash_advance_receipts DROP CONSTRAINT IF EXISTS cash_advance_
 ALTER TABLE public.cash_advance_receipts ADD CONSTRAINT cash_advance_receipts_cancellation_reason_len
   CHECK (cancellation_reason IS NULL OR length(cancellation_reason) <= 1000);
 
+-- Locked columns of an approved receipt, normalised ('' = NULL, money to 2 decimals).
+CREATE OR REPLACE FUNCTION public.petty_receipt_lock_view(j jsonb)
+RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path = public AS $$
+  SELECT jsonb_build_object(
+    'amount',          round(COALESCE((j->>'amount')::numeric, 0), 2),
+    'currency',        upper(COALESCE(NULLIF(btrim(j->>'currency'), ''), 'SAR')),
+    'fx_rate',         (j->>'fx_rate')::numeric,
+    'budget_code',     NULLIF(btrim(j->>'budget_code'), ''),
+    'gl_account_id',   j->>'gl_account_id',
+    'department',      NULLIF(btrim(j->>'department'), ''),
+    'vendor',          NULLIF(btrim(j->>'vendor'), ''),
+    'recipient',       NULLIF(btrim(j->>'recipient'), ''),
+    'advance_id',      j->>'advance_id',
+    'date',            j->>'date',
+    'spend_country',   NULLIF(btrim(j->>'spend_country'), ''),
+    'spend_city',      NULLIF(btrim(j->>'spend_city'), ''),
+    'project_id',      j->>'project_id',
+    'organization_id', j->>'organization_id')
+$$;
+REVOKE ALL ON FUNCTION public.petty_receipt_lock_view(jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.petty_receipt_lock_view(jsonb) TO authenticated, service_role;
+
+-- Who may approve / reject / cancel petty cash receipts of this project:
+-- anyone who may approve its invoices (can_approve_invoice), or a project
+-- member whose role in THIS organization can edit the petty-cash module
+-- (the app's "Reconcile & Approve Petty Cash", pettycash.reconcile).
+CREATE OR REPLACE FUNCTION public.can_approve_petty_receipt(p_project uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT auth.uid() IS NOT NULL AND (
+    public.can_approve_invoice(p_project)
+    OR EXISTS (
+      SELECT 1 FROM public.projects pr
+       WHERE pr.id = p_project
+         AND public.can_access_project(auth.uid(), pr.organization_id, pr.id)
+         AND EXISTS (SELECT 1 FROM public.user_role_assignments ura
+                       JOIN public.role_permissions rp ON rp.role_id = ura.role_id
+                      WHERE ura.user_id = auth.uid()
+                        AND ura.organization_id = pr.organization_id
+                        AND (ura.project_id IS NULL OR ura.project_id = pr.id)
+                        AND rp.module_key = 'petty-cash' AND rp.can_edit)))
+$$;
+REVOKE ALL ON FUNCTION public.can_approve_petty_receipt(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.can_approve_petty_receipt(uuid) TO authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION public.enforce_petty_receipt_approval()
-RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
-DECLARE v_uid uuid := auth.uid();
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid  uuid := auth.uid();
+  v_tr   record;
+  v_jo   jsonb;
+  v_maker uuid;
+  c_meta CONSTANT text[] := ARRAY['status', 'approved_by', 'approved_at', 'cancelled_by', 'cancelled_at',
+                                  'cancellation_reason', 'last_edited_by', 'notes'];
+  c_files CONSTANT text[] := ARRAY['attachment_path', 'attachment_name'];
+  c_money CONSTANT text[] := ARRAY['amount'];
 BEGIN
   IF TG_OP = 'INSERT' THEN
     IF v_uid IS NULL THEN
@@ -602,6 +846,10 @@ BEGIN
     IF NEW.status IN ('approved', 'cancelled') THEN
       RAISE EXCEPTION 'A petty cash receipt is logged as pending — it is approved separately' USING ERRCODE = '42501';
     END IF;
+    -- creator stamped by the database (a trash restore keeps the original one)
+    SELECT * INTO v_tr FROM public.trash_original_creator('cash_advance_receipts', NEW.id);
+    NEW.created_by := CASE WHEN v_tr.found THEN v_tr.created_by ELSE v_uid END;
+    NEW.last_edited_by := v_uid;
     NEW.approved_by := NULL; NEW.approved_at := NULL;
     NEW.cancelled_by := NULL; NEW.cancelled_at := NULL; NEW.cancellation_reason := NULL;
     RETURN NEW;
@@ -609,26 +857,44 @@ BEGIN
 
   IF v_uid IS NULL THEN RETURN NEW; END IF;
 
-  IF OLD.status IN ('approved', 'cancelled') AND (
-       NEW.amount IS DISTINCT FROM OLD.amount
-    OR NEW.currency IS DISTINCT FROM OLD.currency
-    OR NEW.fx_rate IS DISTINCT FROM OLD.fx_rate
-    OR NEW.budget_code IS DISTINCT FROM OLD.budget_code
-    OR NEW.vendor IS DISTINCT FROM OLD.vendor
-    OR NEW.recipient IS DISTINCT FROM OLD.recipient
-    OR NEW.advance_id IS DISTINCT FROM OLD.advance_id
-    OR NEW.date IS DISTINCT FROM OLD.date
-    OR NEW.project_id IS DISTINCT FROM OLD.project_id
-    OR NEW.organization_id IS DISTINCT FROM OLD.organization_id) THEN
-    RAISE EXCEPTION 'An approved petty cash receipt cannot be changed — cancel it and log a new one'
-      USING ERRCODE = '42501';
+  IF NEW.created_by IS DISTINCT FROM OLD.created_by THEN
+    RAISE EXCEPTION 'cash_advance_receipts: created_by cannot be changed' USING ERRCODE = '42501';
+  END IF;
+  NEW.last_edited_by := OLD.last_edited_by;     -- written by the database only
+
+  IF OLD.status IN ('approved', 'cancelled') THEN
+    v_jo := to_jsonb(OLD);
+    IF public.petty_receipt_lock_view(to_jsonb(NEW)) IS DISTINCT FROM public.petty_receipt_lock_view(v_jo) THEN
+      RAISE EXCEPTION 'An approved petty cash receipt cannot be changed — cancel it and log a new one'
+        USING ERRCODE = '42501';
+    END IF;
+    -- keep the stored values (an untouched legacy amount is never rounded here)
+    NEW := jsonb_populate_record(NEW, (SELECT jsonb_object_agg(k, v_jo->k)
+                                         FROM jsonb_object_keys(public.petty_receipt_lock_view(v_jo)) k));
   END IF;
 
   IF NEW.status IS DISTINCT FROM OLD.status THEN
-    IF OLD.status = 'pending' AND NEW.status = 'approved' THEN
-      NEW.approved_by := v_uid; NEW.approved_at := now();
-    ELSIF OLD.status = 'pending' AND NEW.status = 'rejected' THEN
-      NEW.approved_by := NULL; NEW.approved_at := NULL;
+    IF OLD.status = 'pending' AND NEW.status IN ('approved', 'rejected') THEN
+      IF public.approval_row_content(to_jsonb(NEW), c_meta, c_money)
+         IS DISTINCT FROM public.approval_row_content(to_jsonb(OLD), c_meta, c_money) THEN
+        RAISE EXCEPTION 'Maker-checker: approve or reject the receipt as logged — save changes separately'
+          USING ERRCODE = '42501';
+      END IF;
+      v_maker := COALESCE(OLD.created_by, OLD.submitted_by);   -- submitted_by: rows logged before 201
+      IF (v_maker IS NOT NULL AND v_maker = v_uid)
+         OR (OLD.last_edited_by IS NOT NULL AND OLD.last_edited_by = v_uid) THEN
+        RAISE EXCEPTION 'Maker-checker: a petty cash receipt must be approved or rejected by someone other than the person who logged or last changed it'
+          USING ERRCODE = '42501';
+      END IF;
+      IF NOT public.can_approve_petty_receipt(OLD.project_id) THEN
+        RAISE EXCEPTION 'Only a petty cash approver of this project can approve or reject receipts' USING ERRCODE = '42501';
+      END IF;
+      IF NEW.status = 'approved' THEN
+        NEW.approved_by := v_uid; NEW.approved_at := now();
+      ELSE
+        NEW.approved_by := NULL; NEW.approved_at := NULL;
+      END IF;
+      RETURN NEW;
     ELSIF OLD.status = 'rejected' AND NEW.status = 'pending' THEN
       NULL;
     ELSIF OLD.status = 'approved' AND NEW.status = 'cancelled' THEN
@@ -640,8 +906,20 @@ BEGIN
       IF NULLIF(btrim(COALESCE(NEW.cancellation_reason, '')), '') IS NULL THEN
         RAISE EXCEPTION 'A reason is required to cancel an approved receipt' USING ERRCODE = '22023';
       END IF;
+      -- like cancel_invoice: not once money moved against it
+      IF EXISTS (SELECT 1 FROM public.payments pm
+                  WHERE pm.source_type IN ('receipt', 'cash_advance_receipt') AND pm.source_id = OLD.id) THEN
+        RAISE EXCEPTION 'This receipt has payments — it cannot be cancelled (record a refund instead)' USING ERRCODE = '42501';
+      END IF;
+      IF EXISTS (SELECT 1 FROM public.payment_requests r
+                  WHERE r.source_type IN ('receipt', 'cash_advance_receipt') AND r.source_id = OLD.id
+                    AND r.status NOT IN ('rejected', 'cancelled')) THEN
+        RAISE EXCEPTION 'Cancel or reject the payment request of this receipt first' USING ERRCODE = '42501';
+      END IF;
       NEW.cancellation_reason := btrim(NEW.cancellation_reason);
       NEW.cancelled_by := v_uid; NEW.cancelled_at := now();
+      NEW.approved_by := OLD.approved_by; NEW.approved_at := OLD.approved_at;
+      RETURN NEW;
     ELSE
       RAISE EXCEPTION 'A petty cash receipt cannot go from % to % (an approved receipt is cancelled, not reopened)',
         OLD.status, NEW.status USING ERRCODE = '42501';
@@ -650,6 +928,11 @@ BEGIN
     NEW.approved_by := OLD.approved_by;   NEW.approved_at := OLD.approved_at;
     NEW.cancelled_by := OLD.cancelled_by; NEW.cancelled_at := OLD.cancelled_at;
     NEW.cancellation_reason := OLD.cancellation_reason;
+  END IF;
+
+  IF public.approval_row_content(to_jsonb(NEW), c_meta || c_files, c_money)
+     IS DISTINCT FROM public.approval_row_content(to_jsonb(OLD), c_meta || c_files, c_money) THEN
+    NEW.last_edited_by := v_uid;
   END IF;
   RETURN NEW;
 END $$;
@@ -663,7 +946,7 @@ RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
   IF auth.uid() IS NOT NULL
      AND OLD.status IN ('approved', 'cancelled')
-     AND EXISTS (SELECT 1 FROM public.projects p WHERE p.id = OLD.project_id) THEN
+     AND public.project_exists(OLD.project_id) THEN          -- DEFINER helper (176), not the caller's RLS
     RAISE EXCEPTION 'An approved petty cash receipt cannot be deleted — cancel it instead (the cancellation is recorded)'
       USING ERRCODE = '42501';
   END IF;
@@ -1895,16 +2178,49 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
    WHERE COALESCE(v.path, '') <> '' AND v.path !~* '^[a-z]+://'
 $$;
 
+-- The project a legacy path names itself: old app versions wrote
+-- <kind>/<record id>/… (invoices, payroll, crew, cast / people, per-diem,
+-- payment_requests, payments) or locations/<project id>/…. resolved =
+-- the record (or project) exists; project_id = its project.
+CREATE OR REPLACE FUNCTION public.contract_path_record(p_name text, OUT resolved boolean, OUT project_id uuid)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $fn$
+DECLARE v_kind text := lower(split_part(COALESCE(p_name, ''), '/', 1)); v_seg text := split_part(COALESCE(p_name, ''), '/', 2); v_id uuid;
+BEGIN
+  resolved := false;
+  IF v_seg !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN RETURN; END IF;
+  v_id := v_seg::uuid;
+  CASE v_kind
+    WHEN 'invoices' THEN SELECT true, x.project_id INTO resolved, project_id FROM public.invoices x WHERE x.id = v_id;
+    WHEN 'payroll' THEN SELECT true, x.project_id INTO resolved, project_id FROM public.payroll x WHERE x.id = v_id;
+    WHEN 'crew' THEN SELECT true, x.project_id INTO resolved, project_id FROM public.crew_members x WHERE x.id = v_id;
+    WHEN 'cast', 'people' THEN SELECT true, x.project_id INTO resolved, project_id FROM public.people x WHERE x.id = v_id;
+    WHEN 'per-diem', 'per_diem' THEN SELECT true, x.project_id INTO resolved, project_id FROM public.per_diem_ledger x WHERE x.id = v_id;
+    WHEN 'payment_requests', 'payment-requests' THEN SELECT true, x.project_id INTO resolved, project_id FROM public.payment_requests x WHERE x.id = v_id;
+    WHEN 'payments' THEN SELECT true, x.project_id INTO resolved, project_id FROM public.payments x WHERE x.id = v_id;
+    WHEN 'locations' THEN SELECT true, x.id INTO resolved, project_id FROM public.projects x WHERE x.id = v_id;
+    ELSE NULL;
+  END CASE;
+  resolved := COALESCE(resolved, false);
+END $fn$;
+
 -- The plan. action:
 --   move      object not under a project folder, one owning project → move it to new_name
 --   repoint   the object is already at new_name, references still point at the old path
---   conflict  the object is referenced by records of different projects (moved by nobody)
+--   conflict  not moved, see note: referenced by records of different
+--             projects / by a record without a project; or the path names a
+--             record of another project; or (path naming no record) the
+--             object was not uploaded by a member of the target organization
+--             — a reference written into another tenant's row never pulls a
+--             file into that tenant's project. note = unreferenced |
+--             no_project | several_projects | other_project_record |
+--             uploader_outside_org (codes; the screen translates them)
 --   orphan    no record references the object (left where it is)
 -- dry_run = false: performs the 'repoint' rows (action becomes 'repointed').
 -- The bytes of 'move' rows are moved by the Storage API (server function
 -- moveContractFilesToProjectFolders), which then calls repoint_contract_file.
-CREATE OR REPLACE FUNCTION public.move_contract_files_to_project_folders(dry_run boolean DEFAULT true)
-RETURNS TABLE (object_name text, new_name text, owner_table text, owner_id uuid, project_id uuid, action text)
+DROP FUNCTION IF EXISTS public.move_contract_files_to_project_folders(boolean);   -- return type gained "note"
+CREATE FUNCTION public.move_contract_files_to_project_folders(dry_run boolean DEFAULT true)
+RETURNS TABLE (object_name text, new_name text, owner_table text, owner_id uuid, project_id uuid, action text, note text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $fn$
 #variable_conflict use_column
 DECLARE r record;
@@ -1914,42 +2230,74 @@ BEGIN
   FOR r IN
     WITH refs AS (
       SELECT f.* FROM public.contract_file_refs() f
-       WHERE f.project_id IS NOT NULL
-         AND split_part(f.path, '/', 1) IS DISTINCT FROM f.project_id::text
+       WHERE f.project_id IS NULL
+          OR split_part(f.path, '/', 1) IS DISTINCT FROM f.project_id::text
     ),
     obj AS (
-      SELECT o.name FROM storage.objects o
+      SELECT o.name,
+             CASE WHEN COALESCE(to_jsonb(o)->>'owner', to_jsonb(o)->>'owner_id', '')
+                       ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                  THEN COALESCE(to_jsonb(o)->>'owner', to_jsonb(o)->>'owner_id')::uuid END AS uploader
+        FROM storage.objects o
        WHERE o.bucket_id = 'contracts'
          AND NOT EXISTS (SELECT 1 FROM public.projects p WHERE p.id::text = lower(split_part(o.name, '/', 1)))
     ),
     by_obj AS (
-      SELECT obj.name,
+      SELECT obj.name, obj.uploader,
              count(DISTINCT refs.project_id) AS n_proj,
-             (array_agg(refs.project_id ORDER BY refs.owner_table, refs.owner_id))[1] AS pid,
+             bool_or(refs.owner_id IS NOT NULL AND refs.project_id IS NULL) AS no_proj,
+             (array_agg(refs.project_id ORDER BY refs.owner_table, refs.owner_id) FILTER (WHERE refs.project_id IS NOT NULL))[1] AS pid,
              (array_agg(refs.owner_table ORDER BY refs.owner_table, refs.owner_id))[1] AS otab,
              (array_agg(refs.owner_id ORDER BY refs.owner_table, refs.owner_id))[1] AS oid
         FROM obj LEFT JOIN refs ON refs.path = obj.name
-       GROUP BY obj.name
+       GROUP BY obj.name, obj.uploader
+    ),
+    judged AS (
+      SELECT b.*, rec.resolved, rec.project_id AS rec_pid,
+             CASE
+               WHEN b.n_proj = 0 AND NOT COALESCE(b.no_proj, false) THEN 'orphan'
+               WHEN COALESCE(b.no_proj, false) THEN 'conflict'
+               WHEN b.n_proj > 1 THEN 'conflict'
+               WHEN rec.resolved AND rec.project_id IS DISTINCT FROM b.pid THEN 'conflict'
+               WHEN NOT rec.resolved AND NOT (b.uploader IS NOT NULL
+                      AND (public.is_super_admin(b.uploader)
+                           OR public.is_org_member(b.uploader, (SELECT p.organization_id FROM public.projects p WHERE p.id = b.pid))))
+                 THEN 'conflict'
+               ELSE 'move' END AS act,
+             CASE
+               WHEN b.n_proj = 0 AND NOT COALESCE(b.no_proj, false) THEN 'unreferenced'
+               WHEN COALESCE(b.no_proj, false) THEN 'no_project'
+               WHEN b.n_proj > 1 THEN 'several_projects'
+               WHEN rec.resolved AND rec.project_id IS DISTINCT FROM b.pid THEN 'other_project_record'
+               WHEN NOT rec.resolved AND NOT (b.uploader IS NOT NULL
+                      AND (public.is_super_admin(b.uploader)
+                           OR public.is_org_member(b.uploader, (SELECT p.organization_id FROM public.projects p WHERE p.id = b.pid))))
+                 THEN 'uploader_outside_org'
+               END AS why
+        FROM by_obj b
+        CROSS JOIN LATERAL public.contract_path_record(b.name) rec
     ),
     moved AS (          -- references whose file already sits under the project folder
       SELECT DISTINCT ON (refs.path) refs.path, refs.project_id AS pid, refs.owner_table AS otab, refs.owner_id AS oid
         FROM refs
-       WHERE EXISTS (SELECT 1 FROM storage.objects o2
+       WHERE refs.project_id IS NOT NULL
+         AND EXISTS (SELECT 1 FROM storage.objects o2
                       WHERE o2.bucket_id = 'contracts' AND o2.name = refs.project_id::text || '/' || refs.path)
          AND NOT EXISTS (SELECT 1 FROM storage.objects o3 WHERE o3.bucket_id = 'contracts' AND o3.name = refs.path)
+         AND NOT EXISTS (SELECT 1 FROM refs r2 WHERE r2.path = refs.path AND r2.project_id IS DISTINCT FROM refs.project_id)
        ORDER BY refs.path, refs.owner_table, refs.owner_id
     )
-    SELECT b.name AS object_name,
-           CASE WHEN b.n_proj = 1 THEN b.pid::text || '/' || b.name END AS new_name,
-           b.otab AS owner_table, b.oid AS owner_id, CASE WHEN b.n_proj = 1 THEN b.pid END AS project_id,
-           CASE WHEN b.n_proj = 0 THEN 'orphan' WHEN b.n_proj > 1 THEN 'conflict' ELSE 'move' END AS action
-      FROM by_obj b
+    SELECT j.name AS object_name,
+           CASE WHEN j.act = 'move' THEN j.pid::text || '/' || j.name END AS new_name,
+           j.otab AS owner_table, j.oid AS owner_id, CASE WHEN j.act = 'move' THEN j.pid END AS project_id,
+           j.act AS action, j.why AS note
+      FROM judged j
     UNION ALL
-    SELECT m.path, m.pid::text || '/' || m.path, m.otab, m.oid, m.pid, 'repoint' FROM moved m
+    SELECT m.path, m.pid::text || '/' || m.path, m.otab, m.oid, m.pid, 'repoint', NULL::text FROM moved m
     ORDER BY 6, 1
   LOOP
     object_name := r.object_name; new_name := r.new_name; owner_table := r.owner_table;
-    owner_id := r.owner_id; project_id := r.project_id; action := r.action;
+    owner_id := r.owner_id; project_id := r.project_id; action := r.action; note := r.note;
     IF NOT dry_run AND r.action = 'repoint' THEN
       PERFORM public.repoint_contract_file(r.object_name, r.new_name);
       action := 'repointed';
@@ -1979,7 +2327,7 @@ BEGIN
     RAISE EXCEPTION 'repoint_contract_file: the new path must be <project id>/<old path>' USING ERRCODE = '22023';
   END IF;
   IF EXISTS (SELECT 1 FROM public.contract_file_refs() f WHERE f.path = p_old AND f.project_id IS DISTINCT FROM v_pid) THEN
-    RAISE EXCEPTION 'repoint_contract_file: % is referenced by records of another project', p_old USING ERRCODE = '42501';
+    RAISE EXCEPTION 'repoint_contract_file: % is referenced by records of another project (or without a project)', p_old USING ERRCODE = '42501';
   END IF;
 
   UPDATE public.per_diem_ledger SET receipt_path = p_new WHERE receipt_path = p_old AND project_id = v_pid;
@@ -2036,9 +2384,46 @@ BEGIN
 END;
 $fn$;
 
+-- Project-folder access for the contracts bucket: <project id>/… is open to
+-- whoever can access that project, with the project's own organization —
+-- so org owners and org admins keep access after the move (the 20260716
+-- policies passed NULL as organization, which only matched project
+-- members and super admins).
+CREATE OR REPLACE FUNCTION public.contracts_folder_access(_uid uuid, _name text)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT CASE
+    WHEN split_part(COALESCE(_name, ''), '/', 1) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+         AND strpos(_name, '/') > 0
+      THEN public.can_access_project(_uid,
+             (SELECT p.organization_id FROM public.projects p WHERE p.id = split_part(_name, '/', 1)::uuid),
+             split_part(_name, '/', 1)::uuid)
+    ELSE false END
+$$;
+REVOKE ALL ON FUNCTION public.contracts_folder_access(uuid, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.contracts_folder_access(uuid, text) TO authenticated, service_role;
+
+-- Applied now, before any file is moved (owner approval: storage policy change).
+DO $$
+BEGIN
+  IF to_regclass('storage.objects') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS "Project members can read contract files by project" ON storage.objects';
+    EXECUTE $p$CREATE POLICY "Project members can read contract files by project" ON storage.objects
+      FOR SELECT TO authenticated
+      USING (bucket_id = 'contracts' AND public.contracts_folder_access(auth.uid(), name))$p$;
+    EXECUTE 'DROP POLICY IF EXISTS "Project members can upload contract files by project" ON storage.objects';
+    EXECUTE $p$CREATE POLICY "Project members can upload contract files by project" ON storage.objects
+      FOR INSERT TO authenticated
+      WITH CHECK (bucket_id = 'contracts' AND public.contracts_folder_access(auth.uid(), name))$p$;
+  END IF;
+END $$;
+
 -- The policy switch (195 §2), only when no file is left outside a project
 -- folder. p_ignore_orphans = true lets unreferenced files stay where they
 -- are (after the switch only super admins / the service role read them).
+-- Returns 'skipped' (files remain, nothing changed), 'switched' (the
+-- org-wide policy was dropped) or 'not present' (it did not exist — on the
+-- live database migration 20260722132616 already replaced it with the
+-- record-scoped "Contract read requires record access").
 CREATE OR REPLACE FUNCTION public.switch_contracts_bucket_to_project_policy(p_ignore_orphans boolean DEFAULT false)
 RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $fn$
 DECLARE v_left int; v_orphans int;
@@ -2058,22 +2443,25 @@ BEGIN
                     AND policyname = 'Project members can read contract files by project') THEN
     EXECUTE $p$CREATE POLICY "Project members can read contract files by project" ON storage.objects
       FOR SELECT TO authenticated
-      USING (bucket_id = 'contracts'
-             AND (storage.foldername(name))[1] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-             AND public.can_access_project(auth.uid(), NULL, ((storage.foldername(name))[1])::uuid))$p$;
+      USING (bucket_id = 'contracts' AND public.contracts_folder_access(auth.uid(), name))$p$;
   END IF;
-  EXECUTE 'DROP POLICY IF EXISTS "Org members can read contracts" ON storage.objects';
+  IF NOT EXISTS (SELECT 1 FROM pg_policies
+                  WHERE schemaname = 'storage' AND tablename = 'objects'
+                    AND policyname = 'Org members can read contracts') THEN
+    RETURN 'not present';
+  END IF;
+  EXECUTE 'DROP POLICY "Org members can read contracts" ON storage.objects';
   RETURN 'switched';
 END;
 $fn$;
 
 REVOKE ALL ON FUNCTION public.contract_files_assert_admin(), public.contract_file_refs(),
   public.move_contract_files_to_project_folders(boolean), public.repoint_contract_file(text, text),
-  public.switch_contracts_bucket_to_project_policy(boolean) FROM PUBLIC, anon;
-REVOKE ALL ON FUNCTION public.contract_file_refs() FROM authenticated;
+  public.switch_contracts_bucket_to_project_policy(boolean), public.contract_path_record(text) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.contract_file_refs(), public.contract_path_record(text) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.move_contract_files_to_project_folders(boolean), public.repoint_contract_file(text, text),
   public.switch_contracts_bucket_to_project_policy(boolean), public.contract_files_assert_admin() TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.contract_file_refs() TO service_role;
+GRANT EXECUTE ON FUNCTION public.contract_file_refs(), public.contract_path_record(text) TO service_role;
 
 -- Switch now if nothing is left to move (NOTICE and no change otherwise).
 DO $$
