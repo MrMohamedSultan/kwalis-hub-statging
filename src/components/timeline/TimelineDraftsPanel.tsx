@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatDate } from "@/lib/date-format";
 import { FileSpreadsheet, FileText, Loader2, PlayCircle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -140,7 +141,9 @@ export function TimelineDraftsPanel({
                     <span className="text-[10px] text-brand font-semibold">current</span>
                   )}
                 </div>
-                <div className="text-[11px] text-muted-foreground">{v.date}</div>
+                <div className="text-[11px] text-muted-foreground">
+                  {formatDate(v.date) || v.date}
+                </div>
               </div>
 
               <div className="flex items-center gap-1.5">

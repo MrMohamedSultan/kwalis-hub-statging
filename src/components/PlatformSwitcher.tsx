@@ -77,7 +77,7 @@ export function PlatformSwitcher() {
         className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-1.5 text-warning hover:bg-warning/15 transition"
       >
         <Crown className="size-4 text-warning shrink-0" />
-        <div className="flex flex-col leading-tight text-left min-w-0">
+        <div className="flex flex-col leading-tight text-start min-w-0">
           <span className="text-[10px] uppercase tracking-wider text-warning">Super Admin</span>
           <span className="text-sm font-semibold truncate max-w-[180px]">
             {activeOrg ? activeOrg.name : "Platform Hub"}
@@ -101,7 +101,7 @@ export function PlatformSwitcher() {
             className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition ${!orgId ? "bg-accent/50" : ""}`}
           >
             <Globe2 className="size-4 text-brand shrink-0" />
-            <div className="flex-1 text-left">
+            <div className="flex-1 text-start">
               <div className="font-semibold">Platform Hub</div>
               <div className="text-[11px] text-muted-foreground">Global — cross-tenant admin</div>
             </div>
@@ -125,7 +125,7 @@ export function PlatformSwitcher() {
                     className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition ${active ? "bg-accent/50" : ""}`}
                   >
                     <Building2 className="size-4 text-muted-foreground shrink-0" />
-                    <span className="flex-1 text-left truncate">{o.name}</span>
+                    <span className="flex-1 text-start truncate">{o.name}</span>
                     {active && <Check className="size-4 text-brand shrink-0" />}
                   </button>
                 );

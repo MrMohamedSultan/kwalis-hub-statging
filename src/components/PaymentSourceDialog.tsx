@@ -93,7 +93,7 @@ export function PaymentSourceDialog({
                     key={opt.value}
                     type="button"
                     onClick={() => setSource(opt.value)}
-                    className={`w-full flex items-start gap-2.5 rounded-lg border px-3 py-2 text-left transition ${
+                    className={`w-full flex items-start gap-2.5 rounded-lg border px-3 py-2 text-start transition ${
                       active ? "border-brand bg-brand/10" : "border-border hover:bg-muted"
                     }`}
                   >

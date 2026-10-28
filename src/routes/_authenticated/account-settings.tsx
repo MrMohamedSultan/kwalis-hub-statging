@@ -6,8 +6,10 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { UserCircle, KeyRound, Save, Loader2 } from "lucide-react";
 import { z } from "zod";
+import i18n from "@/lib/i18n";
 import { useQueryClient } from "@tanstack/react-query";
 import { clearMyPasswordChangeRequirement } from "@/lib/account-status";
+import { MfaSettingsPanel } from "@/components/auth/MfaSettingsPanel";
 
 export const Route = createFileRoute("/_authenticated/account-settings")({
   component: () => (
@@ -17,16 +19,18 @@ export const Route = createFileRoute("/_authenticated/account-settings")({
   ),
 });
 
-const nameSchema = z
-  .string()
-  .trim()
-  .min(1, "Name is required")
-  .max(120, "Name must be under 120 characters");
+const nameSchema = () =>
+  z
+    .string()
+    .trim()
+    .min(1, i18n.t("platform.account.nameRequired"))
+    .max(120, i18n.t("platform.account.nameTooLong"));
 
-const passwordSchema = z
-  .string()
-  .min(8, "Password must be at least 8 characters")
-  .max(128, "Password must be under 128 characters");
+const passwordSchema = () =>
+  z
+    .string()
+    .min(8, i18n.t("platform.account.passwordTooShort"))
+    .max(72, i18n.t("platform.account.passwordTooLong"));
 
 const inputCls =
   "w-full bg-surface-2 border border-border rounded-xl px-3 py-2 outline-none focus:ring-2 ring-brand text-sm";
@@ -76,9 +80,9 @@ export function AccountSettingsPage() {
   async function handleProfileSave(e: React.FormEvent) {
     e.preventDefault();
     if (!userId) return;
-    const parsed = nameSchema.safeParse(displayName);
+    const parsed = nameSchema().safeParse(displayName);
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "Invalid name");
+      toast.error(parsed.error.issues[0]?.message ?? t("platform.account.nameRequired"));
       return;
     }
     setSavingProfile(true);
@@ -91,9 +95,9 @@ export function AccountSettingsPage() {
         })
         .eq("id", userId);
       if (error) throw error;
-      toast.success("Profile updated");
+      toast.success(t("platform.account.profileUpdated"));
     } catch (err: any) {
-      toast.error(err?.message ?? "Failed to update profile");
+      toast.error(err?.message ?? t("platform.account.profileFailed"));
     } finally {
       setSavingProfile(false);
     }
@@ -101,13 +105,13 @@ export function AccountSettingsPage() {
 
   async function handlePasswordSave(e: React.FormEvent) {
     e.preventDefault();
-    const parsed = passwordSchema.safeParse(password);
+    const parsed = passwordSchema().safeParse(password);
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "Invalid password");
+      toast.error(parsed.error.issues[0]?.message ?? t("platform.account.passwordTooShort"));
       return;
     }
     if (password !== confirmPassword) {
-      toast.error("Passwords do not match");
+      toast.error(t("platform.reset.mismatch"));
       return;
     }
     setSavingPassword(true);
@@ -119,9 +123,9 @@ export function AccountSettingsPage() {
       await queryClient.invalidateQueries({ queryKey: ["account-status"] });
       setPassword("");
       setConfirmPassword("");
-      toast.success("Password updated");
+      toast.success(t("platform.account.passwordUpdated"));
     } catch (err: any) {
-      toast.error(err?.message ?? "Failed to update password");
+      toast.error(err?.message ?? t("platform.account.passwordFailed"));
     } finally {
       setSavingPassword(false);
     }
@@ -146,31 +150,24 @@ export function AccountSettingsPage() {
   return (
     <div className="space-y-6">
       <PageTitle title={t("nav.accountSettings", "Account Settings")} />
-      <p className="text-sm text-muted-foreground -mt-2">
-        {t(
-          "accountSettings.subtitle",
-          "Manage your personal profile and password. These changes affect only your account.",
-        )}
-      </p>
+      <p className="text-sm text-muted-foreground -mt-2">{t("platform.account.subtitle")}</p>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel>
           <div className="flex items-center gap-2 mb-4">
             <UserCircle className="h-5 w-5 text-brand" />
-            <h2 className="text-base font-semibold">{t("accountSettings.profile", "Profile")}</h2>
+            <h2 className="text-base font-semibold">{t("platform.account.profile")}</h2>
           </div>
           <form onSubmit={handleProfileSave} className="space-y-4">
             <label className="block text-sm">
               <div className="text-muted-foreground mb-1">
-                {t("accountSettings.email", "Email")}{" "}
-                <span className="text-[10px]">({t("accountSettings.readOnly", "read-only")})</span>
+                {t("platform.account.email")}{" "}
+                <span className="text-[10px]">({t("platform.account.readOnly")})</span>
               </div>
               <input type="email" value={email} readOnly disabled className={readOnlyCls} />
             </label>
             <label className="block text-sm">
-              <div className="text-muted-foreground mb-1">
-                {t("accountSettings.fullName", "Full Name")}
-              </div>
+              <div className="text-muted-foreground mb-1">{t("platform.account.fullName")}</div>
               <input
                 type="text"
                 value={displayName}
@@ -183,8 +180,10 @@ export function AccountSettingsPage() {
             </label>
             <label className="block text-sm">
               <div className="text-muted-foreground mb-1">
-                {t("accountSettings.jobTitle", "Job Title")}{" "}
-                <span className="text-[10px] text-muted-foreground/70">(optional)</span>
+                {t("platform.account.jobTitle")}{" "}
+                <span className="text-[10px] text-muted-foreground/70">
+                  ({t("platform.common.optional")})
+                </span>
               </div>
               <input
                 type="text"
@@ -192,7 +191,7 @@ export function AccountSettingsPage() {
                 onChange={(e) => setJobTitle(e.target.value)}
                 maxLength={120}
                 className={inputCls}
-                placeholder="e.g. Line Producer"
+                placeholder={t("platform.common.jobTitlePlaceholder")}
               />
             </label>
             <button
@@ -205,7 +204,7 @@ export function AccountSettingsPage() {
               ) : (
                 <Save className="h-4 w-4" />
               )}
-              {t("accountSettings.saveProfile", "Save Profile")}
+              {t("platform.account.saveProfile")}
             </button>
           </form>
         </Panel>
@@ -213,15 +212,11 @@ export function AccountSettingsPage() {
         <Panel>
           <div className="flex items-center gap-2 mb-4">
             <KeyRound className="h-5 w-5 text-brand" />
-            <h2 className="text-base font-semibold">
-              {t("accountSettings.password", "Change Password")}
-            </h2>
+            <h2 className="text-base font-semibold">{t("platform.account.password")}</h2>
           </div>
           <form onSubmit={handlePasswordSave} className="space-y-4">
             <label className="block text-sm">
-              <div className="text-muted-foreground mb-1">
-                {t("accountSettings.newPassword", "New Password")}
-              </div>
+              <div className="text-muted-foreground mb-1">{t("platform.account.newPassword")}</div>
               <input
                 type="password"
                 value={password}
@@ -235,7 +230,7 @@ export function AccountSettingsPage() {
             </label>
             <label className="block text-sm">
               <div className="text-muted-foreground mb-1">
-                {t("accountSettings.confirmPassword", "Confirm New Password")}
+                {t("platform.account.confirmPassword")}
               </div>
               <input
                 type="password"
@@ -257,16 +252,12 @@ export function AccountSettingsPage() {
               ) : (
                 <KeyRound className="h-4 w-4" />
               )}
-              {t("accountSettings.updatePassword", "Update Password")}
+              {t("platform.account.updatePassword")}
             </button>
-            <p className="text-xs text-muted-foreground">
-              {t(
-                "accountSettings.passwordHint",
-                "You will remain signed in after changing your password.",
-              )}
-            </p>
+            <p className="text-xs text-muted-foreground">{t("platform.account.passwordHint")}</p>
           </form>
         </Panel>
+        <MfaSettingsPanel />
       </div>
     </div>
   );

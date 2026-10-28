@@ -95,12 +95,12 @@ export function BudgetUploadHistory() {
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-left text-[10px] uppercase tracking-wide text-muted-foreground border-b border-border">
+              <tr className="text-start text-[10px] uppercase tracking-wide text-muted-foreground border-b border-border">
                 <th className="py-2 pr-3">File</th>
                 <th className="py-2 pr-3">Uploaded</th>
                 <th className="py-2 pr-3">By</th>
-                <th className="py-2 pr-3 text-right">Rows</th>
-                <th className="py-2 pr-3 text-right">Action</th>
+                <th className="py-2 pr-3 text-end">Rows</th>
+                <th className="py-2 pr-3 text-end">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -134,10 +134,8 @@ export function BudgetUploadHistory() {
                         {b.uploader_name ?? "—"}
                       </span>
                     </td>
-                    <td className="py-2 pr-3 text-right font-mono text-foreground">
-                      {b.row_count}
-                    </td>
-                    <td className="py-2 pr-3 text-right">
+                    <td className="py-2 pr-3 text-end font-mono text-foreground">{b.row_count}</td>
+                    <td className="py-2 pr-3 text-end">
                       <button
                         onClick={() => void deleteBatch(b)}
                         disabled={busyId === b.id}

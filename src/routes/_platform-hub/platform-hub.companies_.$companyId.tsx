@@ -2,6 +2,7 @@
 // Platform Hub → Client Company profile & document vault
 // ═══════════════════════════════════════════════════════════════════
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "@/lib/upload-policy";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -193,8 +194,8 @@ function CompanyDetailPage() {
 
   async function onFile(file: File | undefined) {
     if (!file) return;
-    if (file.size > 25 * 1024 * 1024) {
-      toast.error(t("hub_companies_companyid.files_must_be_25_mb_or_smaller"));
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error(t("platform.upload.tooLarge", { name: file.name, max: MAX_UPLOAD_MB }));
       return;
     }
     setUploading(true);

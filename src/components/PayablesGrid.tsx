@@ -629,7 +629,7 @@ export default function PayablesGrid({
                 </div>
 
                 {/* Total Deal */}
-                <div className="w-[110px] shrink-0 px-3 py-3 text-right">
+                <div className="w-[110px] shrink-0 px-3 py-3 text-end">
                   <div className="text-sm font-mono font-semibold text-foreground tabular-nums">
                     {fmt(row.contract_total)}
                   </div>
@@ -637,14 +637,14 @@ export default function PayablesGrid({
                 </div>
 
                 {/* Paid */}
-                <div className="w-[100px] shrink-0 px-3 py-3 text-right">
+                <div className="w-[100px] shrink-0 px-3 py-3 text-end">
                   <div className="text-sm font-mono text-success font-medium tabular-nums">
                     {fmt(row.total_paid)}
                   </div>
                 </div>
 
                 {/* Remaining */}
-                <div className="w-[100px] shrink-0 px-3 py-3 text-right">
+                <div className="w-[100px] shrink-0 px-3 py-3 text-end">
                   <div
                     className={`text-sm font-mono font-medium tabular-nums
                     ${row.remaining > 0 ? "text-foreground" : "text-success"}`}
@@ -673,17 +673,17 @@ export default function PayablesGrid({
                 </div>
               </div>
               <div className="w-[140px] shrink-0 px-3 py-3" />
-              <div className="w-[110px] shrink-0 px-3 py-3 text-right">
+              <div className="w-[110px] shrink-0 px-3 py-3 text-end">
                 <div className="text-sm font-mono font-bold text-foreground tabular-nums">
                   {fmt(totals.deal)}
                 </div>
               </div>
-              <div className="w-[100px] shrink-0 px-3 py-3 text-right">
+              <div className="w-[100px] shrink-0 px-3 py-3 text-end">
                 <div className="text-sm font-mono font-bold text-success tabular-nums">
                   {fmt(totals.paid)}
                 </div>
               </div>
-              <div className="w-[100px] shrink-0 px-3 py-3 text-right">
+              <div className="w-[100px] shrink-0 px-3 py-3 text-end">
                 <div className="text-sm font-mono font-bold text-foreground tabular-nums">
                   {fmt(totals.remaining)}
                 </div>

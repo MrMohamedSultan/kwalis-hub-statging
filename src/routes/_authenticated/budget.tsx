@@ -362,6 +362,7 @@ function LineItemTemplateSelect({
   selectedCode: string;
   onPick: (item: { code: string; name: string } | null) => void;
 }) {
+  const { t } = useTranslation();
   const items = MAIN_ACCOUNTS[headerCode] ?? [];
   const matched = items.find((i) => i.code === selectedCode);
   const value = matched ? matched.code : "__custom__";
@@ -379,7 +380,9 @@ function LineItemTemplateSelect({
       }}
       className="bg-sidebar-active text-white border border-border rounded-lg px-3 py-2 w-full outline-none"
     >
-      {items.length === 0 && <option value="__custom__">No template — enter custom below</option>}
+      {items.length === 0 && (
+        <option value="__custom__">{t("platform.ui.noTemplateEnterCustomBelow")}</option>
+      )}
       {items.length > 0 && (
         <option value="__custom__">— Select a template or enter custom —</option>
       )}
@@ -2201,7 +2204,7 @@ export function UploadBudget() {
           {mode === "template" && (
             <label
               className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border cursor-pointer transition ${strictMode ? "border-warning/60 bg-warning/10 text-warning" : "border-border bg-surface-2 text-muted-foreground hover:bg-muted"}`}
-              title="Strict mapping: disables ALL auto-mapping. Only the columns you explicitly map are read. Non-numeric cells in numeric columns are treated as 0 (prevents ID columns from inflating currency totals)."
+              title={t("platform.ui.strictMappingDisablesAllAutoMappingOnlyThe")}
             >
               <input
                 type="checkbox"
@@ -2233,9 +2236,9 @@ export function UploadBudget() {
           {mode === "template" && (
             <div
               className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border border-border bg-surface-2"
-              title="Save the current Start Row + column mappings as a named preset, or load one you saved earlier."
+              title={t("platform.ui.saveTheCurrentStartRowColumnMappingsAs")}
             >
-              <span className="text-muted-foreground">Preset</span>
+              <span className="text-muted-foreground">{t("platform.ui.preset")}</span>
               <select
                 value=""
                 onChange={(e) => {
@@ -2289,7 +2292,7 @@ export function UploadBudget() {
               void downloadKwalisMasterTemplate("KwalisHub_Master_Budget.xlsx");
             }}
             className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full border border-warning/60 bg-warning/15 text-warning hover:bg-warning/25 font-semibold"
-            title="Pre-populated master template — every account (1101→) already filled in. Just add QTY & RATE."
+            title={t("platform.ui.prePopulatedMasterTemplateEveryAccount1101Alread")}
           >
             <Download className="size-3.5" />
             {t("budget.download_master_template_prefilled")}
@@ -2318,7 +2321,7 @@ export function UploadBudget() {
             disabled={busy}
             onClick={() => multiSheetRef.current?.click()}
             className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full border border-info/50 bg-info/10 text-info hover:bg-info/20 font-semibold disabled:opacity-50"
-            title="Import the formatted multi-sheet workbook (Top Sheet · 1-ATL · 2- Production Expenses · 3- Post-Production · 4- Other Expenses)."
+            title={t("platform.ui.importTheFormattedMultiSheetWorkbookTopSheet")}
           >
             <Upload className="size-3.5" /> {busy ? "Importing…" : "Import Multi-Sheet Budget"}
           </button>
@@ -2404,10 +2407,10 @@ export function UploadBudget() {
 
       {summary && (
         <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-          <Stat label="Budget lines" v={summary.b} />
-          <Stat label="Auto-crew purged" v={summary.purged?.crew ?? 0} />
-          <Stat label="Auto-cast purged" v={summary.purged?.people ?? 0} />
-          <Stat label="Auto-vendors purged" v={summary.purged?.vendors ?? 0} />
+          <Stat label={t("platform.ui.budgetLines")} v={summary.b} />
+          <Stat label={t("platform.ui.autoCrewPurged")} v={summary.purged?.crew ?? 0} />
+          <Stat label={t("platform.ui.autoCastPurged")} v={summary.purged?.people ?? 0} />
+          <Stat label={t("platform.ui.autoVendorsPurged")} v={summary.purged?.vendors ?? 0} />
           <div className="col-span-full text-xs text-muted-foreground">
             Parsed via {summary.via}. Sheets scanned: {summary.sheets.join(", ") || "—"}.
           </div>
@@ -2588,10 +2591,14 @@ function DryRunPreview({
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-4">
-        <Stat label="Selected budget lines" v={commitCount} />
-        <Stat label="Total parsed" v={result.budget.length} />
-        <Stat label="Sheets" v={result.sheetsScanned.length} />
-        <Stat label="Validation issues" v={mismatches.length} accent={mismatches.length > 0} />
+        <Stat label={t("platform.ui.selectedBudgetLines")} v={commitCount} />
+        <Stat label={t("platform.ui.totalParsed")} v={result.budget.length} />
+        <Stat label={t("platform.ui.sheets")} v={result.sheetsScanned.length} />
+        <Stat
+          label={t("platform.ui.validationIssues")}
+          v={mismatches.length}
+          accent={mismatches.length > 0}
+        />
       </div>
 
       {/* Multi-sheet toggles */}
@@ -2638,9 +2645,9 @@ function DryRunPreview({
           <table className="w-full text-start">
             <thead className="opacity-70">
               <tr>
-                <th className="text-start font-medium pe-3">Code</th>
-                <th className="text-start font-medium pe-3">Description</th>
-                <th className="text-start font-medium">Lines</th>
+                <th className="text-start font-medium pe-3">{t("platform.ui.code")}</th>
+                <th className="text-start font-medium pe-3">{t("platform.ui.description")}</th>
+                <th className="text-start font-medium">{t("platform.ui.lines")}</th>
               </tr>
             </thead>
             <tbody>
@@ -2700,11 +2707,11 @@ function DryRunPreview({
               <thead className="sticky top-0 bg-surface-3 text-muted-foreground">
                 <tr>
                   <th className="text-start px-2 py-1">#</th>
-                  <th className="text-start px-2 py-1">Sheet</th>
-                  <th className="text-end px-2 py-1">Row</th>
+                  <th className="text-start px-2 py-1">{t("platform.ui.sheet")}</th>
+                  <th className="text-end px-2 py-1">{t("platform.ui.row")}</th>
                   <th className="text-start px-2 py-1">{t("budget.code")}</th>
                   <th className="text-start px-2 py-1">{t("budget.description")}</th>
-                  <th className="text-end px-2 py-1">Total</th>
+                  <th className="text-end px-2 py-1">{t("platform.ui.total")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -2755,7 +2762,7 @@ function DryRunPreview({
                 <li key={s.id} className="py-1.5 flex flex-wrap items-baseline gap-x-2">
                   <span className="font-mono text-highlight">{row.mainCode}</span>
                   <span className="text-foreground/80 truncate max-w-md">{row.description}</span>
-                  <span className="ml-auto flex items-baseline gap-2">
+                  <span className="ms-auto flex items-baseline gap-2">
                     <span className="text-muted-foreground line-through">
                       {row.headerCode || "—"}
                     </span>
@@ -3017,7 +3024,7 @@ function ColumnMappingPanel({
                   </span>
                   <span
                     className={`text-[10px] font-semibold px-1.5 py-[1px] rounded-full border ${confTone}`}
-                    title="Mapping confidence: official schema / alias match = 100%, Kwalis positional fallback = 50%, unmapped = 0%."
+                    title={t("platform.ui.mappingConfidenceOfficialSchemaAliasMatch100Kwal")}
                   >
                     {confidence}% confident
                   </span>
@@ -3219,7 +3226,7 @@ function CommitSummaryModal({
   }
   const overCeilingSheets = Object.entries(bySheet).filter(([, s]) => s.total > sheetCeiling);
   const hasCeilingViolation = overCeilingSheets.length > 0;
-  const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const fmt = (n: number) => formatAmount(n, 0);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
@@ -3239,15 +3246,19 @@ function CommitSummaryModal({
           <div className="text-[11px] text-muted-foreground mt-0.5">Parsed via {via}</div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
           <div className="rounded-lg border border-border bg-surface-2 p-3">
-            <div className="text-[10px] uppercase text-muted-foreground">Rows</div>
+            <div className="text-[10px] uppercase text-muted-foreground">
+              {t("platform.ui.rows")}
+            </div>
             <div className="text-xl font-semibold tabular-nums">{rows.length}</div>
           </div>
           <div
             className={`rounded-lg border p-3 ${mismatchCount === 0 ? "border-success/30 bg-success/5" : "border-warning/30 bg-warning/5"}`}
           >
-            <div className="text-[10px] uppercase text-muted-foreground">Errors</div>
+            <div className="text-[10px] uppercase text-muted-foreground">
+              {t("platform.ui.errors")}
+            </div>
             <div className="text-xl font-semibold tabular-nums">
               {mismatchCount}
               {mismatchCount > 0 && ackMismatches && (
@@ -4176,11 +4187,7 @@ export function ViewEditBudget() {
                           m
                         ] as string,
                     );
-                  const fmt = (n: number) =>
-                    (Number(n) || 0).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    });
+                  const fmt = (n: number) => formatAmount(Number(n) || 0, 2);
                   const body = rows
                     .map(
                       ({ line: l, section, totalSAR }) => `
@@ -4209,7 +4216,7 @@ export function ViewEditBudget() {
                 <h1>Budget Export — ${esc(filterLabel)}</h1>
                 <div class="sub">${rows.length} line${rows.length === 1 ? "" : "s"} · Generated ${esc(dateStr)}</div>
                 <table>
-                  <thead><tr><th>Section</th><th>Header</th><th>{t("budget.code")}</th><th>{t("budget.description")}</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Periods</th><th class="r">{t("budget.total_sar_2")}</th></tr></thead>
+                  <thead><tr><th>{t("platform.ui.section")}</th><th>{t("platform.ui.header")}</th><th>{t("budget.code")}</th><th>{t("budget.description")}</th><th class="r">{t("platform.ui.qty")}</th><th class="r">{t("platform.ui.rate")}</th><th class="r">{t("platform.ui.periods")}</th><th class="r">{t("budget.total_sar_2")}</th></tr></thead>
                   <tbody>${body}</tbody>
                   <tfoot><tr><td colspan="7" class="r">{t("budget.total_sar")}</td><td class="r">${fmt(filteredSAR)}</td></tr></tfoot>
                 </table>
@@ -4589,7 +4596,7 @@ export function ViewEditBudget() {
                   headers={headersForMacro}
                 />
               </Field>
-              <Field label="Step C · Line Item (pick template or enter custom)">
+              <Field label={t("platform.ui.stepCLineItemPickTemplateOrEnter")}>
                 <LineItemTemplateSelect
                   headerCode={newLine.headerCode ?? ""}
                   selectedCode={newLine.mainCode ?? ""}
@@ -4605,7 +4612,7 @@ export function ViewEditBudget() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <Field label="Sub Code">
+              <Field label={t("platform.ui.subCode")}>
                 <input
                   value={newLine.mainCode ?? ""}
                   onChange={(e) => setNewLine({ ...newLine, mainCode: e.target.value })}
@@ -4613,14 +4620,14 @@ export function ViewEditBudget() {
                   className="bg-sidebar-active text-white border border-border rounded-lg px-3 py-2 w-full outline-none"
                 />
               </Field>
-              <Field label="Description">
+              <Field label={t("platform.ui.description")}>
                 <input
                   value={newLine.description ?? ""}
                   onChange={(e) => setNewLine({ ...newLine, description: e.target.value })}
                   className="bg-sidebar-active text-white border border-border rounded-lg px-3 py-2 w-full outline-none"
                 />
               </Field>
-              <Field label="Name (optional)">
+              <Field label={t("platform.ui.nameOptional")}>
                 <input
                   value={newLine.name ?? ""}
                   onChange={(e) => setNewLine({ ...newLine, name: e.target.value })}
@@ -4628,7 +4635,7 @@ export function ViewEditBudget() {
                   className="bg-sidebar-active text-white border border-border rounded-lg px-3 py-2 w-full outline-none"
                 />
               </Field>
-              <Field label="Prep (optional)">
+              <Field label={t("platform.ui.prepOptional")}>
                 <input
                   type="number"
                   min={0}
@@ -4640,7 +4647,7 @@ export function ViewEditBudget() {
                   className="bg-sidebar-active text-white border border-border rounded-lg px-3 py-2 w-full outline-none"
                 />
               </Field>
-              <Field label="Shooting (optional)">
+              <Field label={t("platform.ui.shootingOptional")}>
                 <input
                   type="number"
                   min={0}
@@ -4655,7 +4662,7 @@ export function ViewEditBudget() {
                   className="bg-sidebar-active text-white border border-border rounded-lg px-3 py-2 w-full outline-none"
                 />
               </Field>
-              <Field label="Wrap (optional)">
+              <Field label={t("platform.ui.wrapOptional")}>
                 <input
                   type="number"
                   min={0}
@@ -4667,14 +4674,14 @@ export function ViewEditBudget() {
                   className="bg-sidebar-active text-white border border-border rounded-lg px-3 py-2 w-full outline-none"
                 />
               </Field>
-              <Field label="Total Periods">
+              <Field label={t("platform.ui.totalPeriods")}>
                 <input
                   readOnly
                   value={totalPeriods(newLine as BudgetLine)}
                   className="bg-black/30 text-white border border-border rounded-lg px-3 py-2 w-full outline-none cursor-not-allowed"
                 />
               </Field>
-              <Field label="Unit">
+              <Field label={t("platform.ui.unit")}>
                 <select
                   value={newLine.unit}
                   onChange={(e) => setNewLine({ ...newLine, unit: e.target.value as BudgetUnit })}
@@ -4685,7 +4692,7 @@ export function ViewEditBudget() {
                   ))}
                 </select>
               </Field>
-              <Field label="Quantity">
+              <Field label={t("platform.ui.quantity")}>
                 <input
                   type="number"
                   value={newLine.amount ?? 1}
@@ -4693,7 +4700,7 @@ export function ViewEditBudget() {
                   className="bg-sidebar-active text-white border border-border rounded-lg px-3 py-2 w-full outline-none"
                 />
               </Field>
-              <Field label="Currency">
+              <Field label={t("platform.ui.currency")}>
                 <select
                   value={newLine.currency ?? "USD"}
                   onChange={(e) =>
@@ -4740,7 +4747,7 @@ export function ViewEditBudget() {
                 />
               </Field>
               <div className="sm:col-span-2 lg:col-span-4">
-                <Field label="Notes (optional)">
+                <Field label={t("platform.ui.notesOptional")}>
                   <textarea
                     value={newLine.notes ?? ""}
                     onChange={(e) => setNewLine({ ...newLine, notes: e.target.value })}

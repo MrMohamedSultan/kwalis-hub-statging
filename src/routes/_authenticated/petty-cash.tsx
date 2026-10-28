@@ -1,4 +1,6 @@
 import { formatDate } from "@/lib/date-format";
+import { formatAmount } from "@/lib/format-number";
+import { assertUploadAllowed } from "@/lib/upload-policy";
 import { createFileRoute } from "@tanstack/react-router";
 import { DateInput } from "@/components/ui/date-input";
 import { storageAudited } from "@/lib/storage-audit";
@@ -416,18 +418,18 @@ function PettyCashPage() {
           <table className="w-full text-sm min-w-[1100px]">
             <thead className="bg-surface text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="text-start p-3">Date</th>
-                <th className="text-start p-3">Holder</th>
-                <th className="text-start p-3">Type</th>
-                <th className="text-start p-3">Ccy</th>
-                <th className="text-end p-3">Advance</th>
+                <th className="text-start p-3">{t("platform.ui.date")}</th>
+                <th className="text-start p-3">{t("platform.ui.holder")}</th>
+                <th className="text-start p-3">{t("platform.ui.type")}</th>
+                <th className="text-start p-3">{t("platform.ui.ccy")}</th>
+                <th className="text-end p-3">{t("platform.ui.advance")}</th>
                 <th className="text-end p-3">Sub-floats</th>
-                <th className="text-end p-3">Spent</th>
-                <th className="text-end p-3">Pending</th>
-                <th className="text-end p-3">Remaining</th>
-                <th className="text-start p-3">Approval</th>
-                <th className="text-start p-3">Acceptance</th>
-                <th className="text-end p-3">Actions</th>
+                <th className="text-end p-3">{t("platform.ui.spent")}</th>
+                <th className="text-end p-3">{t("platform.ui.pending")}</th>
+                <th className="text-end p-3">{t("platform.ui.remaining")}</th>
+                <th className="text-start p-3">{t("platform.ui.approval")}</th>
+                <th className="text-start p-3">{t("platform.ui.acceptance")}</th>
+                <th className="text-end p-3">{t("platform.ui.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -728,16 +730,16 @@ function PettyCashPage() {
           <table className="w-full text-sm min-w-[1000px]">
             <thead className="bg-surface text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="text-start p-3">Date</th>
-                <th className="text-start p-3">Holder</th>
+                <th className="text-start p-3">{t("platform.ui.date")}</th>
+                <th className="text-start p-3">{t("platform.ui.holder")}</th>
                 <th className="text-start p-3">{t("petty_cash.vendor_payee")}</th>
-                <th className="text-start p-3">Description</th>
-                <th className="text-start p-3">Budget Code</th>
-                <th className="text-end p-3">Amount</th>
-                <th className="text-start p-3">Source</th>
-                <th className="text-start p-3">Status</th>
-                <th className="text-center p-3">File</th>
-                <th className="text-end p-3">Actions</th>
+                <th className="text-start p-3">{t("platform.ui.description")}</th>
+                <th className="text-start p-3">{t("platform.ui.budgetCode")}</th>
+                <th className="text-end p-3">{t("platform.ui.amount")}</th>
+                <th className="text-start p-3">{t("platform.ui.source")}</th>
+                <th className="text-start p-3">{t("platform.ui.status")}</th>
+                <th className="text-center p-3">{t("platform.ui.file")}</th>
+                <th className="text-end p-3">{t("platform.ui.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -759,7 +761,7 @@ function PettyCashPage() {
                     <td className="p-3 text-end tabular-nums">
                       {fmtAmount(Number(r.amount) || 0, r.currency ?? a?.currency ?? "SAR")}
                     </td>
-                    <td className="p-3 text-muted-foreground">Receipt</td>
+                    <td className="p-3 text-muted-foreground">{t("platform.ui.receipt")}</td>
                     <td className="p-3">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${
@@ -961,7 +963,7 @@ function PettyCashPage() {
       {historyFor && (
         <PettyCashHistoryModal
           floatId={historyFor.id}
-          floatLabel={`${historyFor.holder} · ${historyFor.currency} ${Number(historyFor.total_advance).toLocaleString()}`}
+          floatLabel={`${historyFor.holder} · ${formatAmount(Number(historyFor.total_advance), 2)} ${historyFor.currency}`}
           receiptIds={receipts.filter((r) => r.advance_id === historyFor.id).map((r) => r.id)}
           onClose={() => setHistoryFor(null)}
         />
@@ -1013,6 +1015,7 @@ function PettyCashPage() {
             // Upload attachment (if any) then patch the row with the storage path
             if (v.attachment && projectId) {
               try {
+                assertUploadAllowed(v.attachment);
                 const safeName = v.attachment.name.replace(/[^\w.\-]+/g, "_");
                 const path = `${projectId}/petty-cash/${inserted.id}/${Date.now()}_${safeName}`;
                 const up = await storageAudited
@@ -1225,7 +1228,7 @@ function AdvanceForm({
         {crew.length === 0 && (
           <div className="-mt-2 text-[11px] text-warning">{t("ap.no_custodians_hint")}</div>
         )}
-        <Field label="Or Holder Name (if not in crew)">
+        <Field label={t("platform.ui.orHolderNameIfNotInCrew")}>
           <input
             value={holder}
             onChange={(e) => setHolder(e.target.value)}
@@ -1233,8 +1236,8 @@ function AdvanceForm({
           />
         </Field>
 
-        <Field label="Float Type">
-          <div className="grid grid-cols-3 gap-2">
+        <Field label={t("platform.ui.floatType")}>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {(Object.keys(FLOAT_TYPE_LABELS) as FloatType[]).map((t) => {
               const Icon = FLOAT_TYPE_ICONS[t];
               const active = floatType === t;
@@ -1257,7 +1260,7 @@ function AdvanceForm({
           </div>
         </Field>
 
-        <Field label="Funding Source">
+        <Field label={t("platform.ui.fundingSource")}>
           <div className="grid grid-cols-2 gap-2 mb-2">
             <button
               type="button"
@@ -1307,8 +1310,8 @@ function AdvanceForm({
           )}
         </Field>
 
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Currency">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Field label={t("platform.ui.currency")}>
             <select
               value={effectiveCurrency}
               onChange={(e) => setCurrency(e.target.value)}
@@ -1319,7 +1322,7 @@ function AdvanceForm({
               <option value="USD">USD</option>
             </select>
           </Field>
-          <Field label="Amount">
+          <Field label={t("platform.ui.amount")}>
             <input
               type="number"
               value={amount}
@@ -1346,7 +1349,7 @@ function AdvanceForm({
           </div>
         )}
 
-        <Field label="Petty Cash Float GL (destination)">
+        <Field label={t("platform.ui.pettyCashFloatGlDestination")}>
           <GlAccountSelector
             value={floatGl}
             onChange={setFloatGl}
@@ -1355,7 +1358,7 @@ function AdvanceForm({
             placeholder={t("petty_cash.search_petty_cash_float_gl")}
           />
         </Field>
-        <Field label="Notes">
+        <Field label={t("platform.ui.notes")}>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -1472,7 +1475,7 @@ function ReceiptForm({
         className="space-y-3"
       >
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Receipt Date">
+          <Field label={t("platform.ui.receiptDate")}>
             <DateInput
               value={date}
               onChange={(v) => setDate(v)}
@@ -1490,14 +1493,14 @@ function ReceiptForm({
             />
           </Field>
         </div>
-        <Field label="Vendor / Payee">
+        <Field label={t("platform.ui.vendorPayee")}>
           <input
             value={vendor}
             onChange={(e) => setVendor(e.target.value)}
             className="w-full rounded-lg bg-background border border-border px-3 py-2 text-sm"
           />
         </Field>
-        <Field label="Description">
+        <Field label={t("platform.ui.description")}>
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -1505,7 +1508,7 @@ function ReceiptForm({
             placeholder={t("petty_cash.what_was_purchased")}
           />
         </Field>
-        <Field label="Budget Line (project chart)">
+        <Field label={t("platform.ui.budgetLineProjectChart")}>
           <BudgetCodeSelector
             value={budgetCode}
             onChange={setBudgetCode}
@@ -1515,7 +1518,7 @@ function ReceiptForm({
             placeholder={t("petty_cash.search_uploaded_project_budget")}
           />
         </Field>
-        <Field label="Receipt attachment (photo / PDF, optional)">
+        <Field label={t("platform.ui.receiptAttachmentPhotoPdfOptional")}>
           <div className="flex items-center gap-2">
             <input
               ref={fileInput}
@@ -1640,6 +1643,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function FormActions({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="flex justify-end gap-2 pt-2">
       <button
@@ -1647,13 +1651,13 @@ function FormActions({ onClose }: { onClose: () => void }) {
         onClick={onClose}
         className="px-4 py-2 text-sm rounded-lg bg-surface hover:bg-muted"
       >
-        Cancel
+        {t("platform.ui.cancel")}
       </button>
       <button
         type="submit"
         className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground font-semibold"
       >
-        Save
+        {t("platform.ui.save")}
       </button>
     </div>
   );

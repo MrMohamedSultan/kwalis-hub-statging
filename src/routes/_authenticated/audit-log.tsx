@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { formatDateTime } from "@/lib/date-format";
 import { DateInput } from "@/components/ui/date-input";
 import { useServerFn } from "@tanstack/react-start";
 import React, { useEffect, useMemo, useState } from "react";
@@ -64,8 +65,7 @@ function categoryBadgeClass(cat: AuditRow["category"]) {
 
 function formatTimestamp(iso: string) {
   try {
-    const d = new Date(iso);
-    return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "medium" });
+    return formatDateTime(iso) || iso;
   } catch {
     return iso;
   }
@@ -260,13 +260,13 @@ export function AuditLogPage() {
           <table className="w-full text-sm">
             <thead className="text-xs uppercase tracking-widest text-muted-foreground">
               <tr className="border-b border-border">
-                <th className="text-left font-medium py-2 pr-3">When</th>
-                <th className="text-left font-medium py-2 pr-3">Category</th>
-                <th className="text-left font-medium py-2 pr-3">Action</th>
-                <th className="text-left font-medium py-2 pr-3">Summary</th>
-                <th className="text-left font-medium py-2 pr-3">Entity</th>
-                <th className="text-left font-medium py-2 pr-3">User</th>
-                <th className="text-left font-medium py-2 pr-3">Severity</th>
+                <th className="text-start font-medium py-2 pr-3">When</th>
+                <th className="text-start font-medium py-2 pr-3">Category</th>
+                <th className="text-start font-medium py-2 pr-3">Action</th>
+                <th className="text-start font-medium py-2 pr-3">Summary</th>
+                <th className="text-start font-medium py-2 pr-3">Entity</th>
+                <th className="text-start font-medium py-2 pr-3">User</th>
+                <th className="text-start font-medium py-2 pr-3">Severity</th>
               </tr>
             </thead>
             <tbody>

@@ -14,6 +14,7 @@
 // repeated on every line.
 // =====================================================================
 import { formatDate } from "@/lib/date-format";
+import { formatAmount } from "@/lib/format-number";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FileSpreadsheet, Loader2, RefreshCw } from "lucide-react";
@@ -57,7 +58,7 @@ const add = (t: Totals, r: Totals) => {
 const remaining = (r: Totals) => r.budget - r.actual - r.committed;
 const usedPct = (r: Totals) => (r.budget > 0 ? ((r.actual + r.committed) / r.budget) * 100 : 0);
 
-const fmt = (n: number) => Math.round(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
+const fmt = (n: number) => formatAmount(Math.round(n), 0);
 
 const UNBUDGETED = "__unbudgeted__";
 

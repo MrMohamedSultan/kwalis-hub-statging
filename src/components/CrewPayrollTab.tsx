@@ -1,4 +1,5 @@
-import { formatDateTime } from "@/lib/date-format";
+import { formatDateTime, formatDate } from "@/lib/date-format";
+import { assertUploadAllowed } from "@/lib/upload-policy";
 import { useMemo, useRef, useState, useCallback } from "react";
 import { loadXlsx } from "@/lib/lazy-export-libs";
 import { Modal } from "@/components/Modal";
@@ -524,17 +525,17 @@ export function CrewPayrollTab({
           icon={<Users className="size-4" />}
         />
         <SummaryCard
-          label="Committed"
+          label={t("platform.ui.committed")}
           value={formatUSD(totals.total)}
           icon={<DollarSign className="size-4" />}
         />
         <SummaryCard
-          label="Pending Approval"
+          label={t("platform.ui.pendingApproval")}
           value={formatUSD(totals.pending)}
           icon={<TrendingUp className="size-4" />}
         />
         <SummaryCard
-          label="Paid to Date"
+          label={t("platform.ui.paidToDate")}
           value={formatUSD(totals.paid)}
           sub={`Approved ${formatUSD(totals.approved)} · Remaining ${formatUSD(totals.remaining)}`}
           icon={<TrendingUp className="size-4" />}
@@ -551,9 +552,7 @@ export function CrewPayrollTab({
           <Unlock className="size-4 text-muted-foreground" />
         )}
         <span className={`text-xs font-semibold ${locked ? "text-warning" : "text-foreground"}`}>
-          {locked
-            ? "Project version LOCKED — payroll & budget edits disabled"
-            : "Project version unlocked"}
+          {locked ? t("platform.lock.lockedBar") : t("platform.lock.unlockedBar")}
         </span>
         <button
           onClick={() => {
@@ -563,20 +562,18 @@ export function CrewPayrollTab({
             }
             if (
               !window.confirm(
-                projectLocked
-                  ? "Unlock this project version? Payroll and budget edits will be re-enabled."
-                  : "Lock this project version? Payroll, structure changes, approvals, and budget adjustments will be disabled until unlocked.",
+                projectLocked ? t("platform.lock.confirmUnlock") : t("platform.lock.confirmLock"),
               )
             )
               return;
             toggleLock();
           }}
           disabled={!projectId}
-          className={`ml-auto inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border font-semibold transition disabled:opacity-40 ${locked ? "border-warning/60 bg-warning/20 text-warning hover:bg-warning/30" : "border-border hover:bg-muted text-foreground"}`}
+          className={`ms-auto inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border font-semibold transition disabled:opacity-40 ${locked ? "border-warning/60 bg-warning/20 text-warning hover:bg-warning/30" : "border-border hover:bg-muted text-foreground"}`}
         >
           {projectLocked ? (
             <>
-              <Unlock className="size-3.5" /> Unlock
+              <Unlock className="size-3.5" /> {t("platform.lock.unlock")}
             </>
           ) : (
             <>
@@ -599,7 +596,7 @@ export function CrewPayrollTab({
             className="bg-surface-2 border border-border rounded-lg pl-8 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-brand/60 w-72"
           />
         </div>
-        <span className="text-[10px] uppercase tracking-widest text-muted-foreground ml-1">
+        <span className="text-[10px] uppercase tracking-widest text-muted-foreground ms-1">
           {t("crewpayrolltab.filter_by_status")}
         </span>
         {filterChips.map((c) => {
@@ -704,7 +701,7 @@ export function CrewPayrollTab({
           Mark Paid {bulkCounts.approved > 0 ? `(${bulkCounts.approved})` : ""}
         </button>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ms-auto flex items-center gap-2">
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground hidden sm:inline">
             Export {selected.size > 0 ? "selection" : "filtered view"}
           </span>
@@ -755,15 +752,15 @@ export function CrewPayrollTab({
                   )}
                 </button>
               </th>
-              <th className="text-left px-4 py-3 font-medium">Beneficiary</th>
-              <th className="text-left px-4 py-3 font-medium">Kind</th>
-              <th className="text-left px-4 py-3 font-medium">Budget</th>
-              <th className="text-right px-4 py-3 font-medium">Total</th>
-              <th className="text-right px-4 py-3 font-medium">Paid</th>
-              <th className="text-right px-4 py-3 font-medium">{t("crewpayrolltab.remaining")}</th>
-              <th className="text-left px-4 py-3 font-medium">Structure</th>
-              <th className="text-left px-4 py-3 font-medium">Status</th>
-              <th className="text-right px-4 py-3 font-medium">Actions</th>
+              <th className="text-start px-4 py-3 font-medium">{t("platform.ui.beneficiary")}</th>
+              <th className="text-start px-4 py-3 font-medium">{t("platform.ui.kind")}</th>
+              <th className="text-start px-4 py-3 font-medium">{t("platform.ui.budget")}</th>
+              <th className="text-end px-4 py-3 font-medium">{t("platform.ui.total")}</th>
+              <th className="text-end px-4 py-3 font-medium">{t("platform.ui.paid")}</th>
+              <th className="text-end px-4 py-3 font-medium">{t("crewpayrolltab.remaining")}</th>
+              <th className="text-start px-4 py-3 font-medium">{t("platform.ui.structure")}</th>
+              <th className="text-start px-4 py-3 font-medium">{t("platform.ui.status")}</th>
+              <th className="text-end px-4 py-3 font-medium">{t("platform.ui.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -829,7 +826,7 @@ export function CrewPayrollTab({
                                   search: { tab: "invoices", focus: srcInv.id } as any,
                                 })
                               }
-                              className="font-medium text-foreground hover:text-brand underline underline-offset-2 decoration-dotted decoration-brand/60 text-left inline-flex items-center gap-1"
+                              className="font-medium text-foreground hover:text-brand underline underline-offset-2 decoration-dotted decoration-brand/60 text-start inline-flex items-center gap-1"
                               title={`Open source invoice #${srcInv.invoiceNo || srcInv.id.slice(0, 6)}`}
                             >
                               <FileSearch className="size-3.5 text-brand/80" />
@@ -885,10 +882,10 @@ export function CrewPayrollTab({
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold">
+                  <td className="px-4 py-3 text-end tabular-nums font-semibold">
                     {formatUSD(total)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-success">
+                  <td className="px-4 py-3 text-end tabular-nums text-success">
                     {formatUSD(paid)}
                     {pending > 0 && (
                       <div className="text-[10px] text-warning font-normal">
@@ -896,7 +893,7 @@ export function CrewPayrollTab({
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatUSD(remaining)}</td>
+                  <td className="px-4 py-3 text-end tabular-nums">{formatUSD(remaining)}</td>
                   <td className="px-4 py-3">
                     <div className="text-xs">
                       {slots > 0
@@ -962,7 +959,7 @@ export function CrewPayrollTab({
                       >
                         Entries
                         {pendingCount + approvedCount > 0 && (
-                          <span className="ml-1 inline-flex items-center justify-center min-w-4 h-4 px-1 text-[9px] font-semibold rounded-full bg-warning/20 text-warning border border-warning/40">
+                          <span className="ms-1 inline-flex items-center justify-center min-w-4 h-4 px-1 text-[9px] font-semibold rounded-full bg-warning/20 text-warning border border-warning/40">
                             {pendingCount + approvedCount}
                           </span>
                         )}
@@ -972,7 +969,7 @@ export function CrewPayrollTab({
                         disabled={!canEdit}
                         className="text-xs px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-40"
                       >
-                        Structure
+                        {t("platform.ui.structure")}
                       </button>
                       <button
                         onClick={() => setPayFor(r)}
@@ -1008,8 +1005,8 @@ export function CrewPayrollTab({
             </span>{" "}
             of <span className="font-mono text-foreground">{rows.length}</span>
           </span>
-          <div className="flex items-center gap-1 ml-2">
-            <span className="text-[10px] uppercase tracking-widest">Rows</span>
+          <div className="flex items-center gap-1 ms-2">
+            <span className="text-[10px] uppercase tracking-widest">{t("platform.ui.rows")}</span>
             <select
               value={pageSize}
               onChange={(e) => {
@@ -1025,7 +1022,7 @@ export function CrewPayrollTab({
               ))}
             </select>
           </div>
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ms-auto flex items-center gap-1">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={safePage <= 1}
@@ -1267,7 +1264,7 @@ function StructureModal({ row, onClose }: { row: PayrollRow; onClose: () => void
                     onChange={(e) => updateMilestone(i, Number(e.target.value) || 0)}
                     className="flex-1 bg-surface-2 border border-border rounded-lg px-3 py-1.5 text-sm outline-none"
                   />
-                  <span className="text-xs text-muted-foreground w-24 text-right">
+                  <span className="text-xs text-muted-foreground w-24 text-end">
                     {formatUSD(((Number(row.totalAmount) || 0) * (Number(m) || 0)) / 100)}
                   </span>
                   <button
@@ -1293,7 +1290,7 @@ function StructureModal({ row, onClose }: { row: PayrollRow; onClose: () => void
             onClick={onClose}
             className="text-sm px-3 py-2 rounded-lg border border-border hover:bg-muted"
           >
-            Cancel
+            {t("platform.ui.cancel")}
           </button>
           <button
             onClick={save}
@@ -1334,8 +1331,10 @@ function RecordPayrollPaymentModal({ row, onClose }: { row: PayrollRow; onClose:
     setSubmitting(true);
     try {
       // Upload proof to contracts bucket
+      assertUploadAllowed(proofFile);
       const ext = proofFile.name.split(".").pop() || "pdf";
-      const path = `payroll/${row.id}/${crypto.randomUUID()}.${ext}`;
+      // X06: under the project folder so project-scoped storage policies apply.
+      const path = `${activeProjectId ? `${activeProjectId}/` : ""}payroll/${row.id}/${crypto.randomUUID()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from("contracts")
         .upload(path, proofFile, { upsert: false });
@@ -1364,10 +1363,14 @@ function RecordPayrollPaymentModal({ row, onClose }: { row: PayrollRow; onClose:
     <Modal onClose={onClose} title={`Record Payment — ${row.name}`}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3 text-sm">
-          <Info label="Total Contract" value={formatUSD(row.totalAmount)} />
-          <Info label="Paid to Date" value={formatUSD(paid)} tone="text-success" />
-          <Info label="Remaining" value={formatUSD(remaining)} tone="text-warning" />
-          <Info label="Budget Code" value={row.budgetCode ?? "—"} />
+          <Info label={t("platform.ui.totalContract")} value={formatUSD(row.totalAmount)} />
+          <Info label={t("platform.ui.paidToDate")} value={formatUSD(paid)} tone="text-success" />
+          <Info
+            label={t("platform.ui.remaining")}
+            value={formatUSD(remaining)}
+            tone="text-warning"
+          />
+          <Info label={t("platform.ui.budgetCode")} value={row.budgetCode ?? "—"} />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -1443,7 +1446,7 @@ function RecordPayrollPaymentModal({ row, onClose }: { row: PayrollRow; onClose:
             onClick={onClose}
             className="text-sm px-3 py-2 rounded-lg border border-border hover:bg-muted"
           >
-            Cancel
+            {t("platform.ui.cancel")}
           </button>
           <button
             onClick={submit}
@@ -1558,9 +1561,11 @@ function EntriesApprovalModal({ row, onClose }: { row: PayrollRow; onClose: () =
       <div className="space-y-3">
         <div className="text-xs text-muted-foreground">
           {t("crewpayrolltab.approval_workflow")}
-          <b className="text-warning">Pending</b> → <b className="text-info">Approved</b> →{" "}
-          <b className="text-success">Paid</b>. Only paid entries post to the Top Sheet actuals
-          column. Pending entries can be manually overridden (amount / due date / memo).
+          <b className="text-warning">{t("platform.ui.pending")}</b> →{" "}
+          <b className="text-info">{t("platform.ui.approved")}</b> →{" "}
+          <b className="text-success">{t("platform.ui.paid")}</b>. Only paid entries post to the Top
+          Sheet actuals column. Pending entries can be manually overridden (amount / due date /
+          memo).
         </div>
         {ledger.length === 0 ? (
           <div className="text-sm text-muted-foreground border border-dashed border-border rounded-lg p-6 text-center">
@@ -1591,7 +1596,7 @@ function EntriesApprovalModal({ row, onClose }: { row: PayrollRow; onClose: () =
                         </span>
                       </div>
                       <div className="text-[11px] text-muted-foreground mt-0.5">
-                        {e.date}
+                        {formatDate(e.date) || e.date}
                         {e.bankRef ? ` · Ref ${e.bankRef}` : ""}
                       </div>
                       {e.memo && (
@@ -1608,7 +1613,7 @@ function EntriesApprovalModal({ row, onClose }: { row: PayrollRow; onClose: () =
                           )}
                           className="text-xs px-2 py-1.5 rounded-lg border border-border hover:bg-muted inline-flex items-center gap-1 disabled:opacity-40"
                         >
-                          <Pencil className="size-3.5" /> Edit
+                          <Pencil className="size-3.5" /> {t("platform.ui.edit")}
                         </button>
                       )}
                       {status === "Pending Approval" && !isEditing && (
@@ -1665,7 +1670,7 @@ function EntriesApprovalModal({ row, onClose }: { row: PayrollRow; onClose: () =
                   {isEditing && (
                     <div className="mt-3 pt-3 border-t border-border grid grid-cols-3 gap-2">
                       <label className="text-[11px] text-muted-foreground">
-                        Amount
+                        {t("platform.ui.amount")}
                         <input
                           type="number"
                           min={0}
@@ -1698,7 +1703,7 @@ function EntriesApprovalModal({ row, onClose }: { row: PayrollRow; onClose: () =
                           onClick={() => setEditingId(null)}
                           className="text-xs px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted"
                         >
-                          Cancel
+                          {t("platform.ui.cancel")}
                         </button>
                         <button
                           onClick={() => saveEdit(e.id)}

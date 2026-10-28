@@ -100,7 +100,7 @@ function CompaniesPage() {
           </div>
           {!loading && (
             <span className="text-xs text-muted-foreground">
-              {filtered.length} of {rows.length} companies
+              {t("platform.billing.countOf", { shown: filtered.length, total: rows.length })}
             </span>
           )}
         </div>
@@ -109,24 +109,40 @@ function CompaniesPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="text-start font-semibold px-4 py-3">Company</th>
-                <th className="text-start font-semibold px-4 py-3">Industry</th>
-                <th className="text-start font-semibold px-4 py-3">Users</th>
-                <th className="text-start font-semibold px-4 py-3">Projects</th>
-                <th className="text-start font-semibold px-4 py-3">Subscription</th>
+                <th className="text-start font-semibold px-4 py-3">
+                  {t("platform.billing.company")}
+                </th>
+                <th className="text-start font-semibold px-4 py-3">
+                  {t("platform.billing.industry")}
+                </th>
+                <th className="text-start font-semibold px-4 py-3">
+                  {t("platform.billing.users")}
+                </th>
+                <th className="text-start font-semibold px-4 py-3">
+                  {t("platform.billing.projects")}
+                </th>
+                <th className="text-start font-semibold px-4 py-3">
+                  {t("platform.billing.activeProjects")}
+                </th>
+                <th className="text-start font-semibold px-4 py-3">
+                  {t("platform.billing.billable")}
+                </th>
+                <th className="text-start font-semibold px-4 py-3">
+                  {t("platform.billing.subscription")}
+                </th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
-                    Loading companies…
+                  <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                    {t("platform.common.loading")}
                   </td>
                 </tr>
               )}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                     <Building2 className="size-6 mx-auto mb-2 opacity-60" />
                     {t("hub_companies.no_companies_found")}
                   </td>
@@ -151,7 +167,20 @@ function CompaniesPage() {
                     {industryLabel(c.industry)}
                   </td>
                   <td className="px-4 py-3">{c.userCount}</td>
-                  <td className="px-4 py-3">{c.projectCount}</td>
+                  <td className="px-4 py-3 tabular-nums">{c.projectCount}</td>
+                  <td className="px-4 py-3 tabular-nums">{c.activeProjectCount}</td>
+                  <td className="px-4 py-3 tabular-nums">
+                    <span
+                      className={
+                        c.max_projects > 0 && c.billableProjectCount > c.max_projects
+                          ? "font-semibold text-destructive"
+                          : ""
+                      }
+                      title={t("platform.billing.limitHint")}
+                    >
+                      {c.billableProjectCount} / {c.max_projects}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">
                     <span
                       className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${subscriptionStatusBadgeClass(c.subscription_status)}`}

@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { formatDate } from "@/lib/date-format";
 import { useEffect, useMemo, useState } from "react";
 import { useStore, formatUSD, generateId } from "@/lib/store";
 import { useCan, useCurrentUser } from "@/lib/rbac";
@@ -186,7 +187,7 @@ function FieldPortal() {
                   updateFlag({ confirmed: true });
                   toast.success(t("field_portal.cash_advance_confirmed"));
                 }}
-                className="flex w-full items-start gap-3 rounded-2xl border border-warning/40 bg-warning/15 p-4 text-left transition hover:bg-warning/20"
+                className="flex w-full items-start gap-3 rounded-2xl border border-warning/40 bg-warning/15 p-4 text-start transition hover:bg-warning/20"
               >
                 <AlertTriangle className="mt-0.5 size-5 shrink-0 text-warning" />
                 <div className="min-w-0">
@@ -225,7 +226,7 @@ function FieldPortal() {
                 )}
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <Stat label="Total Advance" value={formatUSD(advance.totalAdvance)} />
                 <Stat label="Logged" value={formatUSD(logged)} tone="warning" />
                 <Stat
@@ -379,7 +380,7 @@ function FieldPortal() {
                           {r.department || "Field receipt"}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {r.date} · {r.method}
+                          {formatDate(r.date) || r.date} · {r.method}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">

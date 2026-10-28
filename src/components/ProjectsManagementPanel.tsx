@@ -411,14 +411,14 @@ export function ProjectsManagementPanel() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground border-b border-border">
+              <tr className="text-start text-xs uppercase tracking-wide text-muted-foreground border-b border-border">
                 <th className="py-2 pr-3">Code</th>
                 <th className="py-2 pr-3">Name</th>
                 <th className="py-2 pr-3">Organization</th>
                 <th className="py-2 pr-3">{t("projectsmanagementpanel.type")}</th>
                 <th className="py-2 pr-3">Status</th>
                 <th className="py-2 pr-3">Start Date</th>
-                <th className="py-2 pr-3 text-right">Actions</th>
+                <th className="py-2 pr-3 text-end">Actions</th>
               </tr>
             </thead>
             <tbody>

@@ -1,4 +1,4 @@
-import { formatDateTime } from "@/lib/date-format";
+import { formatDateTime, formatDate } from "@/lib/date-format";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DateInput } from "@/components/ui/date-input";
 import { toast } from "sonner";
@@ -411,7 +411,7 @@ function RunRow({
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted"
+        className="w-full flex items-center justify-between px-4 py-3 text-start hover:bg-muted"
       >
         <div className="flex items-center gap-3 min-w-0">
           {expanded ? (
@@ -422,7 +422,7 @@ function RunRow({
           <div className="min-w-0">
             <div className="font-medium truncate">{run.label}</div>
             <div className="text-xs text-muted-foreground">
-              {run.period_start} → {run.period_end} · {items.length} line
+              {formatDate(run.period_start)} → {formatDate(run.period_end)} · {items.length} line
               {items.length === 1 ? "" : "s"} · {run.kind}
             </div>
           </div>
@@ -450,12 +450,12 @@ function RunRow({
               <table className="w-full text-sm">
                 <thead className="text-[11px] uppercase tracking-wider text-muted-foreground bg-surface">
                   <tr>
-                    <th className="text-left py-2 px-3">Beneficiary</th>
-                    <th className="text-left py-2 px-3">Role</th>
-                    <th className="text-left py-2 px-3">Budget</th>
-                    <th className="text-right py-2 px-3">Gross</th>
-                    <th className="text-right py-2 px-3">WHT</th>
-                    <th className="text-right py-2 px-3">Net</th>
+                    <th className="text-start py-2 px-3">Beneficiary</th>
+                    <th className="text-start py-2 px-3">Role</th>
+                    <th className="text-start py-2 px-3">Budget</th>
+                    <th className="text-end py-2 px-3">Gross</th>
+                    <th className="text-end py-2 px-3">WHT</th>
+                    <th className="text-end py-2 px-3">Net</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -471,13 +471,13 @@ function RunRow({
                         )}
                       </td>
                       <td className="py-1.5 px-3 text-muted-foreground">{it.budget_code ?? "—"}</td>
-                      <td className="py-1.5 px-3 text-right tabular-nums">
+                      <td className="py-1.5 px-3 text-end tabular-nums">
                         {formatMoney(Number(it.gross), run.currency)}
                       </td>
-                      <td className="py-1.5 px-3 text-right tabular-nums text-muted-foreground">
+                      <td className="py-1.5 px-3 text-end tabular-nums text-muted-foreground">
                         {formatMoney(Number(it.wht_amount || 0), run.currency)}
                       </td>
-                      <td className="py-1.5 px-3 text-right tabular-nums font-medium">
+                      <td className="py-1.5 px-3 text-end tabular-nums font-medium">
                         {formatMoney(Number(it.net || it.gross), run.currency)}
                       </td>
                     </tr>
@@ -903,7 +903,7 @@ function NewRunForm({
                     <span className="truncate">
                       {person?.fullName ?? "—"}{" "}
                       <span className="text-muted-foreground">
-                        · {s.period_start} → {s.period_end} · {daysWorked}d
+                        · {formatDate(s.period_start)} → {formatDate(s.period_end)} · {daysWorked}d
                       </span>
                     </span>
                   </div>
@@ -943,7 +943,8 @@ function NewRunForm({
                     <span className="truncate">
                       {o.person_name}{" "}
                       <span className="text-muted-foreground">
-                        · {o.work_date} · {Number(o.units).toLocaleString()} {o.overtime_unit}(s)
+                        · {formatDate(o.work_date)} · {Number(o.units).toLocaleString()}{" "}
+                        {o.overtime_unit}(s)
                       </span>
                     </span>
                   </div>

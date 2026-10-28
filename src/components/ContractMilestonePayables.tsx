@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { assertUploadAllowed } from "@/lib/upload-policy";
 import { DateInput } from "@/components/ui/date-input";
 import { toast } from "sonner";
 import {
@@ -560,6 +561,7 @@ function ExecutePaymentModal({
         .replace(/[^A-Za-z0-9]/g, "")
         .slice(0, 10)
         .toLowerCase();
+      assertUploadAllowed(file);
       const path = `${projectId}/${kind}/${milestone.payrollRowId}/ledger-proof/${crypto.randomUUID()}${ext ? `.${ext}` : ""}`;
       const { error } = await supabase.storage
         .from("contracts")

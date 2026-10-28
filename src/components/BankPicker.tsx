@@ -45,7 +45,7 @@ export function CountryCombo({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className={`${inputCls} text-left flex items-center justify-between`}
+        className={`${inputCls} text-start flex items-center justify-between`}
       >
         <span className={value ? "" : "text-muted-foreground"}>
           {value || placeholder || "Select country…"}
@@ -73,7 +73,7 @@ export function CountryCombo({
                   setOpen(false);
                   setQuery("");
                 }}
-                className="w-full text-left px-3 py-1.5 hover:bg-muted text-sm"
+                className="w-full text-start px-3 py-1.5 hover:bg-muted text-sm"
               >
                 {c}
               </button>

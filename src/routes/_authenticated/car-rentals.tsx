@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { formatAmount } from "@/lib/format-number";
 import { DateInput } from "@/components/ui/date-input";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
@@ -316,7 +317,7 @@ function CarRentalsPage() {
                   ].map((h) => (
                     <th
                       key={h}
-                      className="px-3 py-2 text-left text-xs uppercase tracking-wider font-medium"
+                      className="px-3 py-2 text-start text-xs uppercase tracking-wider font-medium"
                     >
                       {h}
                     </th>
@@ -433,7 +434,7 @@ function CarRentalsPage() {
                               : { daily_rate: Number(e.target.value) || 0 },
                           )
                         }
-                        className="w-24 bg-surface-2 border border-border rounded-lg px-2 py-1 text-sm text-right outline-none focus:ring-2 ring-brand"
+                        className="w-24 bg-surface-2 border border-border rounded-lg px-2 py-1 text-sm text-end outline-none focus:ring-2 ring-brand"
                         dir="ltr"
                       />
                       <div className="text-[10px] text-muted-foreground mt-0.5">
@@ -454,8 +455,8 @@ function CarRentalsPage() {
                         className="bg-surface-2 border border-border rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 ring-brand"
                       />
                     </td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums text-sm whitespace-nowrap">
-                      {commitmentFor(row).toLocaleString()} {row.currency}
+                    <td className="px-3 py-2 text-end font-mono tabular-nums text-sm whitespace-nowrap">
+                      {formatAmount(commitmentFor(row), 2)} {row.currency}
                     </td>
                     <td className="px-3 py-2">
                       <select
@@ -468,16 +469,16 @@ function CarRentalsPage() {
                         {vendorInvoices(row.vendor_id).map((inv) => (
                           <option key={inv.id} value={inv.id}>
                             {inv.invoiceNo || inv.id.slice(0, 6)} ·{" "}
-                            {Number(inv.price).toLocaleString()}
+                            {formatAmount(Number(inv.price), 2)}
                           </option>
                         ))}
                       </select>
                     </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <td className="px-3 py-2 text-end whitespace-nowrap">
                       <button
                         disabled={!row.dirty || savingIdx === idx}
                         onClick={() => save(idx)}
-                        className="inline-flex items-center gap-1 rounded-lg bg-brand/90 hover:bg-brand text-white px-3 py-1.5 text-xs font-medium disabled:opacity-40 mr-1"
+                        className="inline-flex items-center gap-1 rounded-lg bg-brand/90 hover:bg-brand text-white px-3 py-1.5 text-xs font-medium disabled:opacity-40 me-1"
                       >
                         {savingIdx === idx ? (
                           <Loader2 className="size-3 animate-spin" />

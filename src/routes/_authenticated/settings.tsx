@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { OrgMfaPanel } from "@/components/settings/OrgMfaPanel";
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
@@ -103,28 +104,33 @@ function SettingsPage() {
 
   const tabs = useMemo(() => {
     const list: { key: TabKey; label: string; icon: React.ReactNode; visible: boolean }[] = [
-      { key: "personal", label: "Personal", icon: <User className="size-4" />, visible: true },
+      {
+        key: "personal",
+        label: t("platform.settings.tabPersonal"),
+        icon: <User className="size-4" />,
+        visible: true,
+      },
       {
         key: "project",
-        label: "Active Project",
+        label: t("platform.settings.tabProject"),
         icon: <FolderCog className="size-4" />,
         visible: canProject,
       },
       {
         key: "organization",
-        label: "Organization",
+        label: t("platform.settings.tabOrganization"),
         icon: <Building2 className="size-4" />,
         visible: canOrg,
       },
       {
         key: "users",
-        label: "Users & Team",
+        label: t("platform.settings.tabUsers"),
         icon: <Users className="size-4" />,
         visible: canUsers,
       },
     ];
     return list.filter((t) => t.visible);
-  }, [canProject, canOrg, canUsers]);
+  }, [canProject, canOrg, canUsers, t]);
 
   const [tab, setTab] = useState<TabKey>("personal");
 
@@ -142,7 +148,7 @@ function SettingsPage() {
                   <button
                     key={t.key}
                     onClick={() => setTab(t.key)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left whitespace-nowrap transition-colors ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-start whitespace-nowrap transition-colors ${
                       active
                         ? "bg-brand text-brand-foreground font-semibold"
                         : "text-muted-foreground hover:bg-muted"
@@ -174,7 +180,7 @@ function SettingsPage() {
                 <ProjectTeamPanel />
               </>
             ) : (
-              <AccessDenied section="Active Project settings" />
+              <AccessDenied section={t("platform.settings.sectionProject")} />
             ))}
 
           {tab === "organization" &&
@@ -195,11 +201,18 @@ function SettingsPage() {
                     }
                   />
                 </Panel>
+                <Panel className="p-5">
+                  <OrgMfaPanel
+                    organizationId={
+                      selectedOrgId ?? roles.adminOrgIds[0] ?? roles.memberOrgIds[0] ?? null
+                    }
+                  />
+                </Panel>
                 <ProjectsManagementPanel />
                 <AccessControlSelfTest />
               </>
             ) : (
-              <AccessDenied section="Organization settings" />
+              <AccessDenied section={t("platform.settings.sectionOrganization")} />
             ))}
           {tab === "users" &&
             (canUsers ? (
@@ -208,7 +221,7 @@ function SettingsPage() {
                 <InvitationsPage embedded />
               </>
             ) : (
-              <AccessDenied section="Users & Team management" />
+              <AccessDenied section={t("platform.settings.sectionUsers")} />
             ))}
         </section>
       </div>
@@ -248,16 +261,13 @@ function ScopeBanner() {
         <span className="text-muted-foreground">
           {orgId ? (
             <>
-              Viewing{" "}
-              <span className="text-foreground font-medium">
-                {orgName ?? "selected organization"}
-              </span>{" "}
-              as tenant admin. Switch context from the top bar to change org or return to the
-              Platform Hub.
+              {t("platform.settings.viewingAsTenant", {
+                org: orgName ?? t("platform.settings.selectedOrganization"),
+              })}
             </>
           ) : (
             <>
-              No organization selected. Pick one from the top-bar switcher, or go to the{" "}
+              {t("platform.settings.noOrgSelected")}{" "}
               <a
                 className="text-brand font-semibold hover:underline"
                 href="/platform-hub/dashboard"
@@ -295,8 +305,7 @@ function AccessDenied({ section }: { section: string }) {
             {t("settings.permission_required")}
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {section} are restricted to organization admins and the system owner. Contact your
-            administrator if you need access.
+            {t("platform.settings.restricted", { section })}
           </p>
         </div>
       </div>
@@ -389,15 +398,15 @@ function ProjectSettingsPanel() {
           Metadata for the currently selected project. Only project admins and managers can edit
           these values.
         </p>
-        <Field label="Project name">
+        <Field label={t("platform.settings.projectName")}>
           <input
             value={form.project_name}
             onChange={(e) => setForm({ ...form, project_name: e.target.value })}
             disabled={loading}
-            className="bg-sidebar-active text-sidebar-foreground border border-border rounded-lg px-3 py-2 w-64 outline-none text-right font-medium"
+            className="bg-sidebar-active text-sidebar-foreground border border-border rounded-lg px-3 py-2 w-64 outline-none text-end font-medium"
           />
         </Field>
-        <Field label="Project type">
+        <Field label={t("platform.settings.projectType")}>
           <Select
             value={form.project_type}
             onChange={(v) => setForm({ ...form, project_type: v })}
@@ -405,7 +414,7 @@ function ProjectSettingsPanel() {
             disabled={loading}
           />
         </Field>
-        <Field label="Production kind">
+        <Field label={t("platform.settings.productionKind")}>
           <select
             value={activeProject?.productionKind ?? "film"}
             disabled={!activeProject}
@@ -424,12 +433,12 @@ function ProjectSettingsPanel() {
             }}
             className="bg-sidebar-active text-sidebar-foreground border border-border rounded-lg px-3 py-2 w-64 outline-none font-medium"
           >
-            <option value="film">Film</option>
-            <option value="series">Series</option>
-            <option value="commercial">Commercial</option>
+            <option value="film">{t("platform.settings.kindFilm")}</option>
+            <option value="series">{t("platform.settings.kindSeries")}</option>
+            <option value="commercial">{t("platform.settings.kindCommercial")}</option>
           </select>
         </Field>
-        <Field label="Currency">
+        <Field label={t("platform.settings.currency")}>
           <Select
             value={form.currency}
             onChange={(v) => setForm({ ...form, currency: v })}
@@ -437,7 +446,7 @@ function ProjectSettingsPanel() {
             disabled={loading}
           />
         </Field>
-        <Field label="Default unit">
+        <Field label={t("platform.settings.defaultUnit")}>
           <Select
             value={form.default_unit}
             onChange={(v) => setForm({ ...form, default_unit: v })}
@@ -445,7 +454,7 @@ function ProjectSettingsPanel() {
             disabled={loading}
           />
         </Field>
-        <Field label="Project status">
+        <Field label={t("platform.settings.projectStatus")}>
           <Select
             value={form.project_status}
             onChange={(v) => setForm({ ...form, project_status: v })}
@@ -455,7 +464,7 @@ function ProjectSettingsPanel() {
         </Field>
         <div className="flex justify-end pt-2">
           <Button onClick={update} disabled={saving || loading}>
-            {saving ? "Updating…" : "Update"}
+            {saving ? t("platform.common.updating") : t("platform.common.update")}
           </Button>
         </div>
       </Panel>
@@ -484,6 +493,7 @@ function DeleteProjectPanel({
   activeProjectId: string | null;
   projectName: string;
 }) {
+  const { t } = useTranslation();
   const roles = useAuthRoles();
   const navigate = Route.useNavigate();
   const removeProject = useServerFn(deleteProjectHard);
@@ -517,14 +527,13 @@ function DeleteProjectPanel({
     <Panel className="max-w-2xl p-5 mt-6 border border-destructive/40 bg-destructive/5">
       <div className="flex items-center gap-2 mb-2">
         <ShieldAlert className="w-4 h-4 text-destructive" />
-        <h2 className="text-base font-semibold">Danger zone</h2>
+        <h2 className="text-base font-semibold">{t("platform.settings.dangerZone")}</h2>
       </div>
       <p className="text-sm text-muted-foreground mb-4">
-        Permanently delete <b>{projectName}</b> together with every budget line, payroll run,
-        invoice, document and financial record attached to it. This cannot be undone.
+        {t("platform.settings.deleteProjectBody", { name: projectName })}
       </p>
       <Button variant="destructive" onClick={() => setConfirming(true)} disabled={deleting}>
-        Delete project
+        {t("platform.settings.deleteProject")}
       </Button>
 
       {confirming && (
@@ -532,9 +541,9 @@ function DeleteProjectPanel({
           open
           tone="danger"
           loading={deleting}
-          title="Delete this project permanently?"
-          message={`“${projectName}” and all of its financial records will be permanently destroyed.`}
-          confirmLabel="Delete project"
+          title={t("platform.settings.deleteProjectTitle")}
+          message={t("platform.settings.deleteProjectMessage", { name: projectName })}
+          confirmLabel={t("platform.settings.deleteProject")}
           onCancel={() => !deleting && setConfirming(false)}
           onConfirm={() => void run()}
         />
@@ -708,7 +717,7 @@ function SecurityPanel() {
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
-    if (pw.length < 8) return toast.error("Password must be at least 8 characters.");
+    if (pw.length < 8) return toast.error(t("platform.account.passwordTooShort"));
     if (pw !== pw2) return toast.error(t("settings.passwords_do_not_match"));
     setSaving(true);
     try {
@@ -717,7 +726,7 @@ function SecurityPanel() {
       setPw("");
       setPw2("");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not update password.");
+      toast.error(e instanceof Error ? e.message : t("platform.account.passwordFailed"));
     } finally {
       setSaving(false);
     }
@@ -727,7 +736,7 @@ function SecurityPanel() {
     <Panel className="p-5">
       <div className="flex items-center gap-2 mb-4">
         <Lock className="w-4 h-4 text-brand" />
-        <h2 className="text-base font-semibold">Security</h2>
+        <h2 className="text-base font-semibold">{t("platform.settings.security")}</h2>
       </div>
       <p className="text-sm text-muted-foreground mb-4">
         {t("settings.update_your_account_password_you_will_stay_signed")}
@@ -744,7 +753,7 @@ function SecurityPanel() {
         <input
           type="password"
           autoComplete="new-password"
-          placeholder="Confirm new password"
+          placeholder={t("platform.reset.confirmPassword")}
           value={pw2}
           onChange={(e) => setPw2(e.target.value)}
           className="bg-sidebar-active text-sidebar-foreground border border-border rounded-lg px-3 py-2 outline-none"
@@ -752,7 +761,7 @@ function SecurityPanel() {
       </div>
       <div className="flex justify-end pt-4">
         <Button type="button" onClick={submit} disabled={saving || !pw || !pw2}>
-          {saving ? "Updating…" : "Update password"}
+          {saving ? t("platform.common.updating") : t("platform.settings.updatePassword")}
         </Button>
       </div>
     </Panel>

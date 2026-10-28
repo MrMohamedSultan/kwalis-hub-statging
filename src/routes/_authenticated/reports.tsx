@@ -28,9 +28,11 @@ import {
   type ExportBuilder,
 } from "@/features/reports/report-export";
 import { BudgetChangeLogReport } from "@/features/reports/budget-change-log/BudgetChangeLogReport";
-import { getSupportingDocUrl } from "@/lib/supporting-docs";
+import { getSupportingDocUrl, useSupportingDocsSync } from "@/lib/supporting-docs";
 import { FilmCommissionRebateReport } from "@/features/reports/rebate/FilmCommissionRebateReport";
 import { CrewCastListReport } from "@/features/reports/rebate/CrewCastListReport";
+import { PerDiemReport } from "@/features/reports/per-diem/PerDiemReport";
+import { isReportTabEnabled } from "@/lib/report-flags";
 import { AuditHistoryPanel } from "@/components/AuditHistoryPanel";
 import { CostReportPanel } from "@/components/reports/CostReportPanel";
 
@@ -71,9 +73,12 @@ function ReportsPage() {
     | (typeof LEDGER_TABS)[number]
     | "budgetlog"
     | "dealsummary"
+    | "perdiem"
   >("cost");
   const [exporting, setExporting] = useState<null | "excel" | "pdf">(null);
   const exportRef = useRef<ExportBuilder | null>(null);
+  const activeProjectIdForDocs = useStore((s) => s.activeProjectId);
+  useSupportingDocsSync(activeProjectIdForDocs); // D08: links from the server
   // ── Export (G03 / D12): ONE Excel + PDF button pair for the whole page.
   // The visible tab registers a builder that returns exactly what is on
   // screen (after its filters, in the display currency).
@@ -113,14 +118,15 @@ function ReportsPage() {
     ...PAYABLES_TABS.map((k) => [k, t(`reconcile.tab.${k}`)] as const),
     ["rebate", t("rebate.title")],
     ["crewlist", t("rebate.cl.title")],
-    ["vat", "Tax & VAT Compliance"],
-    ["gosi", "GOSI & Localization"],
+    ["vat", t("platform.reportTab.vat")],
+    ["gosi", t("platform.reportTab.gosi")],
     ...LEDGER_TABS.map(
       (k) => [k, k === "ledger" ? t("reconcile.tab.ledger") : t(`journal.tab.${k}`)] as const,
     ),
     ["budgetlog", t("refs.bcl_title")],
     ["dealsummary", t("people.deal.title")],
-  ] as const;
+    ["perdiem", t("platform.perDiem.title")],
+  ].filter(([k]) => isReportTabEnabled(k)) as [typeof tab, string][];
   return (
     <>
       <PageTitle
@@ -131,7 +137,8 @@ function ReportsPage() {
           tab === "budgetlog" ||
           tab === "dealsummary" ||
           tab === "rebate" ||
-          tab === "crewlist" ? null : (
+          tab === "crewlist" ||
+          tab === "perdiem" ? null : (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => runExport("excel")}
@@ -189,10 +196,11 @@ function ReportsPage() {
         {tab === "rebate" && <FilmCommissionRebateReport />}
         {tab === "crewlist" && <CrewCastListReport />}
         {tab === "vat" && <VatReport />}
-        {tab === "gosi" && <GosiReport />}
+        {tab === "gosi" && isReportTabEnabled("gosi") && <GosiReport />}
         {isLedgerTab(tab) && <LedgerTab tab={tab} />}
         {tab === "budgetlog" && <BudgetChangeLogReport />}
         {tab === "dealsummary" && <DealSummaryReport />}
+        {tab === "perdiem" && <PerDiemReport />}
       </ReportExportContext.Provider>
     </>
   );
@@ -377,7 +385,7 @@ function VatReport() {
                   (h) => (
                     <th
                       key={h}
-                      className="px-4 py-2 text-left text-xs uppercase tracking-wider font-medium"
+                      className="px-4 py-2 text-start text-xs uppercase tracking-wider font-medium"
                     >
                       {h}
                     </th>
@@ -423,7 +431,7 @@ function VatReport() {
                 {["Date", "Invoice #", "Vendor", "Net (Excl. VAT)", "VAT (15%)"].map((h) => (
                   <th
                     key={h}
-                    className="px-4 py-2 text-left text-xs uppercase tracking-wider font-medium"
+                    className="px-4 py-2 text-start text-xs uppercase tracking-wider font-medium"
                   >
                     {h}
                   </th>

@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { formatAmount } from "@/lib/format-number";
+import { assertUploadAllowed, safeStorageName } from "@/lib/upload-policy";
 import { storageAudited } from "@/lib/storage-audit";
 import { CurrencySymbol } from "@/components/ui/currency";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
@@ -43,7 +45,7 @@ import {
 import { useCan } from "@/lib/rbac";
 import { usePermissionCheck, PermissionDeniedBanner } from "@/lib/permission-guard";
 import { useGlAccounts } from "@/lib/gl-accounts";
-import { useSupportingDocUrl } from "@/lib/supporting-docs";
+import { useSupportingDocUrl, useSupportingDocsSync } from "@/lib/supporting-docs";
 import { SupportingDocField } from "@/components/SupportingDocField";
 import { AuditHistoryPanel } from "@/components/AuditHistoryPanel";
 import { useLedgerSync } from "@/lib/ledger-sync";
@@ -66,6 +68,7 @@ export const Route = createFileRoute("/_authenticated/payroll")({
 type EditTarget = { rowId: string; idx: number } | null;
 
 function PayrollPage() {
+  useSupportingDocsSync(useStore((st) => st.activeProjectId)); // D08
   const { t } = useTranslation();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -198,7 +201,10 @@ function PaymentEditDialog({ target, onClose }: { target: EditTarget; onClose: (
     try {
       let receiptPath: string | null | undefined = undefined;
       if (file) {
-        const path = `payroll/${row.id}/${target.idx}/${Date.now()}-${file.name}`;
+        assertUploadAllowed(file);
+        // X06: under the project folder so project-scoped storage policies apply.
+        const pid = useStore.getState().activeProjectId;
+        const path = `${pid ? `${pid}/` : ""}payroll/${row.id}/${target.idx}/${Date.now()}-${safeStorageName(file.name)}`;
         const { error } = await storageAudited
           .from("contracts")
           .upload(path, file, { upsert: false });
@@ -249,7 +255,7 @@ function PaymentEditDialog({ target, onClose }: { target: EditTarget; onClose: (
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Upcoming">{t("people.status.Upcoming")}</SelectItem>
-                <SelectItem value="Due">Due</SelectItem>
+                <SelectItem value="Due">{t("platform.ui.due")}</SelectItem>
                 <SelectItem value="Paid" disabled={!canApprove}>
                   {t("people.paid")} {!canApprove && "(needs payroll.approve)"}
                 </SelectItem>
@@ -296,7 +302,7 @@ function PaymentEditDialog({ target, onClose }: { target: EditTarget; onClose: (
               disabled={!canExecute}
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               title={!canExecute ? "Permission required: payroll.execute" : undefined}
-              className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-surface file:px-3 file:py-1.5 file:text-foreground file:text-xs file:font-medium hover:file:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              className="block w-full text-sm file:me-3 file:rounded-md file:border-0 file:bg-surface file:px-3 file:py-1.5 file:text-foreground file:text-xs file:font-medium hover:file:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
             />
             {currentReceipt && !file && (
               <button
@@ -378,7 +384,7 @@ function PaymentChip({
   return (
     <button
       onClick={onEdit}
-      className={`w-full text-left rounded-xl border p-3 transition hover:scale-[1.01] ${STATUS_TONE[status]}`}
+      className={`w-full text-start rounded-xl border p-3 transition hover:scale-[1.01] ${STATUS_TONE[status]}`}
     >
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold opacity-80">{label}</span>
@@ -427,10 +433,18 @@ function VendorDrawer({ row, onEdit }: { row: PayrollRow; onEdit: (idx: number) 
         <div className="text-sm text-muted-foreground">{vendor?.category ?? "Vendor"}</div>
       </SheetHeader>
 
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        <StatCard label="Invoice Total" value={formatUSD(invoiceTotal)} />
-        <StatCard label="Total Paid" value={formatUSD(totalPaid)} accent="text-success" />
-        <StatCard label="Remaining" value={formatUSD(remaining)} accent="text-destructive" />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        <StatCard label={t("platform.ui.invoiceTotal")} value={formatUSD(invoiceTotal)} />
+        <StatCard
+          label={t("platform.ui.totalPaid")}
+          value={formatUSD(totalPaid)}
+          accent="text-success"
+        />
+        <StatCard
+          label={t("platform.ui.remaining")}
+          value={formatUSD(remaining)}
+          accent="text-destructive"
+        />
       </div>
 
       <div className="mb-2 text-sm font-semibold text-muted-foreground">
@@ -494,19 +508,19 @@ function PersonDrawer({ row, onEdit }: { row: PayrollRow; onEdit: (idx: number) 
       </SheetHeader>
 
       {/* Strict accounting itemisation — wages vs. per diem vs. housing */}
-      <div className="grid grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         <StatCard
-          label="Base Gross Pay"
+          label={t("platform.ui.baseGrossPay")}
           value={formatUSD(baseGross)}
           hint={`${shootingDays}d × ${formatUSD(perDay)} — Wages GL`}
         />
         <StatCard
-          label="Total Per Diem"
+          label={t("platform.ui.totalPerDiem")}
           value={formatUSD(totalPerDiem)}
           hint="Meals/Per Diem GL — not in Total Deal"
         />
         <StatCard
-          label="Housing Allowance"
+          label={t("platform.ui.housingAllowance")}
           value={formatUSD(housingProrated)}
           hint={
             person && person.housingAllowance
@@ -515,28 +529,42 @@ function PersonDrawer({ row, onEdit }: { row: PayrollRow; onEdit: (idx: number) 
           }
         />
         <StatCard
-          label="Net Payable"
+          label={t("platform.ui.netPayable")}
           value={formatUSD(netPayable)}
           accent="text-success"
           hint={whtAmt > 0 ? `After 5% WHT (${formatUSD(whtAmt)})` : "Base − WHT"}
         />
       </div>
 
-      <div className="grid grid-cols-4 gap-3 mb-4">
-        <StatCard label="Per Day" value={formatUSD(perDay)} />
-        <StatCard label="On-Set Per Diem" value={formatUSD(person?.onSetPerDiem ?? 0)} />
-        <StatCard label="Off-Set Per Diem" value={formatUSD(person?.offSetPerDiem ?? 0)} />
-        <StatCard label="Shooting Days" value={String(shootingDays)} />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <StatCard label={t("platform.ui.perDay")} value={formatUSD(perDay)} />
+        <StatCard
+          label={t("platform.ui.onSetPerDiem")}
+          value={formatUSD(person?.onSetPerDiem ?? 0)}
+        />
+        <StatCard
+          label={t("platform.ui.offSetPerDiem")}
+          value={formatUSD(person?.offSetPerDiem ?? 0)}
+        />
+        <StatCard label={t("platform.ui.shootingDays")} value={String(shootingDays)} />
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         <StatCard
-          label="Contract Total (Wages)"
+          label={t("platform.ui.contractTotalWages")}
           value={formatUSD(row.totalAmount)}
           hint="Payment schedule % applies to this only"
         />
-        <StatCard label="Total Paid" value={formatUSD(totalPaid)} accent="text-success" />
-        <StatCard label="Remaining" value={formatUSD(remaining)} accent="text-destructive" />
+        <StatCard
+          label={t("platform.ui.totalPaid")}
+          value={formatUSD(totalPaid)}
+          accent="text-success"
+        />
+        <StatCard
+          label={t("platform.ui.remaining")}
+          value={formatUSD(remaining)}
+          accent="text-destructive"
+        />
       </div>
 
       <div className="mb-2 text-sm font-semibold text-muted-foreground">
@@ -891,10 +919,10 @@ function PayrollLedgerPanel({ kind }: { kind: PayrollKind }) {
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-3">
-            <Tile label="Total" v={preview.data.rows.length} />
-            <Tile label="Vendor" v={preview.data.counts.vendor} />
-            <Tile label="Crew" v={preview.data.counts.crew} />
-            <Tile label="Cast" v={preview.data.counts.cast} />
+            <Tile label={t("platform.ui.total")} v={preview.data.rows.length} />
+            <Tile label={t("platform.ui.vendor")} v={preview.data.counts.vendor} />
+            <Tile label={t("platform.ui.crew")} v={preview.data.counts.crew} />
+            <Tile label={t("platform.ui.cast")} v={preview.data.counts.cast} />
           </div>
           {preview.data.mismatches.length > 0 && (
             <div className="max-h-32 overflow-auto rounded border border-warning/30 bg-warning/5 text-xs">
@@ -959,7 +987,7 @@ function PayrollLedgerPanel({ kind }: { kind: PayrollKind }) {
                 defaultValue: `⚠ ${issues.length} تنبيه`,
               })}
         </button>
-        <span className="text-[11px] text-muted-foreground ml-auto">
+        <span className="text-[11px] text-muted-foreground ms-auto">
           {t("ledger.showingOf", {
             defaultValue: `عرض ${filteredRows.length} من ${rows.length}`,
             shown: filteredRows.length,
@@ -1013,7 +1041,7 @@ function PayrollLedgerPanel({ kind }: { kind: PayrollKind }) {
             <tr className="text-[10px] uppercase tracking-wider">
               <th
                 colSpan={6}
-                className="text-left px-3 py-2.5 border-b border-border dark:border-border sticky left-0 z-20 bg-surface-2"
+                className="text-start px-3 py-2.5 border-b border-border dark:border-border sticky left-0 z-20 bg-surface-2"
               >
                 {t("ledger.groupBeneficiary", { defaultValue: "بيانات المستفيد" })}
               </th>
@@ -1044,36 +1072,36 @@ function PayrollLedgerPanel({ kind }: { kind: PayrollKind }) {
               <th className="border-b border-l border-border dark:border-border"></th>
             </tr>
             <tr>
-              <th className="text-left px-3 py-2.5 font-medium sticky left-0 z-20 bg-surface-2">
+              <th className="text-start px-3 py-2.5 font-medium sticky left-0 z-20 bg-surface-2">
                 {t("ledger.colBeneficiary", { defaultValue: "المستفيد" })}
               </th>
-              <th className="text-left px-3 py-2.5 font-medium">
+              <th className="text-start px-3 py-2.5 font-medium">
                 {kind === "vendor"
                   ? t("ledger.colCompany", { defaultValue: "الشركة" })
                   : t("ledger.colPosition", { defaultValue: "المسمى" })}
               </th>
-              <th className="text-left px-3 py-2.5 font-medium">
+              <th className="text-start px-3 py-2.5 font-medium">
                 {t("ledger.colDept", { defaultValue: "القسم" })}
               </th>
-              <th className="text-left px-3 py-2.5 font-medium">
+              <th className="text-start px-3 py-2.5 font-medium">
                 {t("ledger.colCcy", { defaultValue: "العملة" })}
               </th>
-              <th className="text-left px-3 py-2.5 font-medium">
+              <th className="text-start px-3 py-2.5 font-medium">
                 {t("ledger.colBank", { defaultValue: "البنك" })}
               </th>
-              <th className="text-left px-3 py-2.5 font-medium border-r border-border dark:border-border">
+              <th className="text-start px-3 py-2.5 font-medium border-r border-border dark:border-border">
                 {t("crewcast.iban")}
               </th>
-              <th className="text-right px-3 py-2.5 font-medium">
+              <th className="text-end px-3 py-2.5 font-medium">
                 {t("ledger.colReserved", { defaultValue: "المحجوز" })}
               </th>
-              <th className="text-right px-3 py-2.5 font-medium border-r border-border dark:border-border">
+              <th className="text-end px-3 py-2.5 font-medium border-r border-border dark:border-border">
                 {t("ledger.colSchedTotal", { defaultValue: "إجمالي مجدول" })}
               </th>
               {Array.from({ length: 7 }, (_, i) => (
                 <th
                   key={`s${i}`}
-                  className={`text-right px-3 py-2.5 font-medium text-info dark:text-info ${i === 6 ? "border-r border-border dark:border-border" : ""}`}
+                  className={`text-end px-3 py-2.5 font-medium text-info dark:text-info ${i === 6 ? "border-r border-border dark:border-border" : ""}`}
                 >
                   S{i + 1}
                 </th>
@@ -1081,19 +1109,19 @@ function PayrollLedgerPanel({ kind }: { kind: PayrollKind }) {
               {Array.from({ length: 7 }, (_, i) => (
                 <th
                   key={`p${i}`}
-                  className={`text-right px-3 py-2.5 font-medium text-success dark:text-success ${i === 6 ? "border-r border-border dark:border-border" : ""}`}
+                  className={`text-end px-3 py-2.5 font-medium text-success dark:text-success ${i === 6 ? "border-r border-border dark:border-border" : ""}`}
                 >
                   P{i + 1}
                 </th>
               ))}
-              <th className="text-right px-3 py-2.5 font-medium">
+              <th className="text-end px-3 py-2.5 font-medium">
                 {t("ledger.colPaidTotal", { defaultValue: "إجمالي مسدَّد" })}
               </th>
-              <th className="text-right px-3 py-2.5 font-medium">
+              <th className="text-end px-3 py-2.5 font-medium">
                 {t("ledger.colRemaining", { defaultValue: "المتبقي" })}
               </th>
-              <th className="text-right px-3 py-2.5 font-medium">%</th>
-              <th className="text-right px-3 py-2.5 font-medium">
+              <th className="text-end px-3 py-2.5 font-medium">%</th>
+              <th className="text-end px-3 py-2.5 font-medium">
                 {t("ledger.colStatus", { defaultValue: "الحالة" })}
               </th>
               <th className="px-3 py-2.5"></th>
@@ -1153,16 +1181,14 @@ function PayrollLedgerPanel({ kind }: { kind: PayrollKind }) {
                   <td className="px-3 py-2 font-mono text-[11px] border-r border-border">
                     {r.iban ?? "—"}
                   </td>
-                  <td className="px-2 py-2 text-right tabular-nums">
-                    {fmtN(r.reserved_budget_sar)}
-                  </td>
-                  <td className="px-2 py-2 text-right tabular-nums font-semibold border-r border-border">
+                  <td className="px-2 py-2 text-end tabular-nums">{fmtN(r.reserved_budget_sar)}</td>
+                  <td className="px-2 py-2 text-end tabular-nums font-semibold border-r border-border">
                     {fmtN(r.scheduled_total_sar)}
                   </td>
                   {Array.from({ length: 7 }, (_, i) => (
                     <td
                       key={`s${i}`}
-                      className={`px-2 py-2 text-right tabular-nums ${i === 6 ? "border-r border-border" : ""}`}
+                      className={`px-2 py-2 text-end tabular-nums ${i === 6 ? "border-r border-border" : ""}`}
                     >
                       {fmtN(r.scheduled_payments?.[i])}
                     </td>
@@ -1170,26 +1196,26 @@ function PayrollLedgerPanel({ kind }: { kind: PayrollKind }) {
                   {Array.from({ length: 7 }, (_, i) => (
                     <td
                       key={`p${i}`}
-                      className={`px-2 py-2 text-right tabular-nums text-success ${i === 6 ? "border-r border-border" : ""}`}
+                      className={`px-2 py-2 text-end tabular-nums text-success ${i === 6 ? "border-r border-border" : ""}`}
                     >
                       {fmtN(r.paid_payments?.[i])}
                     </td>
                   ))}
-                  <td className="px-2 py-2 text-right tabular-nums text-success font-semibold">
+                  <td className="px-2 py-2 text-end tabular-nums text-success font-semibold">
                     {fmtN(r.paid_total_sar)}
                   </td>
-                  <td className="px-2 py-2 text-right tabular-nums text-destructive">
+                  <td className="px-2 py-2 text-end tabular-nums text-destructive">
                     {fmtN(r.remaining_sar)}
                   </td>
-                  <td className="px-2 py-2 text-right tabular-nums">{pct}%</td>
-                  <td className="px-2 py-2 text-right">
+                  <td className="px-2 py-2 text-end tabular-nums">{pct}%</td>
+                  <td className="px-2 py-2 text-end">
                     <span
                       className={`px-2 py-0.5 rounded-full border text-[10px] uppercase tracking-wider ${statusTone}`}
                     >
                       {status}
                     </span>
                   </td>
-                  <td className="px-2 py-2 text-right">
+                  <td className="px-2 py-2 text-end">
                     <button
                       onClick={() => removeRow(r.id)}
                       className="text-muted-foreground hover:text-destructive"
@@ -1204,19 +1230,17 @@ function PayrollLedgerPanel({ kind }: { kind: PayrollKind }) {
               <tr className="border-t border-border bg-surface-2 font-semibold">
                 <td
                   colSpan={6}
-                  className="px-3 py-2 text-right text-muted-foreground sticky left-0 z-10 bg-surface-2"
+                  className="px-3 py-2 text-end text-muted-foreground sticky left-0 z-10 bg-surface-2"
                 >
                   {t("people.totals")}
                 </td>
-                <td className="px-2 py-2 text-right tabular-nums">{fmtN(total.reserved)}</td>
-                <td className="px-2 py-2 text-right tabular-nums border-r border-border">
+                <td className="px-2 py-2 text-end tabular-nums">{fmtN(total.reserved)}</td>
+                <td className="px-2 py-2 text-end tabular-nums border-r border-border">
                   {fmtN(total.scheduled)}
                 </td>
                 <td colSpan={14}></td>
-                <td className="px-2 py-2 text-right tabular-nums text-success">
-                  {fmtN(total.paid)}
-                </td>
-                <td className="px-2 py-2 text-right tabular-nums text-destructive">
+                <td className="px-2 py-2 text-end tabular-nums text-success">{fmtN(total.paid)}</td>
+                <td className="px-2 py-2 text-end tabular-nums text-destructive">
                   {fmtN(total.remaining)}
                 </td>
                 <td colSpan={3}></td>
@@ -1241,7 +1265,7 @@ function Tile({ label, v }: { label: string; v: number }) {
 function fmtN(v: number | null | undefined): string {
   const n = Number(v ?? 0);
   if (!Number.isFinite(n) || n === 0) return "—";
-  return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  return formatAmount(n, 0);
 }
 
 // =====================================================================

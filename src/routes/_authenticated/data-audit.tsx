@@ -154,9 +154,9 @@ function DataAuditPage() {
                 <table className="app-table w-full text-sm">
                   <thead className="bg-surface text-xs uppercase text-muted-foreground">
                     <tr>
-                      <th className="px-4 py-2 text-left">Record</th>
-                      <th className="px-4 py-2 text-left">Organization</th>
-                      <th className="px-4 py-2 text-right">{i18n.t("data_audit.quick_assign")}</th>
+                      <th className="px-4 py-2 text-start">Record</th>
+                      <th className="px-4 py-2 text-start">Organization</th>
+                      <th className="px-4 py-2 text-end">{i18n.t("data_audit.quick_assign")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -171,7 +171,7 @@ function DataAuditPage() {
                           <td className="px-4 py-2 text-xs text-muted-foreground font-mono">
                             {o.organization_id?.slice(0, 8) ?? "—"}
                           </td>
-                          <td className="px-4 py-2 text-right">
+                          <td className="px-4 py-2 text-end">
                             <div className="inline-flex items-center gap-2">
                               <select
                                 disabled={busy || eligible.length === 0}

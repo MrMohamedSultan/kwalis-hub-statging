@@ -148,10 +148,10 @@ function TrashPage() {
             <table className="app-table w-full">
               <thead>
                 <tr>
-                  <th className="px-4 py-3 text-left">Item</th>
-                  <th className="px-4 py-3 text-left">Type</th>
-                  <th className="px-4 py-3 text-left">Deleted</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th className="px-4 py-3 text-start">Item</th>
+                  <th className="px-4 py-3 text-start">Type</th>
+                  <th className="px-4 py-3 text-start">Deleted</th>
+                  <th className="px-4 py-3 text-end">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -174,7 +174,7 @@ function TrashPage() {
                       <div>{fmtDate(it.deletedAt)}</div>
                       {it.deletedBy && <div>by {it.deletedBy}</div>}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-end">
                       <div className="inline-flex items-center gap-1.5">
                         <button
                           onClick={() => {

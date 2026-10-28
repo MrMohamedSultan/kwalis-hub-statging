@@ -1,4 +1,5 @@
 import { formatDateTime } from "@/lib/date-format";
+import { TransactionAttachments } from "@/components/files/TransactionAttachments";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -645,7 +646,7 @@ function ProjectFilesPage() {
             onClick={() => setCurrentId(null)}
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
-            <HomeIcon className="size-4" /> Root
+            <HomeIcon className="size-4" /> {t("platform.files.root")}
           </button>
           {breadcrumbs.map((b) => (
             <div key={b.id} className="flex items-center gap-2">
@@ -813,7 +814,7 @@ function ProjectFilesPage() {
                   <button
                     key={f.id}
                     onClick={() => setCurrentId(f.id)}
-                    className="flex items-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2 text-left hover:bg-muted"
+                    className="flex items-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2 text-start hover:bg-muted"
                   >
                     <Folder className="size-4 text-warning" />
                     <span className="truncate flex-1">{f.name}</span>
@@ -994,16 +995,17 @@ function ProjectFilesPage() {
       </div>
       <ConfirmDialog
         open={!!pendingDelete}
-        title="Delete file"
+        title={t("platform.files.deleteTitle")}
         tone="danger"
-        confirmLabel="Delete permanently"
+        confirmLabel={t("platform.files.deletePermanently")}
         loading={deleting}
-        loadingLabel="Deleting…"
-        warning="This permanently removes the file from storage. It cannot be undone or restored."
-        message={`Are you sure you want to delete "${pendingDelete?.name ?? ""}"?`}
+        loadingLabel={t("platform.files.deleting")}
+        warning={t("platform.files.deleteWarning")}
+        message={t("platform.files.deleteMessage", { name: pendingDelete?.name ?? "" })}
         onConfirm={confirmDelete}
         onCancel={() => (deleting ? undefined : setPendingDelete(null))}
       />
+      {projectId && <TransactionAttachments projectId={projectId} />}
     </AppShell>
   );
 }

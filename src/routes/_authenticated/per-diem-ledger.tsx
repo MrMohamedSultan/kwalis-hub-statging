@@ -1,4 +1,7 @@
 import type React from "react";
+import { formatDate } from "@/lib/date-format";
+import { perDiemRowTotal, perDiemTotals } from "@/lib/per-diem-calc";
+import { assertUploadAllowed, safeStorageName } from "@/lib/upload-policy";
 import { DateInput } from "@/components/ui/date-input";
 import { createFileRoute } from "@tanstack/react-router";
 import { storageAudited } from "@/lib/storage-audit";
@@ -683,7 +686,9 @@ function PerDiemLedgerPage() {
       if (!rowId) return;
       row = findRow(personId, rowId) ?? row;
     }
-    const path = `per-diem/${rowId}/${Date.now()}-${file.name}`;
+    assertUploadAllowed(file);
+    // X06: under the project folder so project-scoped storage policies apply.
+    const path = `${activeProjectId ? `${activeProjectId}/` : ""}per-diem/${rowId}/${Date.now()}-${safeStorageName(file.name)}`;
     const { error: upErr } = await storageAudited
       .from("contracts")
       .upload(path, file, { upsert: false });
@@ -708,18 +713,14 @@ function PerDiemLedgerPage() {
     window.open(data.signedUrl, "_blank");
   };
 
+  // X13: saved rows only (the suggested draft per person is not money yet),
+  // each row = days × rates exactly as the database computes it.
   const totals = useMemo(() => {
-    const acc = {
-      paid: { SAR: 0, USD: 0 } as Record<Currency, number>,
-      pending: { SAR: 0, USD: 0 } as Record<Currency, number>,
+    const t = perDiemTotals(displayRows.flatMap(({ rows }) => rows));
+    return {
+      paid: { SAR: t.paid.SAR ?? 0, USD: t.paid.USD ?? 0 } as Record<Currency, number>,
+      pending: { SAR: t.pending.SAR ?? 0, USD: t.pending.USD ?? 0 } as Record<Currency, number>,
     };
-    for (const { rows } of displayRows) {
-      for (const r of rows) {
-        const bucket = r.status === "paid" ? acc.paid : acc.pending;
-        bucket[r.currency] += r.total_amount;
-      }
-    }
-    return acc;
   }, [displayRows]);
 
   /** Aggregate per diem budget health across every budget line touched by
@@ -792,15 +793,16 @@ function PerDiemLedgerPage() {
     const rows: string[][] = [];
     for (const { person, rows: personRows } of displayRows) {
       for (const r of personRows) {
+        if (!r.id) continue; // X13: unsaved suggestions are not on the sheet
         rows.push([
           person.fullName,
           person.kind === "cast" ? person.character || "Cast" : person.position || "Crew",
-          `${r.period_start} → ${r.period_end}`,
+          `${formatDate(r.period_start)} → ${formatDate(r.period_end)}`,
           fmtMoney(r.on_set_rate, r.currency),
           fmtMoney(r.off_set_rate, r.currency),
           String(r.shoot_days),
           String(r.off_days),
-          fmtMoney(r.total_amount, r.currency),
+          fmtMoney(perDiemRowTotal(r), r.currency),
           r.status === "paid" ? "PAID" : "Pending",
           "",
         ]);
@@ -936,7 +938,7 @@ function PerDiemLedgerPage() {
             tone="text-warning"
           />
           <StatMini
-            label="Pending — USD"
+            label={t("platform.ui.pendingUsd")}
             value={formatUSD(totals.pending.USD)}
             tone="text-warning"
           />
@@ -953,7 +955,11 @@ function PerDiemLedgerPage() {
             }
             tone="text-success"
           />
-          <StatMini label="Paid — USD" value={formatUSD(totals.paid.USD)} tone="text-success" />
+          <StatMini
+            label={t("platform.ui.paidUsd")}
+            value={formatUSD(totals.paid.USD)}
+            tone="text-success"
+          />
         </div>
 
         {loading ? (
@@ -1025,7 +1031,7 @@ function PerDiemLedgerPage() {
                   ].map((h) => (
                     <th
                       key={h}
-                      className="px-2 py-2 text-left text-[11px] uppercase tracking-wider font-medium"
+                      className="px-2 py-2 text-start text-[11px] uppercase tracking-wider font-medium"
                     >
                       {h}
                     </th>
@@ -1064,8 +1070,8 @@ function PerDiemLedgerPage() {
             Each person can hold multiple weekly batches. Rates are{" "}
             <span className="font-medium">locked</span> from the contract and auto-convert on
             currency change — edit the contract to change them. Paid batches post to the selected{" "}
-            <span className="font-medium">Per Diem</span> budget line and become read-only. Use{" "}
-            <span className="font-medium">+ Add Batch</span> for the next week.
+            <span className="font-medium">{t("platform.ui.perDiem")}</span> budget line and become
+            read-only. Use <span className="font-medium">+ Add Batch</span> for the next week.
           </div>
         </div>
       </Panel>
@@ -1224,10 +1230,7 @@ function PersonBlock({
               />
             </td>
             <td className="px-2 py-2 font-medium tabular-nums" dir="ltr">
-              {fmtMoney(
-                +(r.shoot_days * r.on_set_rate + r.off_days * r.off_set_rate).toFixed(2),
-                r.currency,
-              )}
+              {fmtMoney(perDiemRowTotal(r), r.currency)}
             </td>
             <td className="px-2 py-2">
               <select
@@ -1278,8 +1281,8 @@ function PersonBlock({
                   r.status === "paid" ? "text-success" : "text-warning"
                 }`}
               >
-                <option value="pending">Pending</option>
-                <option value="paid">Paid</option>
+                <option value="pending">{t("platform.ui.pending")}</option>
+                <option value="paid">{t("platform.ui.paid")}</option>
               </select>
             </td>
             <td className="px-2 py-2">
@@ -1313,7 +1316,7 @@ function PersonBlock({
                 )}
               </div>
             </td>
-            <td className="px-2 py-2 text-right whitespace-nowrap">
+            <td className="px-2 py-2 text-end whitespace-nowrap">
               <button
                 disabled={!r.dirty || savingKey === r.key}
                 onClick={() => onSave(r.key)}
@@ -1427,12 +1430,12 @@ function BudgetHealthWidget({
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
         <StatMini
-          label="Total Budget"
+          label={t("platform.ui.totalBudget")}
           value={`SAR ${formatSAR(totalBudget)}`}
           tone="text-foreground"
         />
         <StatMini
-          label="Total Paid"
+          label={t("platform.ui.totalPaid")}
           value={`SAR ${formatSAR(totalPaidSar)}`}
           tone={over ? "text-destructive" : "text-info"}
         />

@@ -2,6 +2,7 @@
 // The Accommodation Roster reads this catalog so hotel names and nightly rates
 // stay consistent instead of being retyped per person.
 import { useState } from "react";
+import { formatAmount } from "@/lib/format-number";
 import { Building2, Plus, Trash2, Loader2, BedDouble } from "lucide-react";
 import { toast } from "sonner";
 import { Panel } from "@/components/AppShell";
@@ -279,7 +280,7 @@ export function LodgingSetupPanel() {
                     <span className="font-medium">{r.name}</span>
                     <span className="text-muted-foreground">
                       {" "}
-                      · {p?.name ?? "—"} · {r.nightly_rate.toLocaleString()} {r.currency}/night ·
+                      · {p?.name ?? "—"} · {formatAmount(r.nightly_rate, 2)} {r.currency}/night ·
                       sleeps {r.occupancy}
                     </span>
                   </span>

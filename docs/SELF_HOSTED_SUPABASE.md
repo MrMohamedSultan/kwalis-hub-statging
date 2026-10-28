@@ -161,3 +161,20 @@ prefix. Then `systemctl daemon-reload && systemctl restart kwalis`.
 - AI features that use Lovable's gateway (`LOVABLE_API_KEY`) are off.
 - No e-mail is sent (no SMTP), so password-reset mails don't arrive. Reset passwords in Studio if needed.
 - Restored accounts keep their production passwords. Treat this server as holding real client data.
+
+## 8. Login lockout hook and 2FA (after applying db/pending/195)
+
+In `/opt/kwalis-supabase/.env` (GoTrue / `auth` service), then `docker compose up -d auth`:
+
+```
+GOTRUE_HOOK_PASSWORD_VERIFICATION_ATTEMPT_ENABLED=true
+GOTRUE_HOOK_PASSWORD_VERIFICATION_ATTEMPT_URI=pg-functions://postgres/public/hook_password_verification_attempt
+GOTRUE_MFA_TOTP_ENROLL_ENABLED=true
+GOTRUE_MFA_TOTP_VERIFY_ENABLED=true
+```
+
+The app's sign-in already goes through the server lockout (`signInWithLockout`,
+needs `SUPABASE_SERVICE_ROLE_KEY`); the hook also locks direct API calls.
+Test: 5 wrong passwords → "locked for 2 minutes", also from a second browser.
+E-mail, cron and monitoring: `docs/NOTIFICATIONS_EMAIL.md`, `docs/MONITORING.md`,
+backups: `docs/BACKUP_RESTORE.md`.

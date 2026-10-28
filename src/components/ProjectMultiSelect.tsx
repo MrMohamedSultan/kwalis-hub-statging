@@ -107,7 +107,7 @@ export function ProjectMultiSelect({
                   key={p.id}
                   type="button"
                   onClick={() => toggle(p.id)}
-                  className={`flex items-center gap-2 rounded-md px-2 py-1 text-left text-xs transition ${
+                  className={`flex items-center gap-2 rounded-md px-2 py-1 text-start text-xs transition ${
                     selected ? "bg-brand/10 text-foreground" : "hover:bg-muted"
                   }`}
                 >

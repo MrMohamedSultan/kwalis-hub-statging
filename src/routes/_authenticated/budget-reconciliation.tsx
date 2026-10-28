@@ -379,18 +379,18 @@ function BudgetReconciliationPage() {
             <table className="w-full text-sm">
               <thead className="text-[11px] uppercase tracking-wider text-muted-foreground bg-surface">
                 <tr>
-                  <th className="text-left py-2 px-3">Code</th>
-                  <th className="text-left py-2 px-3">Description</th>
-                  <th className="text-right py-2 px-3">
+                  <th className="text-start py-2 px-3">Code</th>
+                  <th className="text-start py-2 px-3">Description</th>
+                  <th className="text-end py-2 px-3">
                     {t("budget_reconciliation.master_planned")}
                   </th>
-                  <th className="text-right py-2 px-3">Estimate</th>
+                  <th className="text-end py-2 px-3">Estimate</th>
                   <th className="text-end py-2 px-3">{t("glossary.term.commitment")}</th>
                   <th className="text-end py-2 px-3">{t("glossary.term.actual")}</th>
-                  <th className="text-right py-2 px-3">
+                  <th className="text-end py-2 px-3">
                     {t("budget_reconciliation.master_actual")}
                   </th>
-                  <th className="text-right py-2 px-3">Δ actuals</th>
+                  <th className="text-end py-2 px-3">Δ actuals</th>
                 </tr>
               </thead>
               <tbody>
@@ -412,23 +412,23 @@ function BudgetReconciliationPage() {
                           </span>
                         )}
                       </td>
-                      <td className="py-1.5 px-3 text-right tabular-nums">
+                      <td className="py-1.5 px-3 text-end tabular-nums">
                         {formatSAR(r.master_planned)}
                       </td>
-                      <td className="py-1.5 px-3 text-right tabular-nums">
+                      <td className="py-1.5 px-3 text-end tabular-nums">
                         {formatSAR(r.project_estimate)}
                       </td>
-                      <td className="py-1.5 px-3 text-right tabular-nums">
+                      <td className="py-1.5 px-3 text-end tabular-nums">
                         {formatSAR(r.committed)}
                       </td>
-                      <td className="py-1.5 px-3 text-right tabular-nums font-medium">
+                      <td className="py-1.5 px-3 text-end tabular-nums font-medium">
                         {formatSAR(r.actuals)}
                       </td>
-                      <td className="py-1.5 px-3 text-right tabular-nums text-muted-foreground">
+                      <td className="py-1.5 px-3 text-end tabular-nums text-muted-foreground">
                         {formatSAR(r.master_actual)}
                       </td>
                       <td
-                        className={`py-1.5 px-3 text-right tabular-nums ${
+                        className={`py-1.5 px-3 text-end tabular-nums ${
                           Math.abs(delta) > 0.01 ? "text-warning" : "text-muted-foreground"
                         }`}
                       >
@@ -440,20 +440,18 @@ function BudgetReconciliationPage() {
                 <tr className="border-t border-border font-semibold bg-surface">
                   <td className="py-2 px-3" />
                   <td className="py-2 px-3">TOTAL</td>
-                  <td className="py-2 px-3 text-right tabular-nums">
+                  <td className="py-2 px-3 text-end tabular-nums">
                     {formatSAR(totals.master_planned)}
                   </td>
-                  <td className="py-2 px-3 text-right tabular-nums">
+                  <td className="py-2 px-3 text-end tabular-nums">
                     {formatSAR(totals.project_estimate)}
                   </td>
-                  <td className="py-2 px-3 text-right tabular-nums">
-                    {formatSAR(totals.committed)}
-                  </td>
-                  <td className="py-2 px-3 text-right tabular-nums">{formatSAR(totals.actuals)}</td>
-                  <td className="py-2 px-3 text-right tabular-nums">
+                  <td className="py-2 px-3 text-end tabular-nums">{formatSAR(totals.committed)}</td>
+                  <td className="py-2 px-3 text-end tabular-nums">{formatSAR(totals.actuals)}</td>
+                  <td className="py-2 px-3 text-end tabular-nums">
                     {formatSAR(totals.master_actual)}
                   </td>
-                  <td className="py-2 px-3 text-right tabular-nums">
+                  <td className="py-2 px-3 text-end tabular-nums">
                     {formatSAR(money(totals.master_actual - totals.actuals))}
                   </td>
                 </tr>

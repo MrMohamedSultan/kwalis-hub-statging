@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { formatDate } from "@/lib/date-format";
 import { DateInput } from "@/components/ui/date-input";
 import { toast } from "sonner";
 import {
@@ -184,7 +185,7 @@ function TimesheetRow({
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted"
+        className="w-full flex items-center justify-between px-4 py-3 text-start hover:bg-muted"
       >
         <div className="flex items-center gap-3 min-w-0">
           {expanded ? (
@@ -195,7 +196,8 @@ function TimesheetRow({
           <div className="min-w-0">
             <div className="font-medium truncate">{peopleName}</div>
             <div className="text-xs text-muted-foreground">
-              {sheet.period_start} → {sheet.period_end} · {daysWorked} days · {otHours}h OT
+              {formatDate(sheet.period_start)} → {formatDate(sheet.period_end)} · {daysWorked} days
+              · {otHours}h OT
             </div>
           </div>
         </div>
@@ -319,11 +321,11 @@ function TimesheetDays({
       <table className="w-full text-sm">
         <thead className="text-[11px] uppercase tracking-wider text-muted-foreground bg-surface sticky top-0">
           <tr>
-            <th className="text-left py-2 px-3">Date</th>
+            <th className="text-start py-2 px-3">Date</th>
             <th className="text-center py-2 px-3">Worked</th>
-            <th className="text-right py-2 px-3">Hours</th>
-            <th className="text-right py-2 px-3">{t("timesheetspanel.ot_hrs")}</th>
-            <th className="text-left py-2 px-3">Notes</th>
+            <th className="text-end py-2 px-3">Hours</th>
+            <th className="text-end py-2 px-3">{t("timesheetspanel.ot_hrs")}</th>
+            <th className="text-start py-2 px-3">Notes</th>
           </tr>
         </thead>
         <tbody>
@@ -347,7 +349,7 @@ function TimesheetDays({
                     disabled={locked}
                     defaultValue={e?.hours ?? 0}
                     onBlur={(ev) => void upsert(d, { hours: Number(ev.target.value) || 0 })}
-                    className="w-20 text-right rounded border border-border bg-surface-2 px-2 py-0.5"
+                    className="w-20 text-end rounded border border-border bg-surface-2 px-2 py-0.5"
                   />
                 </td>
                 <td className="py-1.5 px-3">
@@ -357,7 +359,7 @@ function TimesheetDays({
                     disabled={locked}
                     defaultValue={e?.ot_hours ?? 0}
                     onBlur={(ev) => void upsert(d, { ot_hours: Number(ev.target.value) || 0 })}
-                    className="w-20 text-right rounded border border-border bg-surface-2 px-2 py-0.5"
+                    className="w-20 text-end rounded border border-border bg-surface-2 px-2 py-0.5"
                   />
                 </td>
                 <td className="py-1.5 px-3">

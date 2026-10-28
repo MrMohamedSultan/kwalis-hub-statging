@@ -22,25 +22,32 @@ import { BetaBadge } from "@/components/BetaBadge";
 import { TRANSIENT_SESSION_KEY } from "@/lib/session-persistence";
 import { useLoginRateLimiter, WARN_THRESHOLD, FIRST_LOCK_AT } from "@/hooks/useLoginRateLimiter";
 import { logSecurityEvent } from "@/lib/security-logger";
+import { signInWithLockout, type SignInResult } from "@/lib/auth-login.functions";
+import { MfaChallenge } from "@/components/auth/MfaChallenge";
+import { LegalLinks } from "@/components/LegalLinks";
+import { getMfaState, needsSecondStep } from "@/lib/mfa";
+import i18n from "@/lib/i18n";
 
 const searchSchema = z.object({
   invite: z.string().uuid().optional(),
   next: z.string().optional(),
 });
 
-const credentialsSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .min(1, "Email is required")
-    .email("Enter a valid email address")
-    .max(255, "Email must be less than 255 characters"),
-  password: z
-    .string()
-    .min(6, "Password must be at least 6 characters")
-    .max(72, "Password must be less than 72 characters"),
-  displayName: z.string().trim().max(100, "Name must be less than 100 characters").optional(),
-});
+// Messages are resolved when validation runs, so they follow the active language.
+const credentialsSchema = () =>
+  z.object({
+    email: z
+      .string()
+      .trim()
+      .min(1, i18n.t("platform.auth.emailRequired"))
+      .email(i18n.t("platform.auth.emailInvalid"))
+      .max(255, i18n.t("platform.auth.emailTooLong")),
+    password: z
+      .string()
+      .min(6, i18n.t("platform.auth.passwordTooShort"))
+      .max(72, i18n.t("platform.auth.passwordTooLong")),
+    displayName: z.string().trim().max(100, i18n.t("platform.auth.nameTooLong")).optional(),
+  });
 
 type FieldErrors = Partial<Record<"email" | "password" | "displayName", string>>;
 
@@ -97,8 +104,16 @@ function AuthPortal() {
   const [rememberMe, setRememberMe] = useState(true);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
-  const { isLocked, lockTimeRemaining, failedAttempts, recordFailure, recordSuccess } =
-    useLoginRateLimiter();
+  const {
+    isLocked,
+    lockTimeRemaining,
+    failedAttempts,
+    applyServerState,
+    recordFailure,
+    recordSuccess,
+  } = useLoginRateLimiter();
+  // X02: set when the password was right and the account has an authenticator app.
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
 
   /** Validate the current form values; returns field-level messages. */
   const validate = (): FieldErrors => {
@@ -107,7 +122,7 @@ function AuthPortal() {
       password,
       displayName,
     };
-    const parsed = credentialsSchema.safeParse(values);
+    const parsed = credentialsSchema().safeParse(values);
     if (parsed.success) return {};
     const next: FieldErrors = {};
     for (const issue of parsed.error.issues) {
@@ -138,8 +153,8 @@ function AuthPortal() {
     const addr = email.trim();
     if (!addr || !z.string().email().safeParse(addr).success) {
       setTouched((prev) => ({ ...prev, email: true }));
-      setErrors((prev) => ({ ...prev, email: "Enter a valid email address" }));
-      toast.error(t("auth.resetEnterEmail"));
+      setErrors((prev) => ({ ...prev, email: t("platform.auth.emailInvalid") }));
+      toast.error(t("platform.auth.resetEnterEmail"));
       return;
     }
     setSendingReset(true);
@@ -147,11 +162,13 @@ function AuthPortal() {
       const { error } = await supabase.auth.resetPasswordForEmail(addr, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
-      if (error) throw error;
+      // Same answer whether or not the address has an account (no user
+      // enumeration); only a rate limit is worth telling the user.
+      if (error && /rate limit|too many/i.test(error.message)) throw error;
       setResetSent(true);
-      toast.success(t("auth.resetSent"));
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Could not send reset email");
+      toast.success(t("platform.auth.resetSent"));
+    } catch {
+      toast.error(t("platform.auth.resetFailed"));
     } finally {
       setSendingReset(false);
     }
@@ -183,13 +200,13 @@ function AuthPortal() {
         }
         const row = Array.isArray(data) ? data[0] : data;
         if (!row) {
-          setInviteError("Invitation not found.");
+          setInviteError(t("platform.auth.inviteNotFound"));
           return;
         }
-        if (row.revoked) setInviteError("This invitation has been revoked.");
-        else if (row.accepted) setInviteError("This invitation has already been used.");
+        if (row.revoked) setInviteError(t("platform.auth.inviteRevoked"));
+        else if (row.accepted) setInviteError(t("platform.auth.inviteUsed"));
         else if (new Date(row.expires_at) < new Date())
-          setInviteError("This invitation has expired.");
+          setInviteError(t("platform.auth.inviteExpired"));
         else {
           setInviteInfo(row as InviteInfo);
           setEmail(row.email);
@@ -199,6 +216,7 @@ function AuthPortal() {
         setLoadingInvite(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invite]);
 
   /** Land the user in their workspace once the session is fully trusted. */
@@ -233,18 +251,47 @@ function AuthPortal() {
         if (error) throw error;
         toast.success(t("auth.account_created_welcome_to") + inviteInfo.organization_name);
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) {
-          const isDemo = email.trim().toLowerCase() === "demo@kwalishub.com";
-          const isInvalidCredentials = /invalid login credentials/i.test(error.message);
-          if (isDemo && isInvalidCredentials) {
-            toast.message("Preparing demo account…");
-            const { ensureDemoSignInReady } = await import("@/lib/demo.functions");
-            await ensureDemoSignInReady();
-            const retry = await supabase.auth.signInWithPassword({ email, password });
-            if (retry.error) throw retry.error;
-            toast.success(t("auth.demo_account_ready"));
-          } else {
+        const isDemo = email.trim().toLowerCase() === "demo@kwalishub.com";
+        let result = await serverSignIn(email, password);
+        if (isDemo && !result.ok && result.reason === "invalid" && !result.message) {
+          toast.message(t("platform.auth.preparingDemo"));
+          const { ensureDemoSignInReady } = await import("@/lib/demo.functions");
+          await ensureDemoSignInReady();
+          result = await serverSignIn(email, password);
+          if (result.ok) toast.success(t("auth.demo_account_ready"));
+        }
+        if (!result.ok) {
+          if (result.reason === "locked") {
+            applyServerState(email, result.failedCount, result.lockedUntil);
+            void logSecurityEvent({
+              event_type: "account_locked",
+              email,
+              attempt_count: result.failedCount,
+            });
+            throw new Error(t("security.loginLockedTitle"));
+          }
+          if (result.reason === "invalid") {
+            applyServerState(email, result.failedCount, null);
+            void logSecurityEvent({
+              event_type: "failed_login",
+              email,
+              attempt_count: result.failedCount,
+            });
+            throw new Error(result.message ?? t("platform.auth.invalidCredentials"));
+          }
+          // Server lockout not configured: sign in directly (GoTrue hook still applies).
+          const { error } = await supabase.auth.signInWithPassword({ email, password });
+          if (error) {
+            const { count, lockedMinutes } = recordFailure(email);
+            void logSecurityEvent({ event_type: "failed_login", email, attempt_count: count });
+            if (lockedMinutes > 0) {
+              void logSecurityEvent({
+                event_type: "account_locked",
+                email,
+                attempt_count: count,
+                lock_duration_minutes: lockedMinutes,
+              });
+            }
             throw error;
           }
         }
@@ -267,23 +314,16 @@ function AuthPortal() {
           });
         }
         recordSuccess();
+        // X02: second step when the account has an authenticator app.
+        const mfa = await getMfaState().catch(() => null);
+        if (mfa && needsSecondStep(mfa) && mfa.factors[0]) {
+          setMfaFactorId(mfa.factors[0].id);
+          return;
+        }
       }
       await finishSignIn();
     } catch (err: unknown) {
-      if (mode === "signin") {
-        // localStorage lockout is primary; DB logging must never block the flow.
-        const { count, lockedMinutes } = recordFailure(email);
-        void logSecurityEvent({ event_type: "failed_login", email, attempt_count: count });
-        if (lockedMinutes > 0) {
-          void logSecurityEvent({
-            event_type: "account_locked",
-            email,
-            attempt_count: count,
-            lock_duration_minutes: lockedMinutes,
-          });
-        }
-      }
-      const msg = err instanceof Error ? err.message : "Authentication failed";
+      const msg = err instanceof Error ? err.message : t("platform.auth.authFailed");
       toast.error(msg);
     } finally {
       setSubmitting(false);
@@ -351,7 +391,7 @@ function AuthPortal() {
               </div>
               <AccessRequestForm onBackToLogin={() => setShowRequestForm(false)} />
               <p className="text-center text-xs text-muted-foreground">
-                Already have an account?{" "}
+                {t("platform.auth.haveAccount")}{" "}
                 <button
                   type="button"
                   onClick={() => setShowRequestForm(false)}
@@ -361,35 +401,38 @@ function AuthPortal() {
                 </button>
               </p>
             </div>
+          ) : mfaFactorId ? (
+            <MfaChallenge
+              factorId={mfaFactorId}
+              onVerified={() => void finishSignIn()}
+              onCancel={() => {
+                setMfaFactorId(null);
+                void supabase.auth.signOut();
+              }}
+            />
           ) : (
             <>
               <div className="mb-7">
                 <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-brand mb-3">
                   <ShieldCheck className="size-3.5" />{" "}
-                  {showSignup ? "Accept invitation" : "Secure workspace sign-in"}
+                  {showSignup
+                    ? t("platform.auth.acceptInvitation")
+                    : t("platform.auth.secureSignIn")}
                 </div>
                 <h2 className="text-3xl font-bold tracking-tight">
-                  {showSignup ? "Complete your account" : "Welcome back"}
+                  {showSignup ? t("platform.auth.completeAccount") : t("platform.auth.welcomeBack")}
                 </h2>
                 <p className="text-muted-foreground mt-1.5 text-sm">
-                  {showSignup ? (
-                    <>
-                      You've been invited to{" "}
-                      <span className="font-semibold text-foreground">
-                        {inviteInfo!.organization_name}
-                      </span>
-                      . Set a password to finish.
-                    </>
-                  ) : (
-                    "Sign in to your Kwalis HUB workspace."
-                  )}
+                  {showSignup
+                    ? t("platform.auth.invitedTo", { org: inviteInfo!.organization_name })
+                    : t("platform.auth.signInBlurb")}
                 </p>
               </div>
 
               {/* Invite status banners */}
               {loadingInvite && (
                 <div className="mb-4 rounded-xl border border-border bg-surface p-3 text-xs text-muted-foreground">
-                  Verifying invitation…
+                  {t("platform.auth.verifyingInvitation")}
                 </div>
               )}
               {inviteError && (
@@ -543,13 +586,15 @@ function AuthPortal() {
                       disabled={sendingReset}
                       className="text-xs font-semibold text-brand hover:underline disabled:opacity-60"
                     >
-                      {sendingReset ? t("auth.resetSending") : t("auth.forgotPassword")}
+                      {sendingReset ? t("platform.auth.resetSending") : t("auth.forgotPassword")}
                     </button>
                   </div>
                 )}
 
                 {resetSent && (
-                  <p className="text-xs text-muted-foreground">{t("auth.resetSentHint")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("platform.auth.resetSentHint")}
+                  </p>
                 )}
 
                 <button
@@ -559,13 +604,14 @@ function AuthPortal() {
                 >
                   {submitting ? (
                     showSignup ? (
-                      "Creating account…"
+                      t("platform.auth.creatingAccount")
                     ) : (
-                      "Signing in…"
+                      t("platform.auth.signingIn")
                     )
                   ) : (
                     <>
-                      {showSignup ? "Create account" : "Sign in"} <ArrowRight className="size-4" />
+                      {showSignup ? t("platform.auth.createAccount") : t("auth.sign_in")}{" "}
+                      <ArrowRight className="size-4 rtl:rotate-180" />
                     </>
                   )}
                 </button>
@@ -580,7 +626,7 @@ function AuthPortal() {
               <p className="text-center text-xs text-muted-foreground mt-8">
                 {showSignup ? (
                   <>
-                    Already have an account?{" "}
+                    {t("platform.auth.haveAccount")}{" "}
                     <button
                       onClick={() => {
                         setMode("signin");
@@ -593,7 +639,7 @@ function AuthPortal() {
                   </>
                 ) : (
                   <>
-                    Don&apos;t have an account?{" "}
+                    {t("platform.auth.noAccount")}{" "}
                     <button
                       type="button"
                       onClick={() => setShowRequestForm(true)}
@@ -606,10 +652,29 @@ function AuthPortal() {
               </p>
             </>
           )}
+          <LegalLinks className="mt-6 justify-center" />
         </div>
       </main>
     </div>
   );
+}
+
+/** Sign-in through the server lockout; a transport failure counts as "unavailable". */
+async function serverSignIn(email: string, password: string): Promise<SignInResult> {
+  try {
+    const result = await signInWithLockout({ data: { email, password } });
+    if (result.ok) {
+      const { error } = await supabase.auth.setSession({
+        access_token: result.accessToken,
+        refresh_token: result.refreshToken,
+      });
+      if (error) throw error;
+    }
+    return result;
+  } catch (err) {
+    console.warn("[auth] server sign-in unavailable:", err);
+    return { ok: false, reason: "unavailable" };
+  }
 }
 
 function Field({

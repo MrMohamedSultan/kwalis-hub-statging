@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { formatAmount } from "@/lib/format-number";
 import { Percent } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
@@ -25,10 +26,7 @@ export function calculateWht(
 }
 
 function money(n: number, ccy: string): string {
-  const s = Math.abs(Number.isFinite(n) ? n : 0).toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  const s = formatAmount(Math.abs(Number.isFinite(n) ? n : 0), 2);
   return `${s} ${ccy}`;
 }
 

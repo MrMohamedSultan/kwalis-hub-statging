@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { formatAmount } from "@/lib/format-number";
+import { assertUploadAllowed } from "@/lib/upload-policy";
 import { DateInput } from "@/components/ui/date-input";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
@@ -494,16 +496,14 @@ function PictureAssetsPage() {
           <div className="text-xs text-muted-foreground uppercase tracking-wider">
             {t("picture_assets.total_agreed_cost")}
           </div>
-          <div className="text-2xl font-semibold mt-1">
-            SAR {totals.agreed.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-          </div>
+          <div className="text-2xl font-semibold mt-1">{formatAmount(totals.agreed, 0)} SAR</div>
         </Panel>
         <Panel>
           <div className="text-xs text-muted-foreground uppercase tracking-wider">
             {t("picture_assets.paid_to_date")}
           </div>
           <div className="text-2xl font-semibold mt-1 text-success">
-            SAR {totals.paidAmt.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            {formatAmount(totals.paidAmt, 0)} SAR
           </div>
         </Panel>
         <Panel>
@@ -640,7 +640,7 @@ function PictureAssetsPage() {
                     ].map((h) => (
                       <th
                         key={h}
-                        className="px-3 py-2 text-left text-xs uppercase tracking-wider font-medium"
+                        className="px-3 py-2 text-start text-xs uppercase tracking-wider font-medium"
                       >
                         {h}
                       </th>
@@ -684,11 +684,8 @@ function PictureAssetsPage() {
                       <td className="px-3 py-2 text-sm">
                         {row.budget_code || <span className="text-muted-foreground">—</span>}
                       </td>
-                      <td className="px-3 py-2 text-sm text-right whitespace-nowrap">
-                        {row.currency}{" "}
-                        {Number(row.agreed_cost || 0).toLocaleString(undefined, {
-                          maximumFractionDigits: 2,
-                        })}
+                      <td className="px-3 py-2 text-sm text-end whitespace-nowrap tabular-nums">
+                        {formatAmount(Number(row.agreed_cost || 0), 2)} {row.currency}
                       </td>
                       <td className="px-3 py-2">
                         <span
@@ -810,10 +807,10 @@ function PictureAssetsPage() {
                           </button>
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <td className="px-3 py-2 text-end whitespace-nowrap">
                         <button
                           onClick={() => openEdit(row)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-border hover:bg-muted px-2 py-1 text-xs font-medium mr-1"
+                          className="inline-flex items-center gap-1 rounded-lg border border-border hover:bg-muted px-2 py-1 text-xs font-medium me-1"
                         >
                           <Pencil className="size-3" /> Edit
                         </button>
@@ -915,6 +912,7 @@ function AssetModal({
 
   const uploadTo = async (slot: "contract" | "id" | "license", file: File) => {
     setUploading(slot);
+    assertUploadAllowed(file);
     const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const path = `${projectId}/picture-assets/${crypto.randomUUID()}-${safe}`;
     const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
@@ -1255,7 +1253,7 @@ function AssetModal({
                   step={0.01}
                   value={row.agreed_cost}
                   onChange={(e) => set({ agreed_cost: Number(e.target.value) || 0 })}
-                  className="mt-1 w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm text-right outline-none focus:ring-2 ring-brand"
+                  className="mt-1 w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm text-end outline-none focus:ring-2 ring-brand"
                   dir="ltr"
                 />
               </div>

@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { signOut } from "@/lib/auth";
 import { accountActionFor, fetchMyAccountStatus } from "@/lib/account-status";
 import { NO_ACCESS_PATH } from "@/lib/permissions/landing";
+import { getMfaState, isMfaRequiredForMe, needsSecondStep } from "@/lib/mfa";
 
 const ACCOUNT_SETTINGS_PATH = "/account-settings";
 
@@ -87,6 +88,27 @@ export function AccountStatusGuard() {
       cancelled = true;
     };
   }, [status, pathname, navigate, queryClient, t]);
+
+  // X02 — an organization that requires two-step verification sends members
+  // without a verified authenticator (or with an unverified session) to
+  // Account Settings until it is done.
+  const { data: mfa } = useQuery({
+    queryKey: ["mfa-requirement"],
+    queryFn: async () => {
+      const required = await isMfaRequiredForMe();
+      if (!required) return { blocked: false };
+      const state = await getMfaState();
+      return { blocked: state.factors.length === 0 || needsSecondStep(state) };
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
+  useEffect(() => {
+    if (!mfa?.blocked || pathname === ACCOUNT_SETTINGS_PATH) return;
+    toast.info(t("platform.mfa.requiredRedirect"));
+    void navigate({ to: ACCOUNT_SETTINGS_PATH, replace: true });
+  }, [mfa?.blocked, pathname, navigate, t]);
 
   return null;
 }

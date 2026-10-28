@@ -5,6 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Bell, AlertTriangle, CheckCircle2, TrendingUp, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { useStore } from "@/lib/store";
+import { formatDateTime } from "@/lib/date-format";
+import { notificationTarget, notificationText } from "@/lib/notification-display";
+import { useBudgetAlertsRunner } from "@/lib/budget-alerts";
+import { BudgetAlertRecipientsPanel } from "@/components/notifications/BudgetAlertRecipientsPanel";
 
 import { useTranslation } from "react-i18next";
 export const Route = createFileRoute("/_authenticated/notifications")({
@@ -24,6 +28,7 @@ type Notif = {
   created_at: string;
   read_at: string | null;
   project_id: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 const iconFor = (n: Notif) => {
@@ -33,26 +38,31 @@ const iconFor = (n: Notif) => {
   return { Icon: Bell, tone: "text-highlight" };
 };
 
-function timeAgo(iso: string) {
+type TFn = (key: string, opts?: Record<string, unknown>) => string;
+
+function timeAgo(iso: string, t: TFn) {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
+  if (s < 60) return t("platform.notify.justNow");
+  if (s < 3600) return t("platform.notify.minutesAgo", { count: Math.floor(s / 60) });
+  if (s < 86400) return t("platform.notify.hoursAgo", { count: Math.floor(s / 3600) });
+  if (s < 7 * 86400) return t("platform.notify.daysAgo", { count: Math.floor(s / 86400) });
+  return formatDateTime(iso);
 }
 
 // Map a notification's category to the in-app destination that surfaces it.
 function targetRouteFor(
   n: Notif,
+  t: TFn,
 ): { to: string; label: string; search?: Record<string, unknown> } | null {
-  if (!n.project_id) return null;
-  if (n.category === "budget" || n.category === "budget_approval") {
-    return { to: "/budget", label: "Open budget", search: { focus: "governance" } };
-  }
-  if (n.category === "payment" || n.category === "payment_request") {
-    return { to: "/payment-approvals", label: "Open approvals" };
-  }
-  return null;
+  const target = notificationTarget(n);
+  if (!target) return null;
+  const label =
+    target.to === "/payment-approvals"
+      ? t("platform.notify.openApprovals")
+      : target.to === "/budget"
+        ? t("platform.notify.openBudget")
+        : t("platform.common.view");
+  return { ...target, label };
 }
 
 export function NotificationsPage() {
@@ -66,12 +76,14 @@ export function NotificationsPage() {
   const [scope, setScope] = useState<"project" | "all">("project");
   const [limit, setLimit] = useState(25);
   const [hasMore, setHasMore] = useState(false);
+  // D04: run the overspend check for the open project when the page opens.
+  useBudgetAlertsRunner(activeProjectId);
 
   const load = async (lim: number) => {
     setLoading(true);
     let q = supabase
       .from("notifications" as any)
-      .select("id, severity, category, title, body, created_at, read_at, project_id")
+      .select("id, severity, category, title, body, created_at, read_at, project_id, metadata")
       .order("created_at", { ascending: false })
       .limit(lim + 1);
     if (scope === "project" && activeProjectId) q = q.eq("project_id", activeProjectId);
@@ -114,7 +126,7 @@ export function NotificationsPage() {
   };
 
   const openNotification = async (n: Notif) => {
-    const target = targetRouteFor(n);
+    const target = targetRouteFor(n, t);
     if (!target) return;
     if (!n.read_at) await markRead(n.id);
     if (n.project_id && n.project_id !== activeProjectId) {
@@ -126,14 +138,14 @@ export function NotificationsPage() {
   return (
     <>
       <PageTitle
-        title="Notifications"
+        title={t("platform.notify.title")}
         action={
           <div className="flex items-center gap-2">
             <button
               onClick={markAllRead}
               className="text-xs font-semibold px-3 py-1.5 rounded-md border border-border hover:bg-surface-2"
             >
-              Mark all as read
+              {t("notificationbell.mark_all_as_read")}
             </button>
             <div className="inline-flex rounded-lg border border-border bg-surface p-1 text-xs">
               {(["project", "all"] as const).map((s) => (
@@ -142,7 +154,7 @@ export function NotificationsPage() {
                   onClick={() => setScope(s)}
                   className={`px-3 py-1 rounded-md font-semibold ${scope === s ? "bg-brand text-brand-foreground" : "text-muted-foreground"}`}
                 >
-                  {s === "project" ? "This project" : "All"}
+                  {s === "project" ? t("platform.notify.thisProject") : t("platform.notify.all")}
                 </button>
               ))}
             </div>
@@ -151,20 +163,21 @@ export function NotificationsPage() {
       />
       <Panel>
         {loading ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            {t("platform.common.loading")}
+          </div>
         ) : notes.length === 0 ? (
           <div className="py-10 text-center">
             <CheckCircle2 className="mx-auto size-8 text-success" />
             <div className="mt-2 text-sm font-medium">{t("notifications.all_clear")}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Budget-threshold alerts will appear here when spend crosses 90% or 100% of a category.
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{t("platform.notify.emptyHint")}</p>
           </div>
         ) : (
           <ul className="divide-y divide-border">
             {notes.map((n) => {
               const { Icon, tone } = iconFor(n);
-              const target = targetRouteFor(n);
+              const target = targetRouteFor(n, t);
+              const text = notificationText(n, t);
               return (
                 <li
                   key={n.id}
@@ -172,10 +185,12 @@ export function NotificationsPage() {
                 >
                   <Icon className={`size-5 ${tone} shrink-0 mt-0.5`} />
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium">{n.title}</div>
-                    {n.body && <div className="text-sm text-muted-foreground mt-0.5">{n.body}</div>}
+                    <div className="font-medium">{text.title}</div>
+                    {text.body && (
+                      <div className="text-sm text-muted-foreground mt-0.5">{text.body}</div>
+                    )}
                     <div className="text-xs text-muted-foreground mt-1">
-                      {timeAgo(n.created_at)}
+                      {timeAgo(n.created_at, t)}
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
@@ -207,11 +222,12 @@ export function NotificationsPage() {
               onClick={() => setLimit((l) => l + 25)}
               className="text-xs font-semibold px-4 py-2 rounded-md border border-border hover:bg-surface-2"
             >
-              Load more
+              {t("notificationbell.load_more")}
             </button>
           </div>
         )}
       </Panel>
+      {activeProjectId && <BudgetAlertRecipientsPanel projectId={activeProjectId} />}
     </>
   );
 }

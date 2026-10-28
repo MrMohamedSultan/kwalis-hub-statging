@@ -215,11 +215,11 @@ export function MultiLineSplitEditor({
           <table className="w-full text-xs">
             <thead className="text-[10px] uppercase tracking-wider text-muted-foreground bg-surface">
               <tr>
-                <th className="text-left py-1.5 px-2">{t("multilinespliteditor.budget_line")}</th>
-                <th className="text-left py-1.5 px-2">Type</th>
-                <th className="text-right py-1.5 px-2">%</th>
-                <th className="text-right py-1.5 px-2">Amount</th>
-                <th className="text-right py-1.5 px-2">Effective</th>
+                <th className="text-start py-1.5 px-2">{t("multilinespliteditor.budget_line")}</th>
+                <th className="text-start py-1.5 px-2">Type</th>
+                <th className="text-end py-1.5 px-2">%</th>
+                <th className="text-end py-1.5 px-2">Amount</th>
+                <th className="text-end py-1.5 px-2">Effective</th>
                 <th />
               </tr>
             </thead>
@@ -286,7 +286,7 @@ export function MultiLineSplitEditor({
                             percent: Number(e.target.value) || 0,
                           })
                         }
-                        className="w-20 text-right rounded border border-border bg-surface-2 px-1.5 py-0.5 disabled:opacity-40"
+                        className="w-20 text-end rounded border border-border bg-surface-2 px-1.5 py-0.5 disabled:opacity-40"
                       />
                     </td>
                     <td className="py-1 px-2">
@@ -300,13 +300,13 @@ export function MultiLineSplitEditor({
                             amount: Number(e.target.value) || 0,
                           })
                         }
-                        className="w-24 text-right rounded border border-border bg-surface-2 px-1.5 py-0.5 disabled:opacity-40"
+                        className="w-24 text-end rounded border border-border bg-surface-2 px-1.5 py-0.5 disabled:opacity-40"
                       />
                     </td>
-                    <td className="py-1 px-2 text-right tabular-nums font-medium">
+                    <td className="py-1 px-2 text-end tabular-nums font-medium">
                       {formatMoney(eff, currency)}
                     </td>
-                    <td className="py-1 px-2 text-right">
+                    <td className="py-1 px-2 text-end">
                       <button
                         type="button"
                         onClick={() => removeRow(idx)}
@@ -322,10 +322,10 @@ export function MultiLineSplitEditor({
             </tbody>
             <tfoot className="border-t border-border">
               <tr>
-                <td colSpan={4} className="py-1.5 px-2 text-right text-muted-foreground">
+                <td colSpan={4} className="py-1.5 px-2 text-end text-muted-foreground">
                   Allocated
                 </td>
-                <td className="py-1.5 px-2 text-right tabular-nums font-semibold">
+                <td className="py-1.5 px-2 text-end tabular-nums font-semibold">
                   {formatMoney(totals.allocated, currency)}{" "}
                   <span className="text-muted-foreground font-normal">
                     /{formatMoney(totalAmount, currency)}

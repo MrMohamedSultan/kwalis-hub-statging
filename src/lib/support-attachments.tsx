@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { assertUploadAllowed } from "@/lib/upload-policy";
 import { storageAudited } from "@/lib/storage-audit";
 import { useEffect, useState } from "react";
 import { Paperclip } from "lucide-react";
@@ -17,6 +18,7 @@ export async function uploadSupportAttachment(params: {
   ticketId: string;
   file: File;
 }): Promise<{ path: string; name: string }> {
+  assertUploadAllowed(params.file);
   const safeName = params.file.name.replace(/[^\w.\-]+/g, "_");
   const path = `${params.userId}/${params.ticketId}/${Date.now()}_${safeName}`;
   const { error } = await storageAudited

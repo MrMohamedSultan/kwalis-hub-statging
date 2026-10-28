@@ -317,7 +317,7 @@ export function ProductionDashboard() {
             </button>
           ))}
           {preset === "custom" && (
-            <div className="inline-flex items-center gap-2 ml-1">
+            <div className="inline-flex items-center gap-2 ms-1">
               <DateInput
                 value={customFrom}
                 onChange={(v) => setCustomFrom(v)}
