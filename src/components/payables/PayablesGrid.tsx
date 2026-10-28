@@ -111,8 +111,14 @@ export function PayablesGrid({
               <div className="sticky start-0 z-10 flex border-e border-border/50 bg-muted shadow-sm">
                 <HeadCell w={260}>{t("payables.beneficiary")}</HeadCell>
                 <HeadCell w={160}>{config.roleLabel}</HeadCell>
-                <HeadCell w={110} end>
-                  {t("glossary.term.contractValue")}
+                <HeadCell w={110} end title={t("taxlive.pay.grossHint")}>
+                  {t("taxlive.pay.contractValueGross")}
+                </HeadCell>
+                <HeadCell w={90} end>
+                  {t("taxlive.pay.wht")}
+                </HeadCell>
+                <HeadCell w={100} end title={t("taxlive.pay.netHint")}>
+                  {t("taxlive.pay.net")}
                 </HeadCell>
                 <HeadCell w={100} end>
                   {t("glossary.term.paid")}
@@ -180,9 +186,15 @@ export function PayablesGrid({
                   </div>
                   <div className="flex h-14 w-[110px] shrink-0 flex-col justify-center px-3 py-2 text-end">
                     <div className="font-mono text-sm font-semibold tabular-nums text-foreground">
-                      {fmt(row.contract_total)}
+                      {fmt(row.contract_gross)}
                     </div>
                     <div className="text-[9px] text-muted-foreground">{row.currency}</div>
+                  </div>
+                  <div className="flex h-14 w-[90px] shrink-0 items-center justify-end px-3 py-2 text-end font-mono text-sm tabular-nums text-muted-foreground">
+                    {row.contract_wht ? fmt(row.contract_wht) : "—"}
+                  </div>
+                  <div className="flex h-14 w-[100px] shrink-0 items-center justify-end px-3 py-2 text-end font-mono text-sm font-medium tabular-nums text-foreground">
+                    {fmt(row.contract_total)}
                   </div>
                   <div className="flex h-14 w-[100px] shrink-0 items-center justify-end px-3 py-2 text-end font-mono text-sm font-medium tabular-nums text-success">
                     {fmt(row.total_paid)}
@@ -227,13 +239,25 @@ export function PayablesGrid({
           </div>
         </div>
       )}
+      <p className="text-xs text-muted-foreground">{t("taxlive.pay.basisNote")}</p>
     </div>
   );
 }
 
-function HeadCell({ w, end, children }: { w: number; end?: boolean; children: ReactNode }) {
+function HeadCell({
+  w,
+  end,
+  title,
+  children,
+}: {
+  w: number;
+  end?: boolean;
+  title?: string;
+  children: ReactNode;
+}) {
   return (
     <div
+      title={title}
       className={`flex h-9 shrink-0 items-center px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground ${
         end ? "justify-end text-end" : ""
       }`}
@@ -274,7 +298,11 @@ function MobileCards({
             </div>
             <div className="shrink-0 text-end">
               <div className="font-mono text-sm font-semibold tabular-nums text-foreground">
-                {fmt(row.contract_total)} {row.currency}
+                {fmt(row.contract_gross)} {row.currency}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {t("taxlive.pay.wht")} {fmt(row.contract_wht)} · {t("taxlive.pay.net")}{" "}
+                {fmt(row.contract_total)}
               </div>
               <div className="text-[11px] text-muted-foreground">
                 {t("glossary.term.paid")} {fmt(row.total_paid, true)} · {t("glossary.term.payable")}{" "}

@@ -71,6 +71,25 @@ export const STATUS_CONFIG: Record<
   },
 };
 
+/**
+ * R13: per instalment column — Due (scheduled amount of every instalment),
+ * Paid, Remaining = Due − Paid.
+ */
+export function milestoneColumnTotals(rows: PayableRow[], maxMilestones: number) {
+  return Array.from({ length: maxMilestones }, (_, i) => {
+    let due = 0;
+    let paid = 0;
+    for (const r of rows) {
+      const m = r.milestones.find((x) => x.milestone_number === i + 1);
+      if (!m) continue;
+      due += m.milestone_amount;
+      if (m.milestone_status === "paid") paid += m.milestone_amount;
+    }
+    const round = (v: number) => Math.round(v * 100) / 100;
+    return { due: round(due), paid: round(paid), remaining: round(due - paid) };
+  });
+}
+
 /** Frontend-only pivot — the backend is never modified. */
 export function pivotByBeneficiary(milestones: PayableMilestone[]): PayableRow[] {
   const map = new Map<string, PayableRow>();
@@ -85,6 +104,8 @@ export function pivotByBeneficiary(milestones: PayableMilestone[]): PayableRow[]
         department: m.department,
         contract_id: m.contract_id,
         contract_total: m.contract_total,
+        contract_gross: m.contract_gross ?? m.contract_total + (m.contract_wht ?? 0),
+        contract_wht: m.contract_wht ?? 0,
         currency: m.currency,
         total_paid: 0,
         payable: 0,

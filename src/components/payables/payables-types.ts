@@ -12,7 +12,11 @@ export interface PayableMilestone {
   beneficiary_name: string;
   beneficiary_role: string;
   department?: string;
+  /** Net of WHT — what the payee receives; instalments are on this basis. */
   contract_total: number;
+  /** R14: Contract Value (gross, the budget figure) and the WHT stored on the contract. */
+  contract_gross?: number;
+  contract_wht?: number;
   currency: string;
   milestone_number: number;
   milestone_label?: string;
@@ -54,7 +58,11 @@ export interface PayableRow {
   beneficiary_role: string;
   department?: string;
   contract_id: string;
+  /** Net (= gross − WHT): instalments, Paid, Payable and Commitment are on this basis. */
   contract_total: number;
+  /** R14: Contract Value (gross) and WHT stored on the contract. */
+  contract_gross: number;
+  contract_wht: number;
   currency: string;
   total_paid: number;
   /** Approved, not paid (glossary: Payable). */

@@ -55,6 +55,14 @@ export const MilestoneCell = React.forwardRef<
   const config = STATUS_CONFIG[milestone.milestone_status];
   const overdue = isOverdue(milestone);
   const dueLabel = formatDue(milestone.due_date);
+  // R14: the date under the amount says what it is — the payment date once
+  // paid, otherwise the due date.
+  const paidLabel = milestone.milestone_status === "paid" ? formatDue(milestone.paid_date) : null;
+  const dateLine = paidLabel
+    ? t("taxlive.pay.paidOn", { date: paidLabel })
+    : dueLabel
+      ? t("taxlive.pay.dueOn", { date: dueLabel })
+      : null;
 
   return (
     <button
@@ -84,13 +92,13 @@ export const MilestoneCell = React.forwardRef<
         {fmt(milestone.milestone_amount, true)}
       </div>
 
-      {dueLabel && (
+      {dateLine && (
         <div
-          className={`text-[10px] font-mono tabular-nums leading-tight ${
+          className={`truncate text-[10px] tabular-nums leading-tight ${
             overdue ? "font-semibold text-destructive" : "text-muted-foreground"
           }`}
         >
-          {dueLabel}
+          {dateLine}
         </div>
       )}
 

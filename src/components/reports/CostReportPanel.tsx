@@ -21,6 +21,7 @@ import { convertForDisplay, displayCurrencyCode } from "@/lib/money-display";
 import { useSeriesBudget } from "@/lib/series-budget";
 import type { ReportColumn, ReportSection } from "@/lib/export/xlsx-report";
 import { useReportExport } from "@/features/reports/report-export";
+import { CostReportOverheadRows } from "@/features/reports/company-overhead/CostReportOverheadRows";
 import {
   COST_CATEGORIES,
   COST_GROUPINGS,
@@ -370,6 +371,8 @@ export function CostReportPanel({ initialGrouping = "line" }: { initialGrouping?
               </tfoot>
             </table>
           </div>
+          {/* R11: Company Overhead (unbudgeted) + True cost = EFC + Overhead */}
+          <CostReportOverheadRows efc={totals.efc} />
           <p className="mt-3 text-xs text-muted-foreground">{t("glossary.cost.legend")}</p>
 
           <div className="mt-5">

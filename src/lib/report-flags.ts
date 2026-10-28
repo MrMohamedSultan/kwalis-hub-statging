@@ -12,7 +12,8 @@
  *   VITE_REPORT_TABS_ENABLE=gosi        show a hidden tab
  *   VITE_REPORT_TABS_DISABLE=qfe,vat    hide a tab
  */
-export const REPORT_TABS_HIDDEN_BY_DEFAULT: readonly string[] = ["gosi"];
+// "gosi" now renders Company Overhead (decision 14), so nothing is hidden by default.
+export const REPORT_TABS_HIDDEN_BY_DEFAULT: readonly string[] = [];
 
 function list(v: unknown): string[] {
   return typeof v === "string"

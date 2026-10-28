@@ -267,10 +267,10 @@ describe("D04 / X24 notification text", () => {
 });
 
 describe("X14 report tab flags", () => {
-  it("hides GOSI by default and honours overrides", () => {
-    expect(isReportTabEnabled("gosi", {})).toBe(false);
-    expect(isReportTabEnabled("final", {})).toBe(true);
-    expect(isReportTabEnabled("gosi", { VITE_REPORT_TABS_ENABLE: "gosi" })).toBe(true);
+  it("shows every tab by default and honours overrides", () => {
+    expect(isReportTabEnabled("gosi", {})).toBe(true);
+    expect(isReportTabEnabled("cost", {})).toBe(true);
+    expect(isReportTabEnabled("gosi", { VITE_REPORT_TABS_DISABLE: "gosi" })).toBe(false);
     expect(isReportTabEnabled("vat", { VITE_REPORT_TABS_DISABLE: "qfe, vat" })).toBe(false);
   });
 });

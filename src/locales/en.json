@@ -5017,5 +5017,281 @@
       "wrapOptional": "Wrap (optional)",
       "yes": "Yes"
     }
+  },
+  "taxlive": {
+    "tab": {
+      "vat": "Tax Cash Impact",
+      "gosi": "Company Overhead",
+      "livebal": "Live Balance",
+      "gsr": "GSR — Global Spend"
+    },
+    "common": {
+      "all": "All contracts",
+      "allDates": "All dates",
+      "item": "Item",
+      "loading": "Loading…",
+      "no": "No",
+      "yes": "Yes",
+      "save": "Save",
+      "saveFailed": "Could not save.",
+      "subtotal": "Subtotal",
+      "total": "Total",
+      "unassigned": "No budget line"
+    },
+    "tax": {
+      "title": "Tax Cash Impact",
+      "whtTitle": "Withholding tax (WHT)",
+      "whtHint": "Read only from the WHT amount stored on each contract and invoice — never recalculated. WHT is withheld when the payee is paid and is due to ZATCA by the 10th of the following month.",
+      "whtTotal": "WHT on contracts & invoices",
+      "whtTotalHint": "Sum of the stored WHT fields",
+      "whtWithheld": "Withheld so far",
+      "whtRemitted": "Remitted to ZATCA",
+      "whtOutstanding": "Withheld, not remitted",
+      "whtOverdueHint": "{{amount}} past the ZATCA due date",
+      "noWht": "No contract or invoice carries a WHT amount.",
+      "col": {
+        "party": "Party",
+        "document": "Document",
+        "residency": "Residency",
+        "serviceType": "Service type",
+        "bearing": "Bearing",
+        "base": "Base",
+        "rate": "Rate",
+        "amount": "WHT amount",
+        "charged": "Charged to budget",
+        "paymentDate": "Payment date",
+        "dueDate": "Due to ZATCA",
+        "status": "Status",
+        "month": "Month"
+      },
+      "kind": {
+        "contract": "Contract",
+        "invoice": "Invoice"
+      },
+      "residency": {
+        "resident": "Resident",
+        "non_resident": "Non-resident",
+        "unknown": "Not confirmed"
+      },
+      "treatment": {
+        "inclusive": "Deducted from payee (inclusive)",
+        "exclusive": "Borne by the company (gross-up)"
+      },
+      "status": {
+        "pending": "Not paid yet",
+        "due": "Due",
+        "overdue": "Overdue",
+        "remitted": "Remitted"
+      },
+      "compareTitle": "Company-borne WHT vs budget line 7099",
+      "compareHint": "Decision 12: WHT is outside the budget, except WHT the company bears (gross-up), which is charged to line {{code}}.",
+      "companyBorne": "Company-borne WHT",
+      "budget7099": "Budget of line 7099",
+      "over7099": "Above the 7099 budget",
+      "onOtherLines": "Company-borne WHT sitting on contract lines",
+      "openDecision": "Open decision: {{amount}} of company-borne (gross-up) WHT is currently inside the contracts' own budget lines, not on line {{code}}. Confirm with the client whether it should move to {{code}}.",
+      "vatTitle": "VAT",
+      "vatSummary": "VAT summary",
+      "vatHint": "From the VAT stored on invoices: {{standard}} standard-rated, {{exempt}} exempt, {{zero}} zero-rated. Exempt and zero-rated invoices carry no VAT.",
+      "vatInputBooked": "Input VAT on invoices",
+      "vatInputPaid": "Input VAT paid to suppliers",
+      "vatUnpaidHint": "{{amount}} on invoices not paid yet",
+      "vatRecovered": "VAT recovered from ZATCA",
+      "vatPending": "Pending recovery",
+      "vatPaidZatca": "VAT paid to ZATCA",
+      "vatForecast": "Forecast VAT on open commitments ({{rate}}%)",
+      "vatForecastHint": "Open purchase orders and logistics commitments × the VAT rate setting",
+      "reverseCharge": "Reverse charge (self-assessed)",
+      "reverseChargeHint": "Imported services: declared and recovered in the same return — no net cash",
+      "cashTitle": "Effect on cash",
+      "cashHint": "These movements are recorded on the Funding screen and enter the Cash Balance: − VAT paid + VAT recovered − WHT remitted.",
+      "openFunding": "Open Funding & Cash Flow"
+    },
+    "oh": {
+      "title": "Company Overhead",
+      "hint": "Company cost carried by this project on top of the production budget: company employees (monthly cost including the company's GOSI share × allocation % × months), the project's share of office rent and of company equipment. Lines without a budget line are \"unbudgeted\".",
+      "kind": {
+        "staff": "Company employees",
+        "office_rent": "Office rent share",
+        "equipment": "Company equipment share"
+      },
+      "add": {
+        "staff": "Add company employee",
+        "office_rent": "Add office rent share",
+        "equipment": "Add equipment share"
+      },
+      "addEmployee": "Add company employee",
+      "employeeHint": "A company employee has no instalments and never appears in payments or cash. Enter the full monthly cost to the company, including the company's GOSI share.",
+      "col": {
+        "type": "Type",
+        "label": "Name",
+        "name": "Employee name",
+        "position": "Position",
+        "basis": "Basis",
+        "period": "Period",
+        "months": "Months",
+        "budgetLine": "Budget line",
+        "amount": "Amount",
+        "monthlyCost": "Monthly cost incl. GOSI share (SAR)",
+        "allocation": "Allocation to the project (%)",
+        "start": "From",
+        "end": "To",
+        "notes": "Notes",
+        "monthlyAmount": "Monthly amount (SAR)",
+        "pctOfBudget": "% of the budget"
+      },
+      "basis": {
+        "monthly": "Monthly amount",
+        "pct_budget": "% of the budget"
+      },
+      "monthlyText": "{{amount}} / month × {{pct}}%",
+      "pctText": "{{pct}}% of the budget",
+      "hidden": "Hidden",
+      "unbudgeted": "Unbudgeted",
+      "unbudgetedTotal": "Unbudgeted overhead",
+      "pctOfBudget": "% of budget",
+      "ofBudget": "{{pct}}% of the budget",
+      "noBudget": "No approved budget",
+      "overAllocated": "Over 100% across projects",
+      "preview": "{{months}} months → {{amount}} SAR on this project",
+      "saved": "Overhead saved.",
+      "invalid": "Please check the fields.",
+      "remove": "Remove",
+      "removeConfirm": "Remove \"{{name}}\" from the overhead?",
+      "removed": "Removed.",
+      "notCash": "Overhead never enters the ledger, payments or the cash balance.",
+      "restricted": "Only users who can edit reports can add or change overhead and see salaries.",
+      "costRow": "Company Overhead (unbudgeted)",
+      "costRowHint": "Company cost not in any budget line (Company Overhead report)",
+      "trueCost": "True cost = EFC + Overhead"
+    },
+    "live": {
+      "title": "Live Balance (accruals)",
+      "hint": "Cost incurred to date on each contract by its accrual method, against what was paid. Live Balance = Incurred − Paid: positive is Accrued (work done, not paid), negative is Prepaid. Never above the contract value; stops at cancellation.",
+      "asOf": "As of",
+      "groupBy": "Group by",
+      "group": {
+        "none": "No grouping",
+        "line": "Budget line",
+        "department": "Department",
+        "vendor": "Party"
+      },
+      "col": {
+        "ref": "Ref",
+        "party": "Party",
+        "code": "Budget line",
+        "value": "Contract Value",
+        "method": "Accrual method",
+        "start": "Start",
+        "end": "End",
+        "totalDays": "Total days",
+        "elapsedDays": "Elapsed days",
+        "incurred": "Incurred to date",
+        "paid": "Paid",
+        "accrued": "Accrued",
+        "prepaid": "Prepaid",
+        "remainingCommitment": "Remaining commitment"
+      },
+      "method": {
+        "work_days": "Daily (working days)",
+        "shoot_days": "Shoot days",
+        "weekly": "Weekly",
+        "monthly": "Monthly",
+        "package": "Package (evenly)",
+        "one_off": "One-off (delivery day)"
+      },
+      "suggested": "{{method}} (from deal type)",
+      "methodSaved": "Accrual method saved.",
+      "balance": "Live Balance",
+      "accruedHint": "Accrued — incurred, not paid yet",
+      "prepaidHint": "Prepaid — paid ahead of the work",
+      "noSchedule": "No shooting schedule for this project yet: shoot-day contracts are estimated from their shoot days spread over the contract period.",
+      "missingDates": "Contracts without a start or end date incur nothing by time — add the dates on the contract.",
+      "paidNote": "Paid is shown on the contract-value basis (net paid × gross ÷ net), so WHT does not appear as accrued."
+    },
+    "gsr": {
+      "title": "GSR — Global Spend Report",
+      "hint": "Payments only, by the country of the payee's bank stored on each payment when it was made. Petty cash, cash and local payments count as Saudi Arabia. Click a country to see its payees and payments.",
+      "byCountry": "By country",
+      "byTag": "By tag",
+      "matrix": "Country × type",
+      "localIntl": "Saudi Arabia vs outside",
+      "inKsa": "Spent in Saudi Arabia",
+      "outside": "Spent outside Saudi Arabia",
+      "unspecified": "Country not recorded",
+      "untagged": "Untagged / unknown",
+      "untaggedWarn": "Some payments have no bank country (should be 0). Add the bank country on the contract or vendor — new payments store it automatically.",
+      "pctByType": "% by type",
+      "col": {
+        "country": "Country",
+        "bank": "Bank",
+        "payments": "Payments",
+        "payees": "Payees",
+        "original": "Original currency",
+        "sar": "Amount (SAR)",
+        "pct": "% of total",
+        "wht": "WHT deducted",
+        "tag": "Tag",
+        "spendType": "Spend type"
+      },
+      "type": {
+        "Crew": "Crew",
+        "Cast": "Cast",
+        "Vendor": "Vendor"
+      },
+      "payee": {
+        "crew": "Crew",
+        "cast": "Cast",
+        "vendor": "Vendor",
+        "petty_cash": "Petty cash",
+        "other": "Other"
+      },
+      "source": {
+        "payroll": "Contract",
+        "invoice": "Invoice",
+        "purchase_order": "Purchase order",
+        "po": "Purchase order",
+        "petty_cash": "Petty cash",
+        "cash_advance": "Petty cash",
+        "cash_advance_receipt": "Petty cash receipt",
+        "receipt": "Receipt",
+        "overtime": "Overtime",
+        "per_diem": "Per diem"
+      }
+    },
+    "pay": {
+      "contractValueGross": "Contract Value (Gross)",
+      "wht": "WHT",
+      "net": "Net",
+      "grossHint": "Contract value including WHT — the figure in the budget",
+      "netHint": "Gross − WHT: what the person receives. Paid, Payable and Commitment are on this basis.",
+      "basisNote": "Contract Value is gross. Paid, Payable and Commitment are on the Net (what the person receives); the WHT is withheld and remitted to ZATCA separately (Tax Cash Impact). Totals per instalment: Due / Paid / Remaining.",
+      "colDue": "Due",
+      "colPaid": "Paid",
+      "colRemaining": "Remaining",
+      "dueOn": "Due {{date}}",
+      "paidOn": "Paid {{date}}",
+      "dueDate": "Due date",
+      "requester": "Requested by",
+      "approver": "Approved by",
+      "history": "History",
+      "noHistory": "No request yet.",
+      "event": {
+        "requested": "Payment requested",
+        "approved_level": "Approved (level)",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "cancelled": "Request cancelled",
+        "reversed": "Approval reversed",
+        "paid": "Paid"
+      }
+    },
+    "person": {
+      "question": "Who are you adding?",
+      "freelancer": "Project freelancer",
+      "freelancerHint": "Contract for this project, with instalments and payments",
+      "employee": "Company employee",
+      "employeeHint": "Monthly cost and allocation % — Company Overhead, no payments or cash"
+    }
   }
 }
