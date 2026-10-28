@@ -8,13 +8,12 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Download, FileText, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useStore } from "@/lib/store";
 import { formatAmount } from "@/lib/format-number";
-import { downloadCSV } from "@/lib/export-csv";
-import { exportPdfReport } from "@/lib/export-pdf";
+import { useReportExport } from "@/features/reports/report-export";
 import { usePersons } from "@/lib/persons";
 import { normalizeName } from "@/lib/person-match";
 import {
@@ -56,7 +55,7 @@ async function fetchDealInputs(projectId: string) {
 const money = (n: number) => formatAmount(n, 2);
 
 export function DealSummaryReport() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const project = useStore((s) => s.projects.find((p) => p.id === s.activeProjectId) ?? null);
   const people = useStore((s) => s.people);
   const payroll = useStore((s) => s.payroll);
@@ -135,32 +134,50 @@ export function DealSummaryReport() {
     money(totals.commitment),
     money(totals.wht),
   ];
-  const slug = project?.code ?? "project";
-  const exportCsv = () =>
-    downloadCSV(
-      `deal-summary-${slug}.csv`,
-      [...tableRows, totalRow].map((cells) =>
-        Object.fromEntries(headers.map((h, i) => [h, cells[i]])),
-      ),
-      headers,
-    );
-  const exportPdf = () =>
-    void exportPdfReport(
-      `deal-summary-${slug}.pdf`,
-      [
-        {
-          title: t("people.deal.title"),
-          subtitle: `${project?.code ?? ""} ${project?.name ?? ""} · SAR`,
-          headers,
-          rows: [...tableRows, totalRow],
-          numericColumns: [3, 4, 5, 6, 7, 8],
+  // G03: the page's Excel / PDF buttons export exactly these rows.
+  useReportExport(() =>
+    q.isLoading
+      ? null
+      : {
+          doc: {
+            report: "Deal Summary",
+            title: t("people.deal.title"),
+            subtitle: `${project?.code ?? ""} ${project?.name ?? ""} · SAR`,
+            sections: [
+              {
+                columns: headers.map((header, i) => ({
+                  header,
+                  type: i === 3 ? ("integer" as const) : i > 3 ? ("money" as const) : undefined,
+                })),
+                rows: rows.map((r) => [
+                  r.name,
+                  kindLabel(r.kinds),
+                  r.roles.join(", "),
+                  r.contracts,
+                  r.value,
+                  r.paid,
+                  r.payable,
+                  r.commitment,
+                  r.wht,
+                ]),
+                totals: [
+                  [
+                    t("people.deal.total"),
+                    null,
+                    null,
+                    totals.contracts,
+                    totals.value,
+                    totals.paid,
+                    totals.payable,
+                    totals.commitment,
+                    totals.wht,
+                  ],
+                ],
+              },
+            ],
+          },
         },
-      ],
-      {
-        documentTitle: `Kwalis Hub — ${t("people.deal.title")}`,
-        direction: i18n.language === "ar" ? "rtl" : "ltr",
-      },
-    );
+  );
 
   const input =
     "rounded-lg bg-surface-2 border border-border px-2 py-1.5 text-xs text-foreground outline-none focus:ring-2 focus:ring-brand/40";
@@ -171,26 +188,6 @@ export function DealSummaryReport() {
         <div>
           <h2 className="text-lg font-semibold">{t("people.deal.title")}</h2>
           <p className="text-xs text-muted-foreground">{t("people.deal.subtitle")}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={exportCsv}
-            disabled={rows.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted disabled:opacity-40"
-          >
-            <Download className="size-3.5" />
-            {t("refs.export_csv")}
-          </button>
-          <button
-            type="button"
-            onClick={exportPdf}
-            disabled={rows.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted disabled:opacity-40"
-          >
-            <FileText className="size-3.5" />
-            {t("refs.export_pdf")}
-          </button>
         </div>
       </div>
 

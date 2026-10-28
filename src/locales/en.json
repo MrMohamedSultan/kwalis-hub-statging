@@ -5342,5 +5342,15 @@
       "po": "PO",
       "due": "Due"
     }
+  },
+  "leftovers": {
+    "budget_pdf": {
+      "title": "Budget",
+      "subtitle": "{{filter}} · {{count}} lines",
+      "done": "Budget PDF exported ({{count}} lines)"
+    },
+    "top_sheet_pdf": {
+      "summary": "Summary"
+    }
   }
 }

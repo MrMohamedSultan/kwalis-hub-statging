@@ -241,6 +241,8 @@ function span(grid: Grid, start: Date, end: Date): { from: number; to: number } 
  * ================================================================== */
 
 const HEADER_ROWS = 5;
+/** Where each sheet leaves room for the client logo (rows 1-2, after the title). */
+const LOGO_ANCHOR = new WeakMap<ExcelJS.Worksheet, { col: number; row: number }>();
 
 interface TextCol {
   label: string;
@@ -299,6 +301,8 @@ function createSheet(
   if (grid) grid.columns.forEach((c) => (ws.getColumn(c.col).width = grid.colWidth));
 
   const titleSpan = Math.min(lastCol, textCount + 22);
+  // Client logo goes in the free cells right after the title block (G02).
+  LOGO_ANCHOR.set(ws, { col: titleSpan + 0.1, row: 0.05 });
 
   ws.mergeCells(1, 1, 1, titleSpan);
   const t = ws.getCell(1, 1);
@@ -803,7 +807,13 @@ export async function exportTimelineToExcel(
   // Shared Kwalis Hub identity + standard file name (G02).
   const { saveBrandedWorkbook } = await import('@/lib/export/xlsx-report');
   const version = options.versionLabel ? ` ${options.versionLabel.split(/[\s·]/)[0]}` : '';
-  await saveBrandedWorkbook(workbook, options.fileName ?? `Production Timeline${version}`);
+  const logos = workbook.worksheets.flatMap((ws) => {
+    const at = LOGO_ANCHOR.get(ws);
+    return at ? [{ ...at, maxWidth: 110, maxHeight: 36, sheets: [ws.name] }] : [];
+  });
+  await saveBrandedWorkbook(workbook, options.fileName ?? `Production Timeline${version}`, undefined, {
+    logo: logos,
+  });
 
   return summary;
 }

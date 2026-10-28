@@ -11,7 +11,9 @@ import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 import { z } from "zod";
 import { Panel } from "@/components/AppShell";
-import { Input } from "@/components/ui/input";
+import { Input, inputBaseClass } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
+import { cn } from "@/lib/utils";
 import { formatAmount } from "@/lib/format-number";
 import { reconciliationStatus } from "@/lib/ledger-calc";
 import {
@@ -162,11 +164,10 @@ export function BankReconciliationReport() {
           </div>
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             {t("journal.as_of")}
-            <Input
-              type="date"
+            <DateInput
               value={asOf}
-              className="h-9 w-40"
-              onChange={(e) => setAsOf(e.target.value)}
+              className={cn(inputBaseClass, "h-9 w-40")}
+              onChange={(v) => setAsOf(v)}
             />
           </label>
         </div>
@@ -292,11 +293,10 @@ export function BankReconciliationReport() {
           <h4 className="mb-3 font-semibold">{t("journal.add_statement_line")}</h4>
           <div className="flex flex-wrap items-end gap-3">
             <Field label={t("journal.col.date")}>
-              <Input
-                type="date"
+              <DateInput
                 value={sDate}
-                className="h-9 w-40"
-                onChange={(e) => setSDate(e.target.value)}
+                className={cn(inputBaseClass, "h-9 w-40")}
+                onChange={(v) => setSDate(v)}
               />
             </Field>
             <Field label={t("journal.amount_signed")}>
@@ -356,11 +356,10 @@ export function BankReconciliationReport() {
               </select>
             </Field>
             <Field label={t("journal.col.date")}>
-              <Input
-                type="date"
+              <DateInput
                 value={tDate}
-                className="h-9 w-40"
-                onChange={(e) => setTDate(e.target.value)}
+                className={cn(inputBaseClass, "h-9 w-40")}
+                onChange={(v) => setTDate(v)}
               />
             </Field>
             <Field label={t("journal.col.amount")}>

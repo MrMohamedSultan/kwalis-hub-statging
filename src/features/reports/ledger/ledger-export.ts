@@ -6,6 +6,7 @@
 import { loadExcelJs } from "@/lib/lazy-export-libs";
 import { downloadBlob } from "@/lib/download";
 import { exportPdfReport } from "@/lib/export-pdf";
+import type { ReportDoc } from "@/lib/export/xlsx-report";
 
 export type LedgerExportTable = {
   title: string;
@@ -27,30 +28,33 @@ export function ledgerFileName(projectCode: string | null, report: string, ext: 
   return `KwalisHub_${code}_${report.replace(/[^A-Za-z0-9]+/g, "")}_${stamp()}.${ext}`;
 }
 
+/** The ledger table as a shared ReportDoc (unit-tested). */
+export function ledgerReportDoc(t: LedgerExportTable): ReportDoc {
+  const money = new Set(t.numericColumns);
+  return {
+    report: t.title,
+    title: t.title,
+    subtitle: t.subtitle,
+    sections: [
+      {
+        columns: t.headers.map((h, i) => ({
+          header: h,
+          type: money.has(i) ? ("money" as const) : ("text" as const),
+        })),
+        rows: t.rows,
+      },
+    ],
+  };
+}
+
+/** Branded workbook (G02): logo, company / project header and footer on the sheet. */
 export async function exportLedgerXlsx(filename: string, t: LedgerExportTable, rtl = false) {
-  const ExcelJS = await loadExcelJs();
-  const wb = new ExcelJS.Workbook();
-  wb.creator = "Kwalis Hub";
-  const ws = wb.addWorksheet(t.title.slice(0, 31), { views: [{ rightToLeft: rtl }] });
-  ws.addRow([t.title]).font = { bold: true, size: 14 };
-  ws.addRow([t.subtitle]).font = { italic: true, size: 10 };
-  ws.addRow([]);
-  const head = ws.addRow(t.headers);
-  head.font = { bold: true };
-  head.eachCell((c) => {
-    c.border = { bottom: { style: "thin" } };
-  });
-  for (const r of t.rows) ws.addRow(r);
-  t.numericColumns.forEach((i) => {
-    ws.getColumn(i + 1).numFmt = "#,##0.00;[Red]-#,##0.00";
-  });
-  t.headers.forEach((h, i) => {
-    const longest = Math.max(
-      h.length,
-      ...t.rows.slice(0, 500).map((r) => String(r[i] ?? "").length),
-    );
-    ws.getColumn(i + 1).width = Math.min(60, Math.max(10, longest + 2));
-  });
+  const [ExcelJS, { getExportBranding }, { buildReportWorkbook }] = await Promise.all([
+    loadExcelJs(),
+    import("@/lib/export/branding"),
+    import("@/lib/export/xlsx-report"),
+  ]);
+  const wb = buildReportWorkbook(ExcelJS, ledgerReportDoc(t), await getExportBranding(), { rtl });
   const buf = await wb.xlsx.writeBuffer();
   downloadBlob(
     filename,

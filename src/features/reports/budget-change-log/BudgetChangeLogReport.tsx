@@ -1,25 +1,26 @@
 // ═══════════════════════════════════════════════════════════════════
 // N10 — Budget Change Log report (Film Commission claim attachment):
 // line, value before, value after, change, user, date, reason. Filters by
-// date, version and "amount changes only"; exports CSV and PDF.
+// date, version and "amount changes only"; the page's Excel / PDF buttons
+// export exactly the filtered rows through the shared writers (G03).
 // ═══════════════════════════════════════════════════════════════════
 
 import { useMemo, useState } from "react";
 import { formatDateTime } from "@/lib/date-format";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Download, FileText, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { useStore } from "@/lib/store";
+import { DateInput } from "@/components/ui/date-input";
 import { formatAmount } from "@/lib/format-number";
-import { downloadCSV } from "@/lib/export-csv";
-import { exportPdfReport } from "@/lib/export-pdf";
+import { useReportExport } from "@/features/reports/report-export";
 import { changeDelta, fetchBudgetChangeLog, filterChangeLog } from "./budget-change-log-data";
 
 const money = (n: number | null) => (n == null ? "—" : formatAmount(n, 2));
 
 export function BudgetChangeLogReport() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const project = useStore((s) => s.projects.find((p) => p.id === s.activeProjectId) ?? null);
   const projectId = project?.id ?? null;
 
@@ -58,42 +59,49 @@ export function BudgetChangeLogReport() {
     t("refs.bcl_user"),
     t("refs.bcl_reason"),
   ];
-  const tableRows = rows.map((r) => [
-    formatDateTime(r.changed_at),
-    [r.budget_code, r.description].filter(Boolean).join(" — "),
-    r.version_name ?? "",
-    t(`refs.action_${r.action}`),
-    money(r.before_sar),
-    money(r.after_sar),
-    money(changeDelta(r)),
-    r.actor_name ?? t("refs.system"),
-    r.reason ?? "",
-  ]);
-  const slug = project?.code ?? "project";
-
-  const exportCsv = () =>
-    downloadCSV(
-      `budget-change-log-${slug}.csv`,
-      tableRows.map((cells) => Object.fromEntries(headers.map((h, i) => [h, cells[i]]))),
-      headers,
-    );
-  const exportPdf = () =>
-    void exportPdfReport(
-      `budget-change-log-${slug}.pdf`,
-      [
-        {
-          title: t("refs.bcl_title"),
-          subtitle: `${project?.code ?? ""} ${project?.name ?? ""} · SAR`,
-          headers,
-          rows: tableRows,
-          numericColumns: [4, 5, 6],
+  useReportExport(() =>
+    q.isLoading
+      ? null
+      : {
+          doc: {
+            report: "Budget Change Log",
+            title: t("refs.bcl_title"),
+            subtitle: `${project?.code ?? ""} ${project?.name ?? ""} · SAR`,
+            sections: [
+              {
+                columns: headers.map((header, i) => ({
+                  header,
+                  type: i >= 4 && i <= 6 ? ("money" as const) : ("text" as const),
+                })),
+                rows: rows.map((r) => [
+                  formatDateTime(r.changed_at),
+                  [r.budget_code, r.description].filter(Boolean).join(" — "),
+                  r.version_name ?? "",
+                  t(`refs.action_${r.action}`),
+                  r.before_sar,
+                  r.after_sar,
+                  changeDelta(r),
+                  r.actor_name ?? t("refs.system"),
+                  r.reason ?? "",
+                ]),
+                totals: [
+                  [
+                    t("refs.bcl_net_change", { count: rows.length }),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    net,
+                    null,
+                    null,
+                  ],
+                ],
+              },
+            ],
+          },
         },
-      ],
-      {
-        documentTitle: `Kwalis Hub — ${t("refs.bcl_title")}`,
-        direction: i18n.language === "ar" ? "rtl" : "ltr",
-      },
-    );
+  );
 
   const input =
     "rounded-lg bg-surface-2 border border-border px-2 py-1.5 text-xs text-foreground outline-none focus:ring-2 focus:ring-brand/40";
@@ -105,41 +113,16 @@ export function BudgetChangeLogReport() {
           <h2 className="text-lg font-semibold">{t("refs.bcl_title")}</h2>
           <p className="text-xs text-muted-foreground">{t("refs.bcl_subtitle")}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={exportCsv}
-            disabled={rows.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted disabled:opacity-40"
-          >
-            <Download className="size-3.5" />
-            {t("refs.export_csv")}
-          </button>
-          <button
-            type="button"
-            onClick={exportPdf}
-            disabled={rows.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted disabled:opacity-40"
-          >
-            <FileText className="size-3.5" />
-            {t("refs.export_pdf")}
-          </button>
-        </div>
       </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-surface p-3">
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           {t("refs.bcl_from")}
-          <input
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            className={input}
-          />
+          <DateInput value={from} onChange={setFrom} className={input} />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           {t("refs.bcl_to")}
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={input} />
+          <DateInput value={to} onChange={setTo} className={input} />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           {t("refs.bcl_version")}

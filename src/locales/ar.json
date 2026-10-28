@@ -5362,5 +5362,15 @@
       "po": "أمر الشراء",
       "due": "الاستحقاق"
     }
+  },
+  "leftovers": {
+    "budget_pdf": {
+      "title": "الميزانية",
+      "subtitle": "{{filter}} · {{count}} بند",
+      "done": "تم تصدير الميزانية PDF ({{count}} بند)"
+    },
+    "top_sheet_pdf": {
+      "summary": "الملخص"
+    }
   }
 }

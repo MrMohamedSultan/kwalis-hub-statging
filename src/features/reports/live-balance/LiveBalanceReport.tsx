@@ -6,7 +6,9 @@ import { Fragment, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Panel } from "@/components/AppShell";
-import { Input } from "@/components/ui/input";
+import { Input, inputBaseClass } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
+import { cn } from "@/lib/utils";
 import { formatDate, riyadhToday } from "@/lib/date-format";
 import { HEADER_ACCOUNTS } from "@/lib/data";
 import { useCan } from "@/lib/rbac";
@@ -194,11 +196,10 @@ export function LiveBalanceReport() {
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             {t("taxlive.live.asOf")}
-            <Input
-              type="date"
+            <DateInput
               value={asOf}
-              className="h-9 w-40"
-              onChange={(e) => setAsOf(e.target.value || riyadhToday())}
+              className={cn(inputBaseClass, "h-9 w-40")}
+              onChange={(v) => setAsOf(v || riyadhToday())}
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
