@@ -121,7 +121,15 @@ export function whtInBase(b: WhtBreakdown, rate: number): WhtBreakdown {
   return { gross, net, wht: round2(gross - net) };
 }
 
-export type WhtRateRule = { serviceType: string; ratePct: number; orgSpecific?: boolean };
+export type WhtRateRule = {
+  serviceType: string;
+  ratePct: number;
+  orgSpecific?: boolean;
+  /** db/pending/201 columns (labels of the Saudi table, display order). */
+  labelEn?: string | null;
+  labelAr?: string | null;
+  sortOrder?: number | null;
+};
 
 /** Rate for a service type: an exact rule (organization first), else "default", else 5%. */
 export function resolveWhtRate(

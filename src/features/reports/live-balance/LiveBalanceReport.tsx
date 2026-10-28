@@ -3,6 +3,7 @@
 // to date by each contract's accrual method against what was paid.
 // =====================================================================
 import { Fragment, useMemo, useState } from "react";
+import { WHT_BUDGET_CODE } from "@/lib/company-wht";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Panel } from "@/components/AppShell";
@@ -25,7 +26,7 @@ import {
   ACCRUAL_METHODS,
   computeLiveBalance,
   groupLiveBalance,
-  paidOnValueBasis,
+  decision12Inputs,
   sumLiveBalance,
   type AccrualMethod,
   type LiveBalanceGrouping,
@@ -49,27 +50,29 @@ export function LiveBalanceReport() {
   const rows = useMemo(() => {
     const d = q.data;
     if (!d) return [];
-    return d.contracts.map((c) =>
-      computeLiveBalance(
+    return d.contracts.flatMap((c) =>
+      decision12Inputs(
         {
           id: c.id,
           ref: c.ref,
           party: c.party,
           budgetCode: c.budgetCode,
-          value: c.gross,
           method: c.method,
           methodSuggested: c.methodSuggested,
           start: c.start,
           end: c.end,
           cancelledAt: c.cancelledAt,
-          paid: paidOnValueBasis(
-            c.payments.filter((p) => p.date && p.date <= asOf).reduce((a, p) => a + p.amount, 0),
-            c.gross,
-            c.net,
-          ),
         },
-        asOf,
-        { dates: d.shootDates, fallbackDays: c.shootingDays || d.projectShootDays },
+        c.gross,
+        c.net,
+        c.treatment,
+        c.payments.filter((p) => p.date && p.date <= asOf).reduce((a, p) => a + p.amount, 0),
+        WHT_BUDGET_CODE,
+      ).map((input) =>
+        computeLiveBalance(input, asOf, {
+          dates: d.shootDates,
+          fallbackDays: c.shootingDays || d.projectShootDays,
+        }),
       ),
     );
   }, [q.data, asOf]);
@@ -298,6 +301,11 @@ export function LiveBalanceReport() {
                       <td className={`${txtCls} font-mono text-xs`}>{r.ref}</td>
                       <td className={`${txtCls} font-medium`}>
                         {r.party}
+                        {r.whtShare && (
+                          <span className="ms-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            {t("decisions.wht7099.badge")}
+                          </span>
+                        )}
                         {r.cancelledAt && (
                           <span className="ms-1.5 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive">
                             {t("glossary.contract.cancelled")}

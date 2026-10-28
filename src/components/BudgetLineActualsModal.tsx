@@ -89,12 +89,14 @@ export function BudgetLineActualsModal({
   // G09: a row opens the transaction drawer of its document (184)
   const [drawer, setDrawer] = useState<GlTransaction | null>(null);
   const ctx = { organizationId, projectId };
+  // decision 12: the 7099 WHT row of a contract opens the contract
+  const drawerSource = (st: string) => (st === "payroll_wht" ? "payroll" : st);
   const openLedgerRow = (r: LedgerRow) =>
-    r.sourceId && DRAWER_SOURCES.has(r.sourceType)
+    r.sourceId && DRAWER_SOURCES.has(drawerSource(r.sourceType))
       ? () =>
           setDrawer(
             transactionForDocument(
-              r.sourceType as GlTransactionSource,
+              drawerSource(r.sourceType) as GlTransactionSource,
               r.sourceId!,
               {
                 date: r.at,

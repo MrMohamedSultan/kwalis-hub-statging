@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { computeWht } from "@/lib/contract-terms";
+import { lineShareOfContract } from "@/lib/company-wht";
 
 export type ProjectBudgetLine = {
   id: string;
@@ -337,10 +338,15 @@ export async function fetchLineCommitments(
   }
   for (const r of (people.data ?? []) as any[]) {
     if (excludeId && r.id === excludeId) continue;
-    // Contract value (gross): an exclusive (gross-up) deal carries its WHT on top.
+    // What the contract commits on THIS line (decision 12, db/pending/201): an
+    // exclusive (gross-up) deal carries its net here — its WHT goes to 7099;
+    // an inclusive deal carries its gross (the WHT is deducted inside it).
     const agreed = Number(r.daily_rate ?? 0) * Number(r.shooting_days ?? 0);
     const treatment = r.wht_treatment === "exclusive" ? "exclusive" : "inclusive";
-    const gross = computeWht(agreed, whtPctByRef.get(String(r.id)) ?? 0, treatment).gross;
+    const gross = lineShareOfContract(
+      computeWht(agreed, whtPctByRef.get(String(r.id)) ?? 0, treatment),
+      treatment,
+    );
     const amount = toBaseAmount ? toBaseAmount(gross, String(r.ccy ?? "")) : gross;
     out.push({
       source: r.kind === "cast" ? "cast" : "crew",

@@ -155,6 +155,10 @@ export function TaxCashImpactReport() {
                   [t("taxlive.tax.companyBorne"), wht.companyBorne],
                   [t("taxlive.tax.budget7099"), wht.budget7099],
                   [t("taxlive.tax.over7099"), wht.over7099],
+                  [
+                    t("decisions.wht7099.booked", { code: WHT_BUDGET_CODE }),
+                    (q.data?.actual7099 ?? 0) + (q.data?.committed7099 ?? 0),
+                  ],
                   [t("taxlive.tax.onOtherLines"), wht.companyBorneOnOtherLines],
                 ],
               },
@@ -297,9 +301,13 @@ export function TaxCashImpactReport() {
             <p className="mb-3 text-xs text-muted-foreground">
               {t("taxlive.tax.compareHint", { code: WHT_BUDGET_CODE })}
             </p>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Card label={t("taxlive.tax.companyBorne")} value={wht.companyBorne} />
               <Card label={t("taxlive.tax.budget7099")} value={wht.budget7099} />
+              <Card
+                label={t("decisions.wht7099.booked", { code: WHT_BUDGET_CODE })}
+                value={(q.data?.actual7099 ?? 0) + (q.data?.committed7099 ?? 0)}
+              />
               <Card
                 label={t("taxlive.tax.over7099")}
                 value={wht.over7099}
@@ -310,7 +318,7 @@ export function TaxCashImpactReport() {
               <div className="mt-3 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                 <span>
-                  {t("taxlive.tax.openDecision", {
+                  {t("decisions.wht7099.otherLines", {
                     amount: wht.companyBorneOnOtherLines.toFixed(2),
                     code: WHT_BUDGET_CODE,
                   })}

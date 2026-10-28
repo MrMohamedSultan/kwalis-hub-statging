@@ -121,6 +121,8 @@ export interface LiveBalanceInput {
   cancelledAt?: string | null;
   /** Paid to date (as of), on the contract-value basis (net paid grossed up by gross ÷ net). */
   paid: number;
+  /** Decision 12: the company-borne WHT share of an Exclusive contract (code 7099). */
+  whtShare?: boolean;
 }
 
 export interface LiveBalanceRow extends LiveBalanceInput {
@@ -315,4 +317,39 @@ export function groupLiveBalance(
   const out = Array.from(map.values()).map((g) => ({ ...g, ...sumLiveBalance(g.rows) }));
   out.sort((a, b) => (a.key === "" ? 1 : b.key === "" ? -1 : a.key.localeCompare(b.key)));
   return out;
+}
+
+/**
+ * Decision 12 (db/pending/201): an Exclusive (gross-up) contract is two
+ * rows — its own line carries the NET, code 7099 the company-borne WHT.
+ * Both accrue by the contract's method; payments are net, so the line is
+ * paid what was paid and the 7099 row the WHT withheld on it. Totals are
+ * the same as one gross row.
+ */
+export function decision12Inputs(
+  base: Omit<LiveBalanceInput, "value" | "paid" | "whtShare">,
+  gross: number,
+  net: number | null | undefined,
+  treatment: string | null | undefined,
+  paidNet: number,
+  whtCode = "7099",
+): LiveBalanceInput[] {
+  const g = Number(gross) || 0;
+  const n = Number(net) || 0;
+  const paidValue = paidOnValueBasis(paidNet, g, net);
+  if (treatment !== "exclusive" || n <= 0 || g <= n) {
+    return [{ ...base, value: g, paid: paidValue }];
+  }
+  const p = round2(Number(paidNet) || 0);
+  return [
+    { ...base, value: round2(n), paid: p },
+    {
+      ...base,
+      id: `${base.id}:wht`,
+      budgetCode: whtCode,
+      value: round2(g - n),
+      paid: round2(paidValue - p),
+      whtShare: true,
+    },
+  ];
 }

@@ -23,6 +23,8 @@ export interface LiveBalanceSource {
   budgetCode: string | null;
   gross: number;
   net: number | null;
+  /** inclusive | exclusive (decision 12: exclusive WHT is on 7099). */
+  treatment: string;
   method: AccrualMethod;
   methodSuggested: boolean;
   start: string | null;
@@ -94,6 +96,7 @@ export function useLiveBalanceData(projectId: string | null) {
           budgetCode: r.budget_code ?? null,
           gross: n(r.total_amount),
           net: r.net_payable == null ? null : n(r.net_payable),
+          treatment: r.wht_treatment === "exclusive" ? "exclusive" : "inclusive",
           method: isAccrualMethod(stored) ? stored : suggestAccrualMethod(pe?.deal_type),
           methodSuggested: !isAccrualMethod(stored),
           start: pe?.start_date ?? null,

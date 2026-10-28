@@ -29,6 +29,8 @@ import {
   type TaxResidency,
   type WhtRateRule,
 } from "@/lib/contract-terms";
+import { lineShareOfContract, WHT_BUDGET_CODE } from "@/lib/company-wht";
+import { whtServiceLabel } from "@/lib/wht-rates";
 import { useCurrencyStore } from "@/stores/useCurrencyStore";
 import { storageAudited } from "@/lib/storage-audit";
 import { BankPicker, validateBankPicker } from "@/components/BankPicker";
@@ -152,9 +154,7 @@ function useWhtRateRules(organizationId: string | null | undefined): WhtRateRule
     let cancelled = false;
     (async () => {
       try {
-        const { data, error } = await (supabase as any)
-          .from("wht_rate_rules")
-          .select("organization_id, service_type, rate_pct");
+        const { data, error } = await (supabase as any).from("wht_rate_rules").select("*"); // label_en / label_ar since db/pending/201
         if (cancelled || error) return;
         setRules(
           ((data ?? []) as any[])
@@ -163,6 +163,9 @@ function useWhtRateRules(organizationId: string | null | undefined): WhtRateRule
               serviceType: String(r.service_type),
               ratePct: Number(r.rate_pct),
               orgSpecific: !!r.organization_id,
+              labelEn: r.label_en ?? null,
+              labelAr: r.label_ar ?? null,
+              sortOrder: r.sort_order ?? null,
             })),
         );
       } catch {
@@ -1531,7 +1534,7 @@ function ContractForm({
   /** Authoritative payment schedule fetched from the DB before mount. */
   scheduleOverride?: HydratedSchedule[] | null;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const payrollRow = useStore((s) =>
     initial ? s.payroll.find((r) => r.refId === initial.id) : undefined,
   );
@@ -1948,7 +1951,15 @@ function ContractForm({
   );
   const whtRules = useWhtRateRules(organizationId);
   const whtServiceTypes = useMemo(
-    () => Array.from(new Set(["default", ...whtRules.map((r) => r.serviceType)])),
+    () =>
+      Array.from(
+        new Set([
+          "default",
+          ...[...whtRules]
+            .sort((a, b) => (a.sortOrder ?? 1000) - (b.sortOrder ?? 1000))
+            .map((r) => r.serviceType),
+        ]),
+      ),
     [whtRules],
   );
 
@@ -2059,7 +2070,11 @@ function ContractForm({
   const contractAmountBase = whtBase.gross;
   const whtAmount = whtBase.wht;
   const netPayable = whtBase.net;
-  const remaining = planned - otherCommitted - contractAmountBase;
+  // Decision 12 (db/pending/201): an exclusive contract commits its NET on this
+  // line; the company-borne WHT is charged to budget line 7099.
+  const lineCommitmentBase = lineShareOfContract(whtBase, whtTreatment);
+  const companyWht = lineCommitmentBase === contractAmountBase ? 0 : whtAmount;
+  const remaining = planned - otherCommitted - lineCommitmentBase;
   const fxBreakdown =
     fxToBase === 1
       ? `${formatAmount(wht.gross, 2)} ${contractCcy}`
@@ -3200,12 +3215,22 @@ function ContractForm({
                 }
                 className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 outline-none focus:ring-2 ring-brand"
               >
-                {whtServiceTypes.map((st) => (
-                  <option key={st} value={st}>
-                    {st === "default" ? t("contracts.wht.service_default") : st} —{" "}
-                    {resolveWhtRate(whtRules, st)}%
-                  </option>
-                ))}
+                {whtServiceTypes.map((st) => {
+                  const rule =
+                    whtRules.find((r) => r.serviceType === st && r.orgSpecific) ??
+                    whtRules.find((r) => r.serviceType === st);
+                  return (
+                    <option key={st} value={st}>
+                      {whtServiceLabel(
+                        st,
+                        i18n.language?.startsWith("ar") ? "ar" : "en",
+                        { label_en: rule?.labelEn, label_ar: rule?.labelAr },
+                        t,
+                      )}{" "}
+                      — {resolveWhtRate(whtRules, st)}%
+                    </option>
+                  );
+                })}
               </select>
             </label>
           </WhtTreatmentSelector>
@@ -3248,8 +3273,16 @@ function ContractForm({
                 {t("crewcastcontracts.contract_commitment")}
               </div>
               <div className="font-semibold" title={fxBreakdown}>
-                {formatUSD(contractAmountBase)}
+                {formatUSD(lineCommitmentBase)}
               </div>
+              {companyWht > 0 && (
+                <div className="text-[10px] text-muted-foreground">
+                  {t("decisions.wht7099.contractHint", {
+                    amount: formatUSD(companyWht),
+                    code: WHT_BUDGET_CODE,
+                  })}
+                </div>
+              )}
               {contractCcy !== baseCurrency && (
                 <div className="text-[10px] text-muted-foreground" dir="ltr">
                   {fxBreakdown}

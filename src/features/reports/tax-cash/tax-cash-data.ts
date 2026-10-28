@@ -2,6 +2,7 @@
 // the active project; RLS enforces the same. Amounts SAR.
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { WHT_BUDGET_CODE } from "@/lib/company-wht";
 import {
   vatTreatmentOf,
   type PaymentEvent,
@@ -56,6 +57,9 @@ export interface TaxCashData {
   movements: TaxCashMovements;
   /** Approved budget of line 7099 (decision 12). */
   budget7099: number;
+  /** Actual + Commitment booked on 7099 (company-borne WHT, db/pending/201). */
+  actual7099: number;
+  committed7099: number;
   /** Open commitments outside contracts (POs, logistics): the VAT forecast base. */
   openCommitments: number;
 }
@@ -119,7 +123,8 @@ export function useTaxCashData(projectId: string | null) {
           storedRate: n(r.wht_percent) > 0 ? n(r.wht_percent) : null,
           storedAmount: n(r.wht_amount),
           payBasis: n(r.net_payable) > 0 ? n(r.net_payable) : gross - n(r.wht_amount),
-          budgetCode: r.budget_code ?? null,
+          // decision 12 (db/pending/201): company-borne WHT of an Exclusive contract is on 7099
+          budgetCode: r.wht_treatment === "exclusive" ? WHT_BUDGET_CODE : (r.budget_code ?? null),
           payments: paysBy.get(`payroll:${r.id}`) ?? [],
         });
       }
@@ -165,11 +170,24 @@ export function useTaxCashData(projectId: string | null) {
       const budget7099 = ((cost.data ?? []) as any[])
         .filter((r) => String(r.budget_code ?? "").startsWith("7099"))
         .reduce((a, r) => a + n(r.budget), 0);
+      const rows7099 = ((cost.data ?? []) as any[]).filter((r) =>
+        String(r.budget_code ?? "").startsWith(WHT_BUDGET_CODE),
+      );
+      const actual7099 = rows7099.reduce((a, r) => a + n(r.actual), 0);
+      const committed7099 = rows7099.reduce((a, r) => a + n(r.commitment), 0);
       const openCommitments = ((commitments.data ?? []) as any[])
-        .filter((r) => r.source_type !== "payroll")
+        .filter((r) => r.source_type !== "payroll" && r.source_type !== "payroll_wht")
         .reduce((a, r) => a + n(r.amount), 0);
 
-      return { whtDocs, vatInvoices, movements, budget7099, openCommitments };
+      return {
+        whtDocs,
+        vatInvoices,
+        movements,
+        budget7099,
+        actual7099,
+        committed7099,
+        openCommitments,
+      };
     },
   });
 }

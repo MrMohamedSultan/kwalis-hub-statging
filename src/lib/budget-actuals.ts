@@ -145,7 +145,8 @@ export function usePayrollKindPosition(): PayrollKindPosition {
         (supabase.from as any)("v_ledger_transactions")
           .select("source_id, description, amount")
           .eq("project_id", projectId)
-          .eq("source_type", "payroll")
+          // decision 12: the company-borne WHT of a contract is a payroll_wht row on 7099
+          .in("source_type", ["payroll", "payroll_wht"])
           .eq("entry_kind", "actual"),
         supabase
           .from("payments")
