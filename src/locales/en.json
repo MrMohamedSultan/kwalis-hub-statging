@@ -5381,6 +5381,21 @@
       "src_payroll": "Contract",
       "src_overtime": "Overtime",
       "src_per_diem": "Per diem"
+    },
+    "data_export": {
+      "title": "Export all project data",
+      "hint": "One Excel workbook with every table of this project (budget, contracts, invoices, purchase orders, payments, general ledger, petty cash, per diem, funding, logistics, file library), one sheet per table, plus the list of attachment links, in a single zip. Only what your account may read is exported.",
+      "include_bank": "Include bank and ID details (IBAN, bank, SWIFT, ID number)",
+      "button": "Export project data",
+      "progress": "Reading tables {{done}} / {{total}}…",
+      "done": "Exported {{rows}} rows from {{tables}} tables and {{attachments}} attachment links",
+      "failed": "The project data export failed",
+      "workbook_title": "Project data",
+      "contents": "Contents",
+      "table": "Table",
+      "rows": "Rows",
+      "note_no_bank": "Bank and ID details are not included.",
+      "note_with_bank": "Bank and ID details are included — handle this file as confidential."
     }
   }
 }

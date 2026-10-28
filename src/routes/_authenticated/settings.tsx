@@ -29,6 +29,7 @@ import { OrganizationCurrencyPanel, ProjectCurrencyPanel } from "@/components/Cu
 import { ExportBrandingPanel } from "@/components/settings/ExportBrandingPanel";
 import { FilmCommissionSettingsPanel } from "@/components/settings/FilmCommissionSettingsPanel";
 import { ShootSchedulePanel } from "@/components/settings/ShootSchedulePanel";
+import { ProjectDataExportPanel } from "@/components/settings/ProjectDataExportPanel";
 import { Button } from "@/components/ui/button";
 import { z } from "zod";
 
@@ -178,6 +179,7 @@ function SettingsPage() {
                 <FilmCommissionSettingsPanel />
                 <ShootSchedulePanel />
                 <ProjectTeamPanel />
+                <ProjectDataExportPanel />
               </>
             ) : (
               <AccessDenied section={t("platform.settings.sectionProject")} />
