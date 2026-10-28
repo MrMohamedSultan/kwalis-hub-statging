@@ -91,6 +91,10 @@ export type Vendor = {
   vendorScope?: VendorScope | "";
   /** Country where the company is legally registered (may differ from bank). */
   companyNationality?: string;
+  /** E05 (db/pending/190): KSA tax residency; undefined before 190. */
+  taxResidency?: "resident" | "non_resident" | null;
+  relatedParty?: boolean;
+  relatedPartyNote?: string | null;
 };
 
 export type Invoice = {
@@ -157,6 +161,17 @@ export type Invoice = {
   serviceReceivedDate?: string | null;
   isRelatedParty?: boolean;
   relatedPartyNote?: string | null;
+  /** E05 (db/pending/190): vendor profile link + its values at entry. */
+  vendorId?: string | null;
+  vendorCrNo?: string | null;
+  vendorVatNo?: string | null;
+  vendorCountry?: string | null;
+  vendorTaxResidency?: "resident" | "non_resident" | null;
+  vendorBankCountry?: string | null;
+  vendorBankName?: string | null;
+  /** D03 (db/pending/190): where the FX rate came from and its date. */
+  fxRateSource?: "sama" | "bank" | "project" | "manual" | null;
+  fxRateDate?: string | null;
 };
 
 export const INVOICE_PAYMENT_METHODS = [
@@ -317,6 +332,12 @@ export type Person = {
   idType?: "national_id" | "iqama" | "passport" | null;
   motherSaudi?: boolean | null;
   relatedParty?: boolean | null;
+  /**
+   * FK → public.persons.id (db/pending/190): the person this contract belongs
+   * to. `undefined` while 190 is not applied; `null` = not linked yet (the
+   * database links / creates the profile on save).
+   */
+  personId?: string | null;
 };
 
 export type DealType = "weekly" | "daily" | "package";
@@ -649,6 +670,9 @@ const fromVendorRow = (r: any): Vendor => ({
   paymentTerms: (r.payment_terms ?? "") as any,
   vendorScope: (r.vendor_scope ?? "") as any,
   companyNationality: r.company_nationality ?? "",
+  taxResidency: r.tax_residency,
+  relatedParty: r.related_party === undefined ? undefined : !!r.related_party,
+  relatedPartyNote: r.related_party_note,
 });
 const toVendorRow = (v: Vendor) => ({
   id: v.id,
@@ -668,6 +692,16 @@ const toVendorRow = (v: Vendor) => ({
   payment_terms: v.paymentTerms ? v.paymentTerms : null,
   vendor_scope: v.vendorScope ? v.vendorScope : null,
   company_nationality: v.companyNationality?.trim() ? v.companyNationality.trim() : null,
+  ...definedOnly({
+    tax_residency: v.taxResidency,
+    related_party: v.relatedParty,
+    related_party_note:
+      v.relatedPartyNote === undefined
+        ? undefined
+        : v.relatedPartyNote?.trim()
+          ? v.relatedPartyNote.trim().slice(0, 1000)
+          : null,
+  }),
   project_id: activePid(),
   organization_id: activeOrgId(),
 });
@@ -715,6 +749,15 @@ const fromInvoiceRow = (r: any): Invoice => ({
   serviceReceivedDate: r.service_received_date ?? null,
   isRelatedParty: !!r.is_related_party,
   relatedPartyNote: r.related_party_note ?? null,
+  vendorId: r.vendor_id,
+  vendorCrNo: r.vendor_cr_no,
+  vendorVatNo: r.vendor_vat_no,
+  vendorCountry: r.vendor_country,
+  vendorTaxResidency: r.vendor_tax_residency,
+  vendorBankCountry: r.vendor_bank_country,
+  vendorBankName: r.vendor_bank_name,
+  fxRateSource: r.fx_rate_source,
+  fxRateDate: r.fx_rate_date,
 });
 const toInvoiceRow = (i: Invoice) => ({
   id: i.id,
@@ -757,6 +800,17 @@ const toInvoiceRow = (i: Invoice) => ({
   service_received_date: i.serviceReceivedDate || null,
   is_related_party: !!i.isRelatedParty,
   related_party_note: i.relatedPartyNote?.trim() ? i.relatedPartyNote.trim().slice(0, 1000) : null,
+  ...definedOnly({
+    vendor_id: i.vendorId,
+    vendor_cr_no: i.vendorCrNo,
+    vendor_vat_no: i.vendorVatNo,
+    vendor_country: i.vendorCountry,
+    vendor_tax_residency: i.vendorTaxResidency,
+    vendor_bank_country: i.vendorBankCountry,
+    vendor_bank_name: i.vendorBankName,
+    fx_rate_source: i.fxRateSource,
+    fx_rate_date: i.fxRateDate || (i.fxRateDate === undefined ? undefined : null),
+  }),
   project_id: i.projectId ?? activePid(),
   organization_id: i.organizationId ?? activeOrgId(),
 });
@@ -858,6 +912,7 @@ const fromPersonRow = (r: any): Person => ({
   idType: r.id_type,
   motherSaudi: r.mother_saudi,
   relatedParty: r.related_party,
+  personId: r.person_id,
 });
 /** Only send optional columns the record actually carries (see fromPersonRow). */
 const definedOnly = (o: Record<string, unknown>) =>
@@ -914,6 +969,7 @@ const toPersonRow = (p: Person) => ({
     id_type: p.idType,
     mother_saudi: p.motherSaudi,
     related_party: p.relatedParty,
+    person_id: p.personId,
   }),
   project_id: p.projectId ?? activePid(),
   organization_id: p.organizationId ?? activeOrgId(),
@@ -1849,6 +1905,7 @@ export const useStore = create<State>()(
           set((s) => ({ people: s.people.filter((x) => x.id !== p.id) }));
           throw error;
         }
+        await refreshPersonContracts(p.id);
       },
       updatePerson: async (id, patch) => {
         const before = get().people.find((p) => p.id === id);
@@ -1864,6 +1921,7 @@ export const useStore = create<State>()(
             if (before) set((s) => ({ people: s.people.map((p) => (p.id === id ? before : p)) }));
             throw error;
           }
+          await refreshPersonContracts(id);
         }
       },
       removePerson: async (id) => {
@@ -2565,3 +2623,40 @@ export const useTotals = (logistics?: LogisticsCommitment[]) => {
     cashAdvances,
   };
 };
+
+/**
+ * E01: after a contract is saved the database links it to a person profile
+ * and syncs the identity onto that person's other contracts — re-read them so
+ * the screen shows what was stored. Silent no-op before db/pending/190.
+ */
+async function refreshPersonContracts(contractId: string): Promise<void> {
+  try {
+    const pid = useStore.getState().activeProjectId;
+    if (!pid) return;
+    const { data: own } = await supabase
+      .from("people")
+      .select("*")
+      .eq("id", contractId)
+      .maybeSingle();
+    const personId = (own as any)?.person_id as string | null | undefined;
+    let rows: any[] = own ? [own] : [];
+    if (personId) {
+      const { data } = await supabase
+        .from("people")
+        .select("*")
+        .eq("project_id", pid)
+        .eq("person_id" as any, personId);
+      rows = (data as any[]) ?? rows;
+    }
+    if (!rows.length) return;
+    const byId = new Map(rows.map((r) => [String(r.id), fromPersonRow(r)]));
+    useStore.setState((s) => ({
+      people: s.people.map((p) => {
+        const fresh = byId.get(p.id);
+        return fresh ? { ...p, ...fresh } : p;
+      }),
+    }));
+  } catch {
+    /* the optimistic copy stays */
+  }
+}
