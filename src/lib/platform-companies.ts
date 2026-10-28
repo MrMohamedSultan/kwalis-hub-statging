@@ -19,7 +19,21 @@ export type Company = {
   created_at: string;
 };
 
-export type CompanyRow = Company & { userCount: number; projectCount: number };
+export type CompanyRow = Company & {
+  userCount: number;
+  projectCount: number;
+  /** X27 — in progress (not archived, not finalized). */
+  activeProjectCount: number;
+  /** X27 — what the plan counts: every project that is not archived. */
+  billableProjectCount: number;
+};
+
+type ProjectCountRow = {
+  organization_id: string;
+  active_projects: number;
+  billable_projects: number;
+  total_projects: number;
+};
 
 export type CompanyDocument = {
   id: string;
@@ -57,10 +71,18 @@ export async function listCompanies(): Promise<CompanyRow[]> {
   if (error) throw error;
   const orgs = (data ?? []) as Company[];
 
-  const [{ data: members }, { data: projects }] = await Promise.all([
+  const [{ data: members }, { data: projects }, counts] = await Promise.all([
     (supabase as any).from("organization_members").select("organization_id"),
     (supabase as any).from("projects").select("organization_id"),
+    // X27: billing counts from v_org_project_counts (db/pending/195); empty until applied.
+    (supabase as any)
+      .from("v_org_project_counts")
+      .select("organization_id, active_projects, billable_projects, total_projects"),
   ]);
+  const countMap = new Map<string, ProjectCountRow>();
+  for (const r of ((counts?.error ? [] : counts?.data) ?? []) as ProjectCountRow[]) {
+    countMap.set(r.organization_id, r);
+  }
 
   const tally = (rows: { organization_id: string | null }[] | null) => {
     const m = new Map<string, number>();
@@ -77,6 +99,8 @@ export async function listCompanies(): Promise<CompanyRow[]> {
     ...o,
     userCount: userMap.get(o.id) ?? 0,
     projectCount: projMap.get(o.id) ?? 0,
+    activeProjectCount: countMap.get(o.id)?.active_projects ?? projMap.get(o.id) ?? 0,
+    billableProjectCount: countMap.get(o.id)?.billable_projects ?? projMap.get(o.id) ?? 0,
   }));
 }
 
