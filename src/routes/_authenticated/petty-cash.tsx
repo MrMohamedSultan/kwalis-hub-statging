@@ -36,6 +36,7 @@ import { parseOpenParam, refMatches, refNoOf } from "@/lib/document-refs";
 import { RefFilterInput, RefText } from "@/components/refs/RefListTools";
 
 import { useTranslation } from "react-i18next";
+import { CancelReceiptButton } from "@/components/decisions/CancelReceiptButton";
 export const Route = createFileRoute("/_authenticated/petty-cash")({
   validateSearch: (s: Record<string, unknown>): { open?: string } => {
     const open = parseOpenParam(s.open);
@@ -769,7 +770,9 @@ function PettyCashPage() {
                 const holder = a?.crew_member_id
                   ? crew.find((c) => c.id === a.crew_member_id)?.full_name
                   : a?.holder;
-                const statusLabel = r.status === "pending" ? "submitted" : r.status;
+                const statusLabel = t(
+                  `decisions.receipt.status.${r.status === "pending" ? "submitted" : r.status}`,
+                );
                 return (
                   <tr key={r.id} className="border-t border-border">
                     <td className="p-3 text-muted-foreground">
@@ -793,7 +796,9 @@ function PettyCashPage() {
                             ? "bg-success/20 text-success"
                             : r.status === "rejected"
                               ? "bg-destructive/20 text-destructive"
-                              : "bg-warning/20 text-warning"
+                              : (r.status as string) === "cancelled"
+                                ? "bg-muted text-muted-foreground line-through"
+                                : "bg-warning/20 text-warning"
                         }`}
                       >
                         {statusLabel}
@@ -830,7 +835,7 @@ function PettyCashPage() {
                             className="text-xs px-2 py-1 rounded-lg bg-success/15 hover:bg-success/25 text-success inline-flex items-center gap-1"
                           >
                             <Check className="size-3" />
-                            Approve
+                            {t("decisions.approval.approve")}
                           </button>
                           <button
                             onClick={async () => {
@@ -848,9 +853,12 @@ function PettyCashPage() {
                             className="text-xs px-2 py-1 rounded-lg bg-destructive/15 hover:bg-destructive/25 text-destructive inline-flex items-center gap-1"
                           >
                             <XIcon className="size-3" />
-                            Reject
+                            {t("decisions.approval.reject")}
                           </button>
                         </span>
+                      )}
+                      {canApprove && r.status === "approved" && (
+                        <CancelReceiptButton receiptId={r.id} onDone={() => void reloadAll()} />
                       )}
                     </td>
                   </tr>

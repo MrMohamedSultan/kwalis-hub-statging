@@ -25,6 +25,7 @@ import {
 } from "./money-display";
 
 import i18n from "@/lib/i18n";
+import { normalizeKsaRegion } from "@/lib/ksa-regions";
 import { normalizeVatTreatment, type VatTreatment } from "./ap-calc";
 import {
   computeBudgetPosition,
@@ -69,6 +70,12 @@ export type BudgetLine = {
   excluded?: boolean;
   /** True when the line qualifies for film-commission rebate reporting. */
   rebateEligible?: boolean;
+  /**
+   * KSA region where the line is spent (db/pending/201, Film Commission budget
+   * by region). null = the project's default region; undefined = not loaded
+   * (database without 201) — then it is never written.
+   */
+  region?: string | null;
 };
 
 export const VENDOR_PAYMENT_TERMS = ["Advance", "Net 15", "Net 30", "Net 60"] as const;
@@ -101,8 +108,21 @@ export type Vendor = {
   relatedPartyNote?: string | null;
 };
 
+export type InvoiceApprovalStatus = "pending" | "approved" | "rejected" | "cancelled";
+
 export type Invoice = {
   id: string;
+  /**
+   * db/pending/201: pending (recorded = Commitment) → approved (Actual, locked)
+   * | rejected; approved → cancelled. Written by the approve / reject / cancel
+   * RPCs only — never sent by toInvoiceRow.
+   */
+  approvalStatus?: InvoiceApprovalStatus;
+  createdBy?: string | null;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  rejectionReason?: string | null;
+  cancellationReason?: string | null;
   projectId?: string | null;
   organizationId?: string | null;
   description: string;
@@ -623,6 +643,7 @@ const fromBudgetRow = (r: any): BudgetLine => ({
   topsheetCode: r.topsheet_code ?? null,
   excluded: !!r.excluded,
   rebateEligible: !!r.rebate_eligible,
+  ...(r.region !== undefined ? { region: r.region ?? null } : {}),
 });
 const activePid = () => useStore.getState().activeProjectId ?? null;
 const activeOrgId = () => {
@@ -632,7 +653,19 @@ const activeOrgId = () => {
   return s.projects.find((p) => p.id === pid)?.organizationId ?? null;
 };
 
-const toBudgetRow = (l: BudgetLine) => ({
+/**
+ * db/pending/201: budget_lines.region (not in the generated types yet) is sent
+ * only when the row was loaded with it, so a database without 201 never gets it.
+ */
+function withRegion<T extends object>(row: T, l: BudgetLine): T {
+  if (l.region !== undefined) {
+    (row as Record<string, unknown>).region = l.region ? normalizeKsaRegion(l.region) : null;
+  }
+  return row;
+}
+
+const toBudgetRow = (l: BudgetLine) => withRegion(budgetRowBase(l), l);
+const budgetRowBase = (l: BudgetLine) => ({
   id: l.id,
   header_code: l.headerCode,
   main_code: l.mainCode,
@@ -733,6 +766,15 @@ const toVendorRow = (v: Vendor) => ({
 
 const fromInvoiceRow = (r: any): Invoice => ({
   id: r.id,
+  // before db/pending/201 every invoice counted as approved
+  approvalStatus: (["pending", "approved", "rejected", "cancelled"].includes(r.approval_status)
+    ? r.approval_status
+    : "approved") as InvoiceApprovalStatus,
+  createdBy: r.created_by ?? null,
+  approvedBy: r.approved_by ?? null,
+  approvedAt: r.approved_at ?? null,
+  rejectionReason: r.rejection_reason ?? null,
+  cancellationReason: r.cancellation_reason ?? null,
   projectId: r.project_id ?? null,
   organizationId: r.organization_id ?? null,
   description: r.description,
@@ -1786,7 +1828,12 @@ export const useStore = create<State>()(
         set((s) => ({
           invoices: [
             ...s.invoices,
-            { ...i, projectId: payload.project_id, organizationId: payload.organization_id },
+            {
+              ...i,
+              approvalStatus: "pending" as const,
+              projectId: payload.project_id,
+              organizationId: payload.organization_id,
+            },
           ],
         }));
         const { error: insertErr } = await supabase.from("invoices").insert(payload as any);
@@ -1847,6 +1894,10 @@ export const useStore = create<State>()(
       },
       removeInvoice: async (id) => {
         const prev = get().invoices.find((x) => x.id === id) ?? null;
+        // X08 (db/pending/201): an approved / cancelled invoice is cancelled, never deleted
+        if (prev && (prev.approvalStatus === "approved" || prev.approvalStatus === "cancelled")) {
+          throw new Error(i18n.t("decisions.invoice.deleteApproved"));
+        }
         // Cascade: clear managed attachments (storage + metadata) first, while
         // the link to the parent still exists. Abort if the lookup itself fails.
         const projectId = get().activeProjectId;
@@ -1854,8 +1905,9 @@ export const useStore = create<State>()(
           const ok = await deleteFilesForEntity(projectId, "invoice", id);
           if (!ok) throw new Error("Could not verify attachments. Deletion aborted for safety.");
         }
+        const { error: delErr } = await supabase.from("invoices").delete().eq("id", id);
+        if (delErr) throw delErr;
         set((s) => ({ invoices: s.invoices.filter((x) => x.id !== id) }));
-        await supabase.from("invoices").delete().eq("id", id);
         // Best-effort: reverse any linked transactions
         try {
           await supabase.from("transactions").delete().eq("reference_no", id);
@@ -2130,8 +2182,16 @@ export const useStore = create<State>()(
       removeReceipt: async (id) => {
         const prev = get().receipts.find((r) => r.id === id);
         if (!prev) return;
+        // db/pending/201: an approved receipt is cancelled, never deleted
+        if (prev.status === "approved" || (prev.status as string) === "cancelled") {
+          throw new Error(i18n.t("decisions.receipt.deleteApproved"));
+        }
+        const { error: delErr } = await supabase
+          .from("cash_advance_receipts")
+          .delete()
+          .eq("id", id);
+        if (delErr) throw delErr;
         set((s) => ({ receipts: s.receipts.filter((r) => r.id !== id) }));
-        await supabase.from("cash_advance_receipts").delete().eq("id", id);
         if (prev.advanceId) {
           const adv = get().cashAdvances.find((a) => a.id === prev.advanceId);
           if (adv) {

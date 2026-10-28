@@ -30,10 +30,26 @@ export function poIsCommitment(status: string | null | undefined): boolean {
   );
 }
 
-/** Excl.-VAT total invoiced against a PO. */
-export function invoicedOnPo(poId: string, invoices: Pick<Invoice, "price" | "purchaseOrderId">[]) {
+/**
+ * Invoice approval (db/pending/201): approved = Actual, pending (recorded) =
+ * Commitment, rejected / cancelled = neither. A row without a status was
+ * saved before 201 and counts as approved.
+ */
+export function invoiceCounts(i: Pick<Invoice, "approvalStatus">): "actual" | "commitment" | null {
+  const st = i.approvalStatus ?? "approved";
+  if (st === "approved") return "actual";
+  if (st === "pending") return "commitment";
+  return null;
+}
+
+/** Excl.-VAT total invoiced against a PO (rejected / cancelled invoices do not count). */
+export function invoicedOnPo(
+  poId: string,
+  invoices: Pick<Invoice, "price" | "purchaseOrderId" | "approvalStatus">[],
+) {
   return invoices.reduce(
-    (a, i) => (i.purchaseOrderId === poId ? a + (Number(i.price) || 0) : a),
+    (a, i) =>
+      i.purchaseOrderId === poId && invoiceCounts(i) !== null ? a + (Number(i.price) || 0) : a,
     0,
   );
 }
@@ -45,7 +61,7 @@ export function invoicedOnPo(poId: string, invoices: Pick<Invoice, "price" | "pu
  */
 export function poOpenCommitment(
   po: Pick<PurchaseOrder, "id" | "amount" | "status">,
-  invoices: Pick<Invoice, "price" | "purchaseOrderId">[],
+  invoices: Pick<Invoice, "price" | "purchaseOrderId" | "approvalStatus">[],
 ): number {
   if (!poIsCommitment(po.status)) return 0;
   return Math.max(0, (Number(po.amount) || 0) - invoicedOnPo(po.id, invoices));
@@ -132,6 +148,7 @@ export type BudgetPosition = {
     contractsActual: number;
     contractsCommitment: number;
     invoicesActual: number;
+    invoicesCommitment: number;
     poCommitment: number;
     pettyActual: number;
     logisticsCommitment: number;
@@ -150,7 +167,14 @@ export function computeBudgetPosition(input: BudgetPositionInput): BudgetPositio
     if (!isContractCancelled(r)) contractsCommitment += Math.max(0, total - act);
   }
 
-  const invoicesActual = invoices.reduce((a, i) => a + (Number(i.price) || 0), 0);
+  const invoicesActual = invoices.reduce(
+    (a, i) => (invoiceCounts(i) === "actual" ? a + (Number(i.price) || 0) : a),
+    0,
+  );
+  const invoicesCommitment = invoices.reduce(
+    (a, i) => (invoiceCounts(i) === "commitment" ? a + (Number(i.price) || 0) : a),
+    0,
+  );
 
   const poCommitment = input.purchaseOrders.reduce(
     (a, po) => a + poOpenCommitment(po, invoices),
@@ -163,7 +187,9 @@ export function computeBudgetPosition(input: BudgetPositionInput): BudgetPositio
     0,
   );
 
-  const priceOf = new Map(invoices.map((i) => [i.id, Number(i.price) || 0]));
+  const priceOf = new Map(
+    invoices.filter((i) => invoiceCounts(i) !== null).map((i) => [i.id, Number(i.price) || 0]),
+  );
   const logisticsCommitment = (input.logistics ?? []).reduce(
     (a, l) =>
       a +
@@ -172,7 +198,9 @@ export function computeBudgetPosition(input: BudgetPositionInput): BudgetPositio
   );
 
   const actual = round2(contractsActual + invoicesActual + pettyActual);
-  const commitment = round2(contractsCommitment + poCommitment + logisticsCommitment);
+  const commitment = round2(
+    contractsCommitment + poCommitment + logisticsCommitment + invoicesCommitment,
+  );
   const paid = round2(payments.reduce((a, p) => a + (Number(p.amount) || 0), 0));
   const budget = round2(Number(input.totalBudget) || 0);
   return {
@@ -186,6 +214,7 @@ export function computeBudgetPosition(input: BudgetPositionInput): BudgetPositio
       contractsActual: round2(contractsActual),
       contractsCommitment: round2(contractsCommitment),
       invoicesActual: round2(invoicesActual),
+      invoicesCommitment: round2(invoicesCommitment),
       poCommitment: round2(poCommitment),
       pettyActual: round2(pettyActual),
       logisticsCommitment: round2(logisticsCommitment),

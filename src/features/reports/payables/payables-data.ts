@@ -82,7 +82,9 @@ export function useDueItems(projectId: string | null) {
                 "purchase_order_id, currency, fx_rate, amount_original, fx_rate_source, fx_rate_date, " +
                 "service_period_from, service_period_to, service_received_date, is_related_party, related_party_note",
             )
-            .eq("project_id", projectId),
+            .eq("project_id", projectId)
+            // db/pending/201: only an approved invoice is owed
+            .eq("approval_status", "approved"),
         ),
         rows(
           from("payments")
@@ -178,7 +180,13 @@ export function useOpenPoData(projectId: string | null) {
             )
             .eq("project_id", projectId),
         ),
-        rows(from("invoices").select("purchase_order_id, price").eq("project_id", projectId)),
+        rows(
+          from("invoices")
+            .select("purchase_order_id, price")
+            .eq("project_id", projectId)
+            // rejected / cancelled invoices do not reduce a PO (db/pending/201)
+            .in("approval_status", ["approved", "pending"]),
+        ),
       ]);
       return {
         pos: (pos as any[]).map((p): OpenPoInput => ({

@@ -168,6 +168,13 @@ import {
 import { recordAudit } from "@/lib/audit-log";
 import { downloadBlob } from "@/lib/download";
 import { useTranslation } from "react-i18next";
+import {
+  ApprovalFilterSelect,
+  ApprovalStatusPill,
+  InvoiceApprovalActions,
+  useCanApproveInvoice,
+  type ApprovalFilter,
+} from "@/components/decisions/ApprovalControls";
 export { explainAutoQfe, computeAutoQfe, qfeRuleLabel };
 export type { QfeExplain, QfeRule };
 
@@ -2310,19 +2317,26 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
   const [qfeRuleFilter, setQfeRuleFilter] = useState<"all" | "A" | "B" | "C" | "override">("all");
   // G08: Kwalis reference number column + filter
   const [refQuery, setRefQuery] = useState("");
+  // db/pending/201: invoice approval status filter + approver check
+  const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>("all");
+  const canApproveInvoices = useCanApproveInvoice(activeProjectId);
   const refs = useRefMap(invoices.length);
   const filteredInvoices = useMemo(() => {
+    const byStatus =
+      approvalFilter === "all"
+        ? invoices
+        : invoices.filter((i) => (i.approvalStatus ?? "approved") === approvalFilter);
     const byRule =
       qfeRuleFilter === "all"
-        ? invoices
+        ? byStatus
         : qfeRuleFilter === "override"
-          ? invoices.filter((i) => !!i.rebateManualOverride)
-          : invoices.filter(
+          ? byStatus.filter((i) => !!i.rebateManualOverride)
+          : byStatus.filter(
               (i) => !i.rebateManualOverride && invoiceRule(i).rule === qfeRuleFilter,
             );
     return refQuery.trim() ? byRule.filter((i) => refs.matches(i.id, refQuery)) : byRule;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invoices, qfeRuleFilter, people, vendors, refQuery, refs.refOf]);
+  }, [invoices, qfeRuleFilter, approvalFilter, people, vendors, refQuery, refs.refOf]);
 
   // Render only one page of rows at a time. Filtering above stays untouched —
   // pagination always operates on the already-filtered result set.
@@ -2339,6 +2353,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
         <h3 className="text-xl font-semibold">{t("platform.ui.invoices")}</h3>
         <div className="flex gap-2 items-center flex-wrap">
           <RefFilterInput value={refQuery} onChange={setRefQuery} />
+          <ApprovalFilterSelect value={approvalFilter} onChange={setApprovalFilter} />
           <label className="text-xs uppercase tracking-wider text-muted-foreground">
             {t("accounting.qfe_rule")}
           </label>
@@ -2390,6 +2405,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
               "Invoice #",
               "Vendor",
               "Purchaser",
+              t("decisions.approval.column"),
               "Status",
               "Actions",
             ]}
@@ -2457,6 +2473,15 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                       )}
                     </Cell>
                     <Cell>
+                      <div className="flex flex-col items-start gap-1">
+                        <ApprovalStatusPill
+                          status={i.approvalStatus ?? "approved"}
+                          reason={i.rejectionReason ?? i.cancellationReason}
+                        />
+                        <InvoiceApprovalActions invoice={i} canApprove={canApproveInvoices} />
+                      </div>
+                    </Cell>
+                    <Cell>
                       <PaymentStatusPill paid={paidTotal} total={amountDue} />
                     </Cell>
                     <Cell>
@@ -2507,14 +2532,20 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                               totalAmount: amountDue,
                             });
                           }}
-                          disabled={paidTotal >= amountDue - 0.005 || !can("invoices.pay")}
+                          disabled={
+                            paidTotal >= amountDue - 0.005 ||
+                            !can("invoices.pay") ||
+                            (i.approvalStatus ?? "approved") !== "approved"
+                          }
                           className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-success/20 text-success text-xs font-semibold hover:bg-success/30 border border-success/30 disabled:opacity-40 disabled:cursor-not-allowed"
                           title={
                             !can("invoices.pay")
                               ? "Permission required: invoices.pay"
-                              : needsPurchaser && !i.purchaserId
-                                ? "Assign a Purchaser first"
-                                : "Record Payment"
+                              : (i.approvalStatus ?? "approved") !== "approved"
+                                ? t("decisions.invoice.payNeedsApproval")
+                                : needsPurchaser && !i.purchaserId
+                                  ? "Assign a Purchaser first"
+                                  : "Record Payment"
                           }
                         >
                           {!can("invoices.pay") ? (
@@ -2554,12 +2585,17 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                               toast.error(e?.message ?? "Failed to delete invoice.");
                             }
                           }}
-                          disabled={!can("transactions.modify")}
+                          disabled={
+                            !can("transactions.modify") ||
+                            ["approved", "cancelled"].includes(i.approvalStatus ?? "approved")
+                          }
                           className="p-1.5 rounded-lg hover:bg-destructive/20 text-destructive disabled:opacity-40 disabled:cursor-not-allowed"
                           title={
                             !can("transactions.modify")
                               ? "Permission required: transactions.modify"
-                              : "Delete/Void"
+                              : ["approved", "cancelled"].includes(i.approvalStatus ?? "approved")
+                                ? t("decisions.invoice.deleteApproved")
+                                : "Delete/Void"
                           }
                         >
                           <Trash2 className="size-4" />
@@ -2570,7 +2606,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                   <PaymentHistoryToggle
                     sourceType="invoice"
                     sourceId={i.id}
-                    colSpan={14}
+                    colSpan={15}
                     initialOpen={focusedId === i.id}
                   />
                 </Fragment>
@@ -2578,7 +2614,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
             })}
             {filteredInvoices.length === 0 && (
               <TableEmptyRow
-                colSpan={14}
+                colSpan={15}
                 variant={invoices.length === 0 ? "empty" : "filtered"}
                 title={invoices.length === 0 ? "No invoices yet" : "No matching invoices"}
                 description={
