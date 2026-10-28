@@ -21,7 +21,8 @@ SELECT t.eq('Head Writer carries only its own payroll', (SELECT actual::text||'/
 SELECT t.eq('the other 3 lines of 1101 show no spend (no repetition)', (SELECT sum(actual) FROM bt WHERE budget_code='1101' AND line_id IS NOT NULL AND line_id<>:'l_head'), 0.00);
 SELECT t.eq('unlinked payroll sits once on the 1101 unassigned row', (SELECT actual::text||'/'||committed::text FROM bt WHERE budget_code='1101' AND line_id IS NULL), '0.00/107500.00');
 SELECT t.eq('paid follows the linked source', (SELECT paid FROM bt WHERE line_id=:'l_head'), 2000.00);
-SELECT t.eq('Actor A: invoice actual + its payment', (SELECT actual::text||'/'||paid::text FROM bt WHERE line_id=:'l_actor'), '5000.00/1500.00');
+-- 196: the invoice request paid in 020 (1,000) now writes its payments row
+SELECT t.eq('Actor A: invoice actual + its payments', (SELECT actual::text||'/'||paid::text FROM bt WHERE line_id=:'l_actor'), '5000.00/2500.00');
 SELECT t.eq('1403 unassigned: petty cash actual, PO committed', (SELECT actual::text||'/'||committed::text FROM bt WHERE budget_code='1403' AND line_id IS NULL), '800.00/3000.00');
 SELECT t.eq('remaining = budget - actual - committed', (SELECT count(*) FROM bt WHERE remaining <> budget-actual-committed), 0::bigint);
 -- acceptance: totals equal the Cost Report
