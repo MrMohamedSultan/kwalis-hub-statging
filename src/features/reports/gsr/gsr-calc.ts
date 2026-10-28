@@ -35,6 +35,8 @@ export interface GsrPayment {
   amount_sar: number;
   wht: number;
   method: string | null;
+  /** db/pending/203: a payment on an invoice that is not approved (listed, flagged). */
+  invoice_not_approved?: boolean;
 }
 
 /** Template spend type: petty cash and other payments are vendors. */

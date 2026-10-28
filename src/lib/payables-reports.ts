@@ -342,6 +342,8 @@ export type RegisterRow = {
   gross: number;
   wht: number;
   net: number;
+  /** db/pending/203: a payment on an invoice that is not approved (listed, flagged). */
+  invoice_not_approved?: boolean;
 };
 
 export type RegisterFilter = {

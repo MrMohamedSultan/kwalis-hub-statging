@@ -60,6 +60,8 @@ export function GsrReport() {
   const [open, setOpen] = useState<string | null>(null);
   const q = useGsrPayments(projectId, fromDate, toDate);
   const g = useMemo(() => buildGsr(q.data ?? []), [q.data]);
+  // db/pending/203: payments on invoices that are not approved are listed, flagged
+  const unapproved = useMemo(() => (q.data ?? []).filter((p) => p.invoice_not_approved), [q.data]);
   const country = (c: string) => (c === UNSPECIFIED ? t("taxlive.gsr.unspecified") : c);
   const type = (k: string) => t(`taxlive.gsr.type.${k}`);
   const period =
@@ -184,6 +186,11 @@ export function GsrReport() {
           <div>
             <h3 className="text-lg font-semibold">{t("taxlive.gsr.title")}</h3>
             <p className="max-w-3xl text-xs text-muted-foreground">{t("taxlive.gsr.hint")}</p>
+            {unapproved.length > 0 && (
+              <p className="mt-2 max-w-3xl rounded-lg border border-warning/40 bg-warning/10 px-2 py-1 text-xs text-warning">
+                {t("decisions.invoice.paidNotApproved", { count: unapproved.length })}
+              </p>
+            )}
           </div>
           <PeriodFilter
             from={fromDate}

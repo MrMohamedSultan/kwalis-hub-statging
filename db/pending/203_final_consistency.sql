@@ -22,16 +22,16 @@
 --    contract's place, nationality and spend type (Labour unless the
 --    organization maps 7099 to another spend type), so the GSR total still
 --    equals the Actual of the ledger.
--- 3. get_gsr_payments (198) and 4. get_payments_register (196) — payments
---    on an invoice that is not approved are left out. 201 already refuses
---    such a payment for signed-in users (trg_payments_invoice_approved) and
---    refuses to cancel an invoice that has payments, so on normal data this
---    removes nothing; it only matters for rows written by the service role
---    / imports (auth.uid() IS NULL). Note for 4: such a payment is still a
---    bank credit in the General Ledger (v_journal_lines posts every
---    payment), so the R12 tie-out "Σ net on 9100 = GL bank credits" holds
---    except for those rows — they should be fixed (approve the invoice)
---    rather than hidden; ask the accountant if any appear.
+-- 3. get_gsr_payments (198) and 4. get_payments_register (196) — a
+--    payment on an invoice that is not approved is still listed (it is real
+--    cash out and a bank credit in the General Ledger, so the R12 tie-out
+--    "Σ net on 9100 = GL bank credits" keeps holding) but flagged with the
+--    new last column invoice_not_approved = true, and the screens show it.
+--    201 already refuses such a payment for signed-in users
+--    (trg_payments_invoice_approved) and refuses to cancel an invoice that
+--    has payments, so on normal data no row is flagged; it only happens for
+--    rows written by the service role / imports (auth.uid() IS NULL). They
+--    should be fixed (approve the invoice) — ask the accountant if any appear.
 --
 -- Consumers of source_type = 'payroll' in v_ledger_transactions (reviewed):
 --   * views by budget code / totals (v_budget_code_position,
@@ -45,11 +45,15 @@
 --     handles 'payroll_wht' (201 branch).
 --
 -- Nothing else changes: no table, column, policy, grant or data. All four
--- functions stay SECURITY INVOKER with their access checks.
+-- functions stay SECURITY INVOKER with their access checks. 3 and 4 are
+-- dropped and re-created (their result gains a column; nothing in the
+-- database depends on them), with their REVOKE / GRANT lines.
 --
 -- Rollback: re-run the function definitions (with their REVOKE / GRANT /
 -- COMMENT lines) from db/pending/197 §7 (rebate_transactions), 100
--- (get_gsr), 198 (get_gsr_payments) and 196 §6 (get_payments_register).
+-- (get_gsr); for 198 (get_gsr_payments) and 196 §6 (get_payments_register)
+-- first DROP FUNCTION public.get_gsr_payments(uuid, date, date) /
+-- public.get_payments_register(uuid, date, date) (the result type changes back).
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -570,9 +574,10 @@ REVOKE ALL ON FUNCTION public.get_gsr(uuid, date, date) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_gsr(uuid, date, date) TO authenticated, service_role;
 
 -- ---------------------------------------------------------------------
--- 3. get_gsr_payments — copy of 198; change marked 203
+-- 3. get_gsr_payments — copy of 198; changes marked 203
 -- ---------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.get_gsr_payments(p_project_id uuid, p_from date DEFAULT NULL, p_to date DEFAULT NULL)
+DROP FUNCTION IF EXISTS public.get_gsr_payments(uuid, date, date);   -- 203: new column invoice_not_approved
+CREATE FUNCTION public.get_gsr_payments(p_project_id uuid, p_from date DEFAULT NULL, p_to date DEFAULT NULL)
 RETURNS TABLE (
   payment_id      uuid,
   payment_date    date,
@@ -587,7 +592,8 @@ RETURNS TABLE (
   amount_original numeric,
   amount_sar      numeric,
   wht             numeric,
-  method          text
+  method          text,
+  invoice_not_approved boolean   -- 203: a payment on an invoice that is not approved (shown, flagged)
 )
 LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path = public AS $$
 DECLARE v_org uuid;
@@ -624,7 +630,8 @@ BEGIN
                 AND COALESCE(inv.price, 0) + COALESCE(inv.vat_amount, 0) - inv.wht_amount > 0
              THEN pm.amount * inv.wht_amount / (COALESCE(inv.price, 0) + COALESCE(inv.vat_amount, 0) - inv.wht_amount)
            ELSE 0 END, 2),
-         pm.method
+         pm.method,
+         (inv.id IS NOT NULL AND inv.approval_status IS DISTINCT FROM 'approved')   -- 203
     FROM public.payments pm
     LEFT JOIN public.payroll pr ON pm.source_type = 'payroll' AND pr.id = pm.source_id
     LEFT JOIN public.invoices inv ON pm.source_type = 'invoice' AND inv.id = pm.source_id
@@ -635,7 +642,6 @@ BEGIN
            WHEN 'overtime' THEN (SELECT o.person_id FROM public.overtime_entries o WHERE o.id = pm.source_id)
            WHEN 'per_diem' THEN (SELECT d.person_id FROM public.per_diem_ledger d WHERE d.id = pm.source_id) END
    WHERE pm.project_id = p_project_id
-     AND (inv.id IS NULL OR inv.approval_status = 'approved')            -- 203: approved invoices only
      AND (p_from IS NULL OR pm.payment_date >= p_from)
      AND (p_to   IS NULL OR pm.payment_date <= p_to)
    ORDER BY pm.payment_date, pm.created_at;
@@ -645,12 +651,14 @@ REVOKE ALL ON FUNCTION public.get_gsr_payments(uuid, date, date) FROM PUBLIC, an
 GRANT EXECUTE ON FUNCTION public.get_gsr_payments(uuid, date, date) TO authenticated, service_role;
 
 -- ---------------------------------------------------------------------
--- 4. get_payments_register — copy of 196; change marked 203
+-- 4. get_payments_register — copy of 196; changes marked 203
 -- ---------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.get_payments_register(p_project_id uuid, p_from date DEFAULT NULL, p_to date DEFAULT NULL)
+DROP FUNCTION IF EXISTS public.get_payments_register(uuid, date, date);   -- 203: new column invoice_not_approved
+CREATE FUNCTION public.get_payments_register(p_project_id uuid, p_from date DEFAULT NULL, p_to date DEFAULT NULL)
 RETURNS TABLE (event_key text, event_type text, payment_date date, payment_ref text, payee text,
                document_type text, document_id uuid, document_ref text, instalment text, budget_code text,
-               method text, paid_from_code text, paid_from_name text, gross numeric, wht numeric, net numeric)
+               method text, paid_from_code text, paid_from_name text, gross numeric, wht numeric, net numeric,
+               invoice_not_approved boolean)   -- 203
 LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path = public AS $$
 BEGIN
   PERFORM public.ledger_assert_member(p_project_id, 'get_payments_register');
@@ -701,7 +709,8 @@ BEGIN
               WHEN d.prefix IN ('petty_receipt', 'per_diem') THEN 'Petty cash'
               ELSE 'Transfer' END,
          d.gl_code, d.gl_name,
-         round(d.net + w.wht, 2), round(w.wht, 2), round(d.net, 2)
+         round(d.net + w.wht, 2), round(w.wht, 2), round(d.net, 2),
+         (inv.id IS NOT NULL AND inv.approval_status IS DISTINCT FROM 'approved')   -- 203
     FROM d
     LEFT JOIN public.payments pay ON d.prefix = 'payment' AND pay.id = d.src_id
     LEFT JOIN public.invoices inv ON pay.source_type = 'invoice' AND inv.id = pay.source_id
@@ -722,10 +731,9 @@ BEGIN
              AND COALESCE(inv.price, 0) + COALESCE(inv.vat_amount, 0) - inv.wht_amount > 0
           THEN inv.wht_amount * d.net / (COALESCE(inv.price, 0) + COALESCE(inv.vat_amount, 0) - inv.wht_amount)
         ELSE 0 END AS wht) w
-   WHERE inv.id IS NULL OR inv.approval_status = 'approved'               -- 203: approved invoices only
    ORDER BY d.d, d.event_key;
 END $$;
 REVOKE ALL ON FUNCTION public.get_payments_register(uuid, date, date) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_payments_register(uuid, date, date) TO authenticated, service_role;
 COMMENT ON FUNCTION public.get_payments_register(uuid, date, date) IS
-  'Payments Register (R12): one row per payment out of the bank / cash / petty cash in the ledger (payments, petty cash floats and receipts, per diem from a float, WHT remittances, VAT payments, bank charges) with payee, document and instalment, method, paid-from account, gross / WHT / net. Σ net on 9100 = bank credits of those events in the General Ledger. db/pending/196; payments on invoices not approved (db/pending/201) are left out since db/pending/203.';
+  'Payments Register (R12): one row per payment out of the bank / cash / petty cash in the ledger (payments, petty cash floats and receipts, per diem from a float, WHT remittances, VAT payments, bank charges) with payee, document and instalment, method, paid-from account, gross / WHT / net. Σ net on 9100 = bank credits of those events in the General Ledger. db/pending/196; since db/pending/203 a payment on an invoice that is not approved (db/pending/201) is listed with invoice_not_approved = true.';

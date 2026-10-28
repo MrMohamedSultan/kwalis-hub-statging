@@ -179,6 +179,13 @@ export function PaymentsRegisterReport() {
         error={q.error ? (q.error as Error).message : null}
         empty={!q.isLoading && !q.error && rows.length === 0}
       />
+      {rows.some((r) => r.invoice_not_approved) && (
+        <p className="mt-3 rounded-lg border border-warning/40 bg-warning/10 px-2 py-1 text-xs text-warning">
+          {t("decisions.invoice.paidNotApproved", {
+            count: rows.filter((r) => r.invoice_not_approved).length,
+          })}
+        </p>
+      )}
       {!q.isLoading && !q.error && rows.length > 0 && (
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm">
@@ -208,7 +215,17 @@ export function PaymentsRegisterReport() {
                     <td className={`${txtCls} font-mono text-xs`}>{r.payment_ref ?? "—"}</td>
                     <td className={txtCls}>{r.payee ?? "—"}</td>
                     <td className={txtCls}>{docLabel(r.document_type)}</td>
-                    <td className={`${txtCls} font-mono text-xs`}>{r.document_ref ?? "—"}</td>
+                    <td className={`${txtCls} font-mono text-xs`}>
+                      {r.document_ref ?? "—"}
+                      {r.invoice_not_approved && (
+                        <span
+                          className="ms-1 rounded bg-warning/15 px-1 font-sans text-[10px] text-warning"
+                          title={t("decisions.invoice.notApprovedBadgeHint")}
+                        >
+                          {t("decisions.invoice.notApprovedBadge")}
+                        </span>
+                      )}
+                    </td>
                     <td className={txtCls}>{r.instalment ?? "—"}</td>
                     <td className={`${txtCls} font-mono text-xs`}>{r.budget_code ?? "—"}</td>
                     <td className={txtCls}>{methodLabel(r.method)}</td>

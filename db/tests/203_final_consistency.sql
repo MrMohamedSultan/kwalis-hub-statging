@@ -1,5 +1,6 @@
--- 203 — final consistency after 201: rebate_transactions, GSR and the
--- payments register count approved invoices only; the 7099 company-WHT
+-- 203 — final consistency after 201: rebate_transactions and GSR count
+-- approved invoices only; GSR payments and the payments register flag a
+-- payment on an invoice that is not approved (#16); the 7099 company-WHT
 -- rows of decision 12 follow their contract in the GSR.
 \set A  '00000000-0000-0000-0000-00000000000a'
 \set O1 '10000000-0000-0000-0000-000000000001'
@@ -48,10 +49,13 @@ SELECT t.eq('GSR: the 7099 row takes its contract''s place (nothing Unspecified)
 SELECT t.eq('GSR: contract + its 7099 WHT under Labour', (SELECT sum(amount_excl_vat) FROM get_gsr(:'P') WHERE spend_type = 'Labour'), 7368.42);
 
 -- ================================================================ 3. get_gsr_payments
-SELECT t.eq('GSR payments: only the approved invoice''s payment', (SELECT string_agg(source_id::text, ',') FROM get_gsr_payments(:'P') WHERE source_type = 'invoice'), :'IA');
+SELECT t.eq('GSR payments: the approved invoice''s payment, not flagged', (SELECT invoice_not_approved FROM get_gsr_payments(:'P') WHERE source_id = :'IA'), false);
+SELECT t.eq('#16 GSR payments: the import''s payment on the pending invoice is shown, flagged', (SELECT invoice_not_approved::text||'|'||amount_sar FROM get_gsr_payments(:'P') WHERE source_id = :'IP'), 'true|100.00');
 
 -- ================================================================ 4. get_payments_register
-SELECT t.eq('register: only the approved invoice''s payment', (SELECT string_agg(document_id::text, ',') FROM get_payments_register(:'P') WHERE document_type = 'invoice'), :'IA');
+SELECT t.eq('register: the approved invoice''s payment, not flagged', (SELECT invoice_not_approved FROM get_payments_register(:'P') WHERE document_id = :'IA'), false);
+SELECT t.eq('#16 register: the payment on the pending invoice is shown, flagged', (SELECT invoice_not_approved::text||'|'||net FROM get_payments_register(:'P') WHERE document_id = :'IP'), 'true|100.00');
+SELECT t.eq('#16 register: Σ net = bank credits of the ledger (nothing hidden)', (SELECT sum(net) FROM get_payments_register(:'P') WHERE document_type = 'invoice'), 1250.00);
 SELECT t.eq('register: its amount', (SELECT net FROM get_payments_register(:'P') WHERE document_id = :'IA'), 1150.00);
 RESET ROLE;
 
