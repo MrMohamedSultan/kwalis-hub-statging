@@ -4129,9 +4129,9 @@ export function ViewEditBudget() {
                 <h1>Budget Export — ${esc(filterLabel)}</h1>
                 <div class="sub">${rows.length} line${rows.length === 1 ? "" : "s"} · Generated ${esc(dateStr)}</div>
                 <table>
-                  <thead><tr><th>{t("platform.ui.section")}</th><th>{t("platform.ui.header")}</th><th>{t("budget.code")}</th><th>{t("budget.description")}</th><th class="r">{t("platform.ui.qty")}</th><th class="r">{t("platform.ui.rate")}</th><th class="r">{t("platform.ui.periods")}</th><th class="r">{t("budget.total_sar_2")}</th></tr></thead>
+                  <thead><tr><th>${esc(t("platform.ui.section"))}</th><th>${esc(t("platform.ui.header"))}</th><th>${esc(t("budget.code"))}</th><th>${esc(t("budget.description"))}</th><th class="r">${esc(t("platform.ui.qty"))}</th><th class="r">${esc(t("platform.ui.rate"))}</th><th class="r">${esc(t("platform.ui.periods"))}</th><th class="r">${esc(t("budget.total_sar_2"))}</th></tr></thead>
                   <tbody>${body}</tbody>
-                  <tfoot><tr><td colspan="7" class="r">{t("budget.total_sar")}</td><td class="r">${fmt(filteredSAR)}</td></tr></tfoot>
+                  <tfoot><tr><td colspan="7" class="r">${esc(t("budget.total_sar"))}</td><td class="r">${fmt(filteredSAR)}</td></tr></tfoot>
                 </table>
                 <script>window.onload=()=>{window.print();};</script>
               </body></html>`;
