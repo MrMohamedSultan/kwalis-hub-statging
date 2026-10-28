@@ -16,7 +16,8 @@ SELECT t.eq('unmapped: one Uncategorized row', (SELECT count(*) FROM get_cost_by
 -- 180 glossary: contracts are Commitment until their instalments are approved (only the 2,000 paid is Actual)
 SELECT t.eq('unmapped: actual = paid on contracts + invoices + petty cash', (SELECT actual FROM get_cost_by_gl_account(:'P1') WHERE gl_account_id IS NULL), 9000.00);
 SELECT t.eq('unmapped: committed = PO + rest of the contracts', (SELECT committed FROM get_cost_by_gl_account(:'P1')), 244039.47);
-SELECT t.eq('paid read from the payments ledger', (SELECT paid FROM get_cost_by_gl_account(:'P1')), 3900.00);
+-- 196: + the 1,000 invoice request paid in 020 (it now writes its payments row)
+SELECT t.eq('paid read from the payments ledger', (SELECT paid FROM get_cost_by_gl_account(:'P1')), 4900.00);
 SELECT t.denied('plain member cannot write the mapping', format($$INSERT INTO budget_code_gl_map(organization_id, budget_code_prefix, gl_account_id) VALUES ('10000000-0000-0000-0000-000000000001','11',%L)$$, :'gl_script'));
 -- platform default by super admin, org override by org admin
 SELECT t.as_user(:'E');
@@ -37,7 +38,7 @@ SELECT t.eq('1403 spend under Principal Cast', (SELECT actual::text||'/'||commit
 SELECT t.eq('payments follow their source row''s account', (SELECT paid FROM g WHERE gl_code='GL-1000'), 2000.00);
 SELECT t.eq('only the unmapped invoice stays Uncategorized', (SELECT actual FROM g WHERE gl_account_id IS NULL), 1200.00);
 SELECT t.eq('totals unchanged by mapping: actual', (SELECT sum(actual) FROM g), 9000.00);
-SELECT t.eq('totals unchanged by mapping: paid = payments ledger', (SELECT sum(paid) FROM g), 3900.00);
+SELECT t.eq('totals unchanged by mapping: paid = payments ledger', (SELECT sum(paid) FROM g), 4900.00);  -- 196: + the request paid in 020
 SELECT t.eq('rows resolved through the mapping are counted', (SELECT sum(mapped_by_code) FROM g), 5::bigint);
 SELECT t.eq('period filter on entry date', (SELECT COALESCE(sum(actual),0) FROM get_cost_by_gl_account(:'P1','2026-09-01','2026-09-30') WHERE gl_code='GL-1300'), 5800.00);
 -- a row's own gl_account_id wins over the mapping

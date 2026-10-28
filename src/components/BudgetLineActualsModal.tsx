@@ -108,7 +108,8 @@ export function BudgetLineActualsModal({
       ]);
 
       const ledgerRows = ((ledgerRes.data ?? []) as any[]).map((r) => ({
-        key: `${r.source_type}:${r.source_id}:${r.entry_date}`,
+        // a payroll row comes twice (actual + commitment) with the same id
+        key: `${r.source_type}:${r.source_id}:${r.entry_kind}:${r.entry_date}`,
         at: String(r.entry_date ?? ""),
         counterparty: (r.counterparty as string | null) ?? null,
         reference: (r.reference as string | null) ?? null,

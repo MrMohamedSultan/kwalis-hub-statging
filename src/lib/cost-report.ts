@@ -35,9 +35,84 @@ export type CostReportRow = {
 export type CostGrouping = "line" | "account" | "category";
 export const COST_GROUPINGS: CostGrouping[] = ["line", "account", "category"];
 
-/** Final-report categories (context: ATL / BTL / Post / Other). */
-export type CostCategory = "ATL" | "BTL" | "Post" | "Other";
-export const COST_CATEGORIES: CostCategory[] = ["ATL", "BTL", "Post", "Other"];
+/**
+ * Report categories of the client's Cost Report template (drive/SUMMARY.md):
+ * ATL / BTL / Post / Music / VFX / Other (R09: Music 6000, VFX 6100 are their
+ * own categories, not Post).
+ */
+export type CostCategory = "ATL" | "BTL" | "Post" | "Music" | "VFX" | "Other";
+export const COST_CATEGORIES: CostCategory[] = ["ATL", "BTL", "Post", "Music", "VFX", "Other"];
+
+/** Header accounts of the client chart of accounts (02_Chart-of-Accounts.csv) → category. */
+export const CLIENT_COA_HEADERS: Readonly<Record<string, CostCategory>> = {
+  "1100": "ATL",
+  "1200": "ATL",
+  "1300": "ATL",
+  "1400": "ATL",
+  "1600": "ATL",
+  "2000": "BTL",
+  "2100": "BTL",
+  "2200": "BTL",
+  "2300": "BTL",
+  "2400": "BTL",
+  "2500": "BTL",
+  "2600": "BTL",
+  "2700": "BTL",
+  "2800": "BTL",
+  "2900": "BTL",
+  "3000": "BTL",
+  "3100": "BTL",
+  "3200": "BTL",
+  "3300": "BTL",
+  "3400": "BTL",
+  "3500": "BTL",
+  "3600": "BTL",
+  "3700": "BTL",
+  "3800": "BTL",
+  "3900": "BTL",
+  "4000": "BTL",
+  "4100": "BTL",
+  "4700": "BTL",
+  "5000": "Post",
+  "5100": "Post",
+  "5200": "Post",
+  "5300": "Post",
+  "5400": "Post",
+  "6000": "Music",
+  "6100": "VFX",
+  "7000": "Other",
+  "7200": "Other",
+  "7400": "Other",
+  "7900": "Other",
+  "8200": "Other",
+};
+
+/** Header account of a detail code ("6101" → "6100"); null when the code is not 4 digits. */
+export function coaHeaderOf(code: string | null | undefined): string | null {
+  const m = /^(\d{4})/.exec(String(code ?? "").trim());
+  if (!m) return null;
+  return `${m[1].slice(0, 2)}00`;
+}
+
+/** True when the code is a detail code under a header of the client chart of accounts. */
+export function inClientCoa(code: string | null | undefined): boolean {
+  const h = coaHeaderOf(code);
+  return h != null && h in CLIENT_COA_HEADERS && String(code).trim() !== h;
+}
+
+/**
+ * Category of a cost row: from its budget code when the code is in the client
+ * chart of accounts (so 6001 is Music and 6101 VFX, R09), else from the Top
+ * Sheet section get_cost_report returns.
+ */
+export function categoryOfCode(
+  code: string | null | undefined,
+  section: string | null | undefined,
+): CostCategory {
+  const h = coaHeaderOf(code);
+  if (h && CLIENT_COA_HEADERS[h]) return CLIENT_COA_HEADERS[h];
+  return categoryOf(section);
+}
 
 /** Top-sheet section of get_cost_report → report category. */
 export function categoryOf(section: string | null | undefined): CostCategory {
@@ -45,6 +120,8 @@ export function categoryOf(section: string | null | undefined): CostCategory {
   if (s === "atl" || s.startsWith("above")) return "ATL";
   if (s === "btl" || s === "production" || s.startsWith("below")) return "BTL";
   if (s.startsWith("post")) return "Post";
+  if (s === "music") return "Music";
+  if (s === "vfx" || s.startsWith("visual")) return "VFX";
   return "Other";
 }
 
@@ -152,7 +229,7 @@ export function groupCostReport(
       code = r.glCode;
       label = r.glName ?? labels.unassigned;
     } else {
-      const c = categoryOf(r.group);
+      const c = categoryOfCode(r.budgetCode, r.group);
       key = c;
       code = c;
       label = labels.category ? labels.category(c) : c;
@@ -253,4 +330,91 @@ export function finalReportSummary(rows: CostReportRow[], groups: readonly strin
     { actualPaid: 0, commitments: 0, budget: 0, efc: 0, variance: 0 },
   );
   return { rows: out, totals };
+}
+
+// ------------------------------------------------------------ R08 / R10 / template checks
+
+/** Var% of the template: Variance / Budget, blank (null) when Budget = 0. */
+export function variancePct(variance: number, budget: number): number | null {
+  return Math.abs(budget) < 0.005 ? null : round2((variance / budget) * 100);
+}
+
+/** R10 colour by meaning: saving (green), overrun (red), zero / unallocated (grey). */
+export type Tone = "saving" | "overrun" | "neutral";
+export function varianceTone(v: number): Tone {
+  if (v > 0.005) return "saving";
+  if (v < -0.005) return "overrun";
+  return "neutral";
+}
+
+export type CostFilter = {
+  category?: CostCategory | "all";
+  search?: string;
+  /** Hide rows with no budget and no money at all. */
+  hideEmpty?: boolean;
+};
+
+/** R08: the filters apply to the code rows before any grouping. */
+export function filterCostRows(rows: CostReportRow[], f: CostFilter): CostReportRow[] {
+  const q = (f.search ?? "").trim().toLowerCase();
+  return rows.filter((r) => {
+    if (f.category && f.category !== "all" && categoryOfCode(r.budgetCode, r.group) !== f.category)
+      return false;
+    if (
+      q &&
+      ![r.budgetCode, r.description, r.glCode, r.glName, r.topsheetCode, r.topsheetName]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
+    )
+      return false;
+    if (
+      f.hideEmpty &&
+      [r.budget, r.actual, r.commitment, r.paidToDate, r.etc].every((v) => Math.abs(v) < 0.005)
+    )
+      return false;
+    return true;
+  });
+}
+
+export type CostCheck = {
+  key:
+    | "gl_total"
+    | "actual_mapped"
+    | "unmapped_spend"
+    | "codes_not_in_coa"
+    | "budget_not_in_coa"
+    | "etc_not_in_coa";
+  value: number;
+  /** "count" checks are numbers of codes, the others SAR. */
+  unit: "money" | "count";
+  /** null = information only (no pass / fail). */
+  ok: boolean | null;
+};
+
+/**
+ * The check rows of the client Cost Report template: spend that has no budget
+ * code must be 0, and every code with spend / budget / ETC must be a detail
+ * code of the chart of accounts.
+ */
+export function costReportChecks(rows: CostReportRow[]): CostCheck[] {
+  const total = round2(rows.reduce((a, r) => a + r.actual, 0));
+  const mapped = round2(rows.filter((r) => r.budgetCode).reduce((a, r) => a + r.actual, 0));
+  const unmapped = round2(
+    rows
+      .filter((r) => !r.budgetCode)
+      .reduce((a, r) => a + Math.abs(r.actual) + Math.abs(r.commitment), 0),
+  );
+  const notIn = (pred: (r: CostReportRow) => boolean) =>
+    rows.filter((r) => r.budgetCode && !inClientCoa(r.budgetCode) && pred(r)).length;
+  const spendNotIn = notIn((r) => Math.abs(r.actual) + Math.abs(r.commitment) >= 0.005);
+  const budgetNotIn = notIn((r) => Math.abs(r.budget) >= 0.005);
+  const etcNotIn = notIn((r) => r.etcIsManual);
+  return [
+    { key: "gl_total", value: total, unit: "money", ok: null },
+    { key: "actual_mapped", value: mapped, unit: "money", ok: null },
+    { key: "unmapped_spend", value: unmapped, unit: "money", ok: unmapped < 0.005 },
+    { key: "codes_not_in_coa", value: spendNotIn, unit: "count", ok: spendNotIn === 0 },
+    { key: "budget_not_in_coa", value: budgetNotIn, unit: "count", ok: budgetNotIn === 0 },
+    { key: "etc_not_in_coa", value: etcNotIn, unit: "count", ok: etcNotIn === 0 },
+  ];
 }

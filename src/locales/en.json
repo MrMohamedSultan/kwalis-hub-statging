@@ -3864,5 +3864,225 @@
       "no_profile": "no profile",
       "definitions": "Amounts in SAR. Contract value = gross agreed (WHT included). Commitment = contract value − approved instalments. Paid = payments made. Payable = approved instalments (net of WHT) not yet paid. WHT = gross − net."
     }
+  },
+  "reconcile": {
+    "common": {
+      "all": "All",
+      "search": "Search",
+      "total": "Total"
+    },
+    "tab": {
+      "cost": "Cost Report",
+      "ledger": "General Ledger",
+      "paid": "Payments Register",
+      "due": "Payments Due",
+      "aging": "AP Aging",
+      "openpo": "Open Purchase Orders",
+      "pettyrec": "Petty Cash Reconciliation"
+    },
+    "event": {
+      "vat_payment": "VAT payment"
+    },
+    "source": {
+      "treasury": "Bank movement"
+    },
+    "status": {
+      "Pending": "Pending",
+      "Requested": "Requested",
+      "Approved": "Approved",
+      "Paid": "Paid"
+    },
+    "gl": {
+      "openHint": "Open the document behind this line"
+    },
+    "cost": {
+      "category": {
+        "ATL": "Above the line",
+        "BTL": "Below the line",
+        "Post": "Post-production",
+        "Music": "Music",
+        "VFX": "Visual effects",
+        "Other": "Other"
+      },
+      "allCategories": "All categories",
+      "searchHint": "Code, name or account",
+      "headerAcct": "Header account",
+      "varPct": "Var %",
+      "keyFigures": "Key figures",
+      "figure": "Figure",
+      "fx": "Exchange rate (SAR per USD)",
+      "episodes": "Episodes",
+      "episodesCount": "{{count}} episodes",
+      "costPerEpisode": "EFC per episode",
+      "categorySummary": "Summary by category",
+      "checks": "Checks",
+      "checksHint": "Spend without a budget code must be 0, and every code with spend, budget or ETC must be a detail code of the chart of accounts (headers 1100–8200).",
+      "check": {
+        "col": "Check",
+        "status": "Status",
+        "gl_total": "Actual total",
+        "actual_mapped": "Actual on budget codes",
+        "unmapped_spend": "Spend without a budget code (must be 0)",
+        "codes_not_in_coa": "Codes with spend not in the chart of accounts (must be 0)",
+        "budget_not_in_coa": "Budget lines not in the chart of accounts (must be 0)",
+        "etc_not_in_coa": "ETC lines not in the chart of accounts (must be 0)"
+      }
+    },
+    "series": {
+      "title": "Series episode allocations · {{seasons}} seasons · {{episodes}} episodes",
+      "season": "Season",
+      "episodes": "Episodes",
+      "allocated": "Allocated",
+      "share": "% of budget",
+      "perEpisode": "Per episode",
+      "unallocated": "Not allocated",
+      "unallocatedBudget": "Budget not allocated (Budget − Allocated)"
+    },
+    "cash": {
+      "bankBalance": "Bank balance",
+      "paidFromBank": "Paid from the bank",
+      "pettyIssued": "Petty cash floats issued",
+      "pettyReturned": "Petty cash returned",
+      "bankCharges": "Bank charges",
+      "cashOnHand": "Cash on hand",
+      "pettyBalance": "Petty cash floats (unspent)",
+      "minusPaidFromBank": "− Paid from the bank",
+      "minusPettyIssued": "− Petty cash floats issued",
+      "plusPettyReturned": "+ Petty cash returned",
+      "minusBankCharges": "− Bank charges",
+      "outsideBank": "Cash outside the bank",
+      "paidNotFromBank": "Paid in cash or from petty cash",
+      "note": "The bank balance is the bank account of the Trial Balance: Funding − Paid from the bank − petty cash floats + petty cash returned − VAT paid + VAT recovered − WHT remitted − bank charges. Approved but unpaid amounts are Upcoming payments; the Expected balance is what is left after them."
+    },
+    "treasury": {
+      "tab": "Tax & bank movements",
+      "title": "Record a bank movement (VAT / WHT / bank charge)",
+      "hint": "Money paid to or received from ZATCA and bank charges. They post to the ledger and change the bank balance. Petty cash returns are recorded on the Bank Reconciliation report.",
+      "list": "Bank movements ({{count}})",
+      "budgetCode": "Budget code of the charge",
+      "vat_payment": "VAT paid",
+      "vat_recovery": "VAT recovered",
+      "wht_remittance": "WHT remitted",
+      "bank_charge": "Bank charge",
+      "petty_cash_return": "Petty cash returned"
+    },
+    "register": {
+      "hint": "Every payment out of the bank, cash on hand or a petty cash float, from the ledger. The bank total equals the bank credits of the General Ledger.",
+      "col": {
+        "date": "Date",
+        "paymentRef": "Payment no.",
+        "payee": "Payee",
+        "document": "Type",
+        "documentRef": "Contract / invoice no.",
+        "instalment": "Instalment",
+        "budgetCode": "Budget code",
+        "method": "Method",
+        "paidFrom": "Paid from",
+        "gross": "Gross",
+        "wht": "WHT",
+        "net": "Net"
+      },
+      "doc": {
+        "invoice": "Invoice",
+        "payroll": "Contract instalment",
+        "purchase_order": "Purchase order",
+        "petty_cash": "Petty cash float",
+        "petty_receipt": "Petty cash receipt",
+        "per_diem": "Per diem",
+        "overtime": "Overtime",
+        "wht_remittance": "WHT remittance",
+        "vat_payment": "VAT payment",
+        "bank_charge": "Bank charge"
+      },
+      "method": {
+        "Transfer": "Bank transfer",
+        "Cash": "Cash",
+        "Check": "Cheque",
+        "Card": "Card",
+        "Bank": "Bank",
+        "Petty_cash": "Petty cash"
+      },
+      "total": "Total",
+      "totalFrom": "Paid from {{account}}",
+      "bankNote": "equals the bank credits in the General Ledger"
+    },
+    "due": {
+      "hint": "Contract instalments not paid yet and unpaid invoice balances. Pending and Requested instalments are still Commitment; Approved ones and invoices are Payable.",
+      "col": {
+        "payee": "Payee",
+        "type": "Type",
+        "ref": "Reference",
+        "instalment": "Instalment / vendor no.",
+        "dueDate": "Due date",
+        "status": "Status",
+        "amount": "Amount",
+        "daysOverdue": "Days overdue"
+      },
+      "kind": {
+        "instalment": "Instalment",
+        "invoice": "Invoice"
+      },
+      "window": {
+        "all": "All",
+        "overdue": "Overdue",
+        "this_week": "This week",
+        "this_month": "This month",
+        "next_30": "Next 30 days"
+      },
+      "totalDue": "Total due",
+      "totalOverdue": "Overdue"
+    },
+    "aging": {
+      "hint": "What is payable (Actual − Paid) by payee, aged on the due date. Amounts not yet due are in 0–30.",
+      "payee": "Payee",
+      "items": "Items",
+      "asOf": "As of {{date}}",
+      "bucket": {
+        "0_30": "0–30 days",
+        "31_60": "31–60 days",
+        "61_90": "61–90 days",
+        "90_plus": "Over 90 days"
+      }
+    },
+    "po": {
+      "hint": "Purchase orders not fully matched by invoices: PO value − invoices raised on it.",
+      "col": {
+        "ref": "PO no.",
+        "vendor": "Vendor",
+        "date": "Date",
+        "budgetCode": "Budget code",
+        "status": "Status",
+        "value": "PO value",
+        "invoices": "Invoices",
+        "invoiced": "Invoiced",
+        "open": "Open"
+      }
+    },
+    "petty": {
+      "hint": "Each petty cash float: issued, spent with approved receipts, returned to the bank and what remains, with the Film Commission cash limits.",
+      "col": {
+        "float": "Float no.",
+        "holder": "Holder",
+        "issued": "Issued",
+        "spent": "Spent (approved receipts)",
+        "pending": "Receipts pending",
+        "returned": "Returned",
+        "remaining": "Remaining",
+        "receipts": "Receipts",
+        "overLimit": "Over the per-payment limit"
+      },
+      "limits": "Film Commission cash limits",
+      "cashSpent": "Cash spent (receipts + cash payments)",
+      "qpeBase": "Spend measured against",
+      "cashShare": "Cash share of spend",
+      "limitPct": "Limit (% of QPE)",
+      "limitPctValue": "Limit: {{pct}}% of QPE",
+      "largest": "Largest cash payment",
+      "limitTxn": "Limit per payment (SAR)",
+      "limitTxnValue": "Limit per payment: SAR {{amount}}",
+      "defaultLimits": "The project has no Film Commission cash limits yet: default limits (10% of QPE, SAR 5,000 per payment) are used until they are set in the project's Film Commission settings.",
+      "settingsLimits": "Limits from the project's Film Commission settings.",
+      "qpeNote": "The cash share is measured against the project's Actual until the Film Commission report provides the QPE total."
+    }
   }
 }

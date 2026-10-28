@@ -1,27 +1,24 @@
 // ═══════════════════════════════════════════════════════════════════
-// GL Transactions — data layer for the read-only v_ledger_transactions
-// view. The view runs with security_invoker, so the caller's RLS on all
-// seven base tables applies. We additionally scope to the active project
-// and gate the whole query behind the gl_transactions RBAC permission:
-// when canView is false the request is NEVER fired (enabled: false).
-//
-// Currency: invoices/payroll/purchase_orders/payments have NO currency
-// column — the write path stores them in the organization base currency
-// (payroll-payments.functions.ts and payrollImport.ts both default to
-// the org base, SAR). So per-row display currency resolves as
-//   row.currency ?? organization.base_currency (via the PROJECT's
-//   organization_id — row-level organization_id is unreliable: legacy
-//   payroll rows have it NULL, which produced unlabeled "—" figures).
-// Never a hardcoded default, never converted for display here — display
-// conversion lives in fx-resolution.ts and is presentation-only.
+// Transaction drawer row shape (G09) — one financial document as the
+// General Ledger drawer shows it. The old GL Transactions tab that listed
+// v_ledger_transactions was retired by decision 6 (db/pending/196): the
+// General Ledger tab (double entry, db/pending/182) opens this drawer from
+// a ledger line (see features/reports/ledger/ledger-drawer.ts).
+// v_ledger_transactions can return a payroll row twice (actual +
+// commitment) with the same id: key its rows by row_key, never by id.
 // ═══════════════════════════════════════════════════════════════════
 
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { fetchRefMap } from "@/lib/document-refs";
-
 export type GlTransactionSource =
-  "invoice" | "payroll" | "purchase_order" | "petty_cash" | "overtime" | "per_diem" | "payment";
+  | "invoice"
+  | "payroll"
+  | "purchase_order"
+  | "petty_cash"
+  | "overtime"
+  | "per_diem"
+  | "payment"
+  | "cash_advance"
+  | "funding"
+  | "treasury";
 
 export type GlEntryKind = "actual" | "commitment" | "payment";
 
@@ -30,6 +27,8 @@ export interface GlTransaction {
   source_type: GlTransactionSource;
   source_id: string | null;
   entry_kind: GlEntryKind;
+  /** id:entry_kind — unique per row of v_ledger_transactions (db/pending/196). */
+  row_key?: string | null;
   entry_date: string | null;
   reference: string | null;
   /** Kwalis reference number (db/pending/184), merged in from v_document_refs. */
@@ -65,6 +64,9 @@ export const SOURCE_LABELS: Record<GlTransactionSource, string> = {
   overtime: "Overtime",
   per_diem: "Per Diem",
   payment: "Payment",
+  cash_advance: "Petty Cash Float",
+  funding: "Funding",
+  treasury: "Bank movement",
 };
 
 /** Base table behind each source — used by the drill-down drawer. */
@@ -76,6 +78,9 @@ export const SOURCE_TABLE: Record<GlTransactionSource, string> = {
   overtime: "overtime_entries",
   per_diem: "per_diem_ledger",
   payment: "payments",
+  cash_advance: "cash_advances",
+  funding: "project_funding",
+  treasury: "treasury_movements",
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -108,82 +113,4 @@ const APPROVED_STATUSES = new Set(["approved", "paid"]);
 export function countsTowardTotals(status: string | null): boolean {
   if (status == null || status.trim() === "") return true;
   return APPROVED_STATUSES.has(status.trim().toLowerCase());
-}
-
-const PAGE = 1000; // PostgREST default cap — page through the view.
-
-async function fetchGlTransactions(projectId: string): Promise<GlTransaction[]> {
-  const out: GlTransaction[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from("v_ledger_transactions")
-      .select("*")
-      .eq("project_id", projectId)
-      .order("entry_date", { ascending: false })
-      .range(from, from + PAGE - 1);
-    if (error) throw error;
-    const rows = (data ?? []) as unknown as GlTransaction[];
-    out.push(...rows);
-    if (rows.length < PAGE) break;
-  }
-
-  // Resolve the organization base currency via the PROJECT's organization.
-  // Row-level organization_id is unreliable — legacy payroll rows have it
-  // NULL, which left resolvedCurrency null and rendered "242,850.00 —".
-  // The project FK is authoritative: org-base is where invoices, payroll,
-  // POs and payments are actually stored.
-  let baseCurrency: string | null = null;
-  const { data: proj } = await supabase
-    .from("projects")
-    .select("organization_id")
-    .eq("id", projectId)
-    .maybeSingle();
-  const orgId =
-    ((proj as { organization_id?: string | null } | null)?.organization_id ?? null) ||
-    out.find((r) => r.organization_id)?.organization_id ||
-    null;
-  if (orgId) {
-    const { data } = await supabase
-      .from("organizations")
-      .select("base_currency")
-      .eq("id", orgId)
-      .maybeSingle();
-    baseCurrency = (data?.base_currency as string | null) ?? null;
-  }
-  for (const r of out) r.resolvedCurrency = r.currency ?? baseCurrency;
-
-  // G06: readable reference numbers live on the base tables; the ledger view
-  // is shared with other work, so they are merged in here by record id.
-  try {
-    const refs = await fetchRefMap(projectId);
-    for (const r of out) {
-      const ref = refs.get(r.id);
-      if (!ref) continue;
-      r.ref_no = ref.ref_no;
-      r.parent_type = ref.parent_type;
-      r.parent_id = ref.parent_id;
-    }
-  } catch {
-    // before db/pending/184 is applied the view does not exist: keep the old references
-  }
-  return out;
-}
-
-/**
- * Fetch the unified ledger for the active project.
- *
- * SECURITY (non-negotiable): `enabled: canView` — when the user lacks the
- * gl_transactions view permission the query is never executed, so zero
- * requests to v_ledger_transactions appear on the network. RLS isolates
- * organizations; it knows nothing about roles inside an organization, so
- * hiding the UI alone would still leak rows to any signed-in org member.
- */
-export function useGlTransactions(projectId: string | null | undefined, canView: boolean) {
-  return useQuery({
-    queryKey: ["gl-transactions", projectId],
-    queryFn: () => fetchGlTransactions(projectId as string),
-    enabled: canView && !!projectId,
-    staleTime: 300_000,
-    gcTime: 600_000,
-  });
 }

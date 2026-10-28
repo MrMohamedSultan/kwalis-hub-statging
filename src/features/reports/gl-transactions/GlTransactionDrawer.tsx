@@ -191,7 +191,9 @@ export function GlTransactionDrawer({
       : [];
   const total = scheduleTotal(schedule);
   const contractValue = Number(record?.total_amount) || 0;
-  const typeLabel = t(`refs.source_${row.source_type}`);
+  const typeLabel = t(`refs.source_${row.source_type}`, {
+    defaultValue: t(`reconcile.source.${row.source_type}`, { defaultValue: row.source_type }),
+  });
 
   const createdName = created?.actor_name ?? createdByName.data ?? null;
   const createdAt = created?.created_at ?? (record?.created_at as string | undefined) ?? null;

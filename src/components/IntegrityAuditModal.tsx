@@ -35,7 +35,12 @@ function IntegrityAuditModal({ onClose }: { onClose: () => void }) {
     () => funding.reduce((a, e) => a + Number(e.amount || 0), 0),
     [funding],
   );
-  const directVatPaid = useMemo(() => vat.reduce((a, e) => a + Number(e.amount || 0), 0), [vat]);
+  // treasury_movements holds every bank movement (db/pending/196): VAT paid only
+  const directVatPaid = useMemo(
+    () =>
+      vat.filter((e) => e.kind === "vat_payment").reduce((a, e) => a + Number(e.amount || 0), 0),
+    [vat],
+  );
 
   const findings = useIntegrityAudit({ fundingInflows, directVatPaid });
   const errors = findings.filter((f) => f.severity === "error").length;
