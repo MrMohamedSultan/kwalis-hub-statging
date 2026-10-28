@@ -51,6 +51,8 @@ import { BudgetAuditLog } from "@/components/BudgetAuditLog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 import { parseKwalisWorkbook } from "@/lib/excelImport";
+import { cleanImportedBudget, describeWorkbookError } from "@/lib/budget-import-clean";
+import { ImportCleanReport, useServerImportCheck } from "@/components/budget/ImportCleanReport";
 import { fetchMasterCodes, normalizeBudgetCode } from "@/lib/budget-mapping-check";
 import { parseBudgetExcel, parseProjectDetails, exportBudgetExcel } from "@/lib/excelAdapter";
 import { adapterLineToStoreLine, storeLineToAdapterLine } from "@/lib/excelAdapterBridge";
@@ -1587,7 +1589,17 @@ export function UploadBudget() {
         toast.error(t("budget.no_budget_rows_found_expected_sheets_1atl_2"));
         return;
       }
-      const lines = parsed.map(adapterLineToStoreLine).filter((l) => l.mainCode || l.description);
+      const cleaned = cleanImportedBudget(
+        parsed.map(adapterLineToStoreLine).filter((l) => l.mainCode || l.description),
+      );
+      const lines = cleaned.lines;
+      if (cleaned.stats.duplicates > 0 || cleaned.stats.swapped > 0)
+        toast.warning(
+          t("people.import.multisheet_cleaned", {
+            dups: cleaned.stats.duplicates,
+            swapped: cleaned.stats.swapped,
+          }),
+        );
       await addBudgetLines(lines);
       const details = await parseProjectDetails(f).catch(() => ({}));
       toast.success(`Imported ${lines.length} budget line(s) from the multi-sheet template.`);
@@ -1606,7 +1618,8 @@ export function UploadBudget() {
       await reloadScoped();
     } catch (e) {
       console.error(e);
-      toast.error(e instanceof Error ? e.message : "Could not read that workbook.");
+      const why = describeWorkbookError(e, f.name);
+      toast.error(t(`people.import.err_${why.key}`, { detail: why.detail ?? "" }));
     } finally {
       setBusy(false);
       if (multiSheetRef.current) multiSheetRef.current.value = "";
@@ -1824,9 +1837,8 @@ export function UploadBudget() {
         summary: `Failed to parse budget workbook "${f.name}"`,
         details: { fileName: f.name, error: e instanceof Error ? e.message : String(e) },
       });
-      toast.error(
-        t("budget.failed_to_parse_workbook") + (e instanceof Error ? e.message : "unknown"),
-      );
+      const why = describeWorkbookError(e, f.name);
+      toast.error(t(`people.import.err_${why.key}`, { detail: why.detail ?? "" }));
     } finally {
       setBusy(false);
     }
@@ -1977,7 +1989,7 @@ export function UploadBudget() {
   };
 
   // Filter budget lines by enabled sheets — enforced on commit AND stat display.
-  const filteredBudget = useMemo(() => {
+  const rawFilteredBudget = useMemo(() => {
     if (!preview) return [];
     const { result, sheetOfLine } = preview.data;
     if (!sheetOfLine || Object.keys(sheetOfLine).length === 0) return result.budget;
@@ -1987,6 +1999,25 @@ export function UploadBudget() {
       return s ? enabledSheets[s] !== false : true;
     });
   }, [preview, enabledSheets]);
+  // E13 / D01: trim, round to 2 decimals, Header ≤ Main, duplicates warned and
+  // skipped — then the database's own checks on exactly these rows.
+  const [keepDuplicates, setKeepDuplicates] = useState(false);
+  const cleanResult = useMemo(
+    () =>
+      cleanImportedBudget(rawFilteredBudget, {
+        keepDuplicates,
+        rowOf: preview?.data.rowOfLine,
+        sheetOf: preview?.data.sheetOfLine,
+      }),
+    [rawFilteredBudget, keepDuplicates, preview],
+  );
+  const filteredBudget = cleanResult.lines;
+  const importProjectId = useStore((s) => s.activeProjectId);
+  const serverCheck = useServerImportCheck(
+    preview ? importProjectId : null,
+    filteredBudget,
+    preview?.data.rowOfLine,
+  );
 
   // Apply AI suggestions to the preview in-memory.
   const applyAiSuggestions = () => {
@@ -2058,6 +2089,10 @@ export function UploadBudget() {
     }
     if (filteredBudget.length === 0) {
       toast.error(t("budget.no_rows_enabled_for_commit_toggle_at_least"));
+      return;
+    }
+    if (serverCheck.status === "errors") {
+      toast.error(t("people.import.commit_blocked", { count: serverCheck.errors.length }));
       return;
     }
     setShowCommitSummary(true);
@@ -2356,6 +2391,14 @@ export function UploadBudget() {
           onEditColumnMap={onEditColumnMap}
           onBulkFix={onBulkFix}
           onExportValidationReport={onExportValidationReport}
+        />
+      )}
+      {preview && (
+        <ImportCleanReport
+          clean={cleanResult}
+          server={serverCheck}
+          keepDuplicates={keepDuplicates}
+          onKeepDuplicates={setKeepDuplicates}
         />
       )}
 
