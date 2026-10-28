@@ -154,7 +154,7 @@ function AuthPortal() {
     if (!addr || !z.string().email().safeParse(addr).success) {
       setTouched((prev) => ({ ...prev, email: true }));
       setErrors((prev) => ({ ...prev, email: t("platform.auth.emailInvalid") }));
-      toast.error(t("auth.resetEnterEmail"));
+      toast.error(t("platform.auth.resetEnterEmail"));
       return;
     }
     setSendingReset(true);
@@ -166,7 +166,7 @@ function AuthPortal() {
       // enumeration); only a rate limit is worth telling the user.
       if (error && /rate limit|too many/i.test(error.message)) throw error;
       setResetSent(true);
-      toast.success(t("auth.resetSent"));
+      toast.success(t("platform.auth.resetSent"));
     } catch {
       toast.error(t("platform.auth.resetFailed"));
     } finally {
@@ -415,7 +415,9 @@ function AuthPortal() {
               <div className="mb-7">
                 <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-brand mb-3">
                   <ShieldCheck className="size-3.5" />{" "}
-                  {showSignup ? t("platform.auth.acceptInvitation") : t("platform.auth.secureSignIn")}
+                  {showSignup
+                    ? t("platform.auth.acceptInvitation")
+                    : t("platform.auth.secureSignIn")}
                 </div>
                 <h2 className="text-3xl font-bold tracking-tight">
                   {showSignup ? t("platform.auth.completeAccount") : t("platform.auth.welcomeBack")}
@@ -584,13 +586,15 @@ function AuthPortal() {
                       disabled={sendingReset}
                       className="text-xs font-semibold text-brand hover:underline disabled:opacity-60"
                     >
-                      {sendingReset ? t("auth.resetSending") : t("auth.forgotPassword")}
+                      {sendingReset ? t("platform.auth.resetSending") : t("auth.forgotPassword")}
                     </button>
                   </div>
                 )}
 
                 {resetSent && (
-                  <p className="text-xs text-muted-foreground">{t("auth.resetSentHint")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("platform.auth.resetSentHint")}
+                  </p>
                 )}
 
                 <button

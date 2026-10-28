@@ -59,7 +59,11 @@ export function fileExtension(name: string): string {
 }
 
 /** Why a file may not be uploaded, or null when it is fine. */
-export function uploadProblem(file: { name: string; size: number; type?: string }): UploadProblem | null {
+export function uploadProblem(file: {
+  name: string;
+  size: number;
+  type?: string;
+}): UploadProblem | null {
   if (!file || file.size <= 0) return "empty";
   if (file.size > MAX_UPLOAD_BYTES) return "tooLarge";
   const ext = fileExtension(file.name);

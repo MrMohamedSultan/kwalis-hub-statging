@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { formatDateTime } from "@/lib/date-format";
 import { DateInput } from "@/components/ui/date-input";
 import { useServerFn } from "@tanstack/react-start";
 import React, { useEffect, useMemo, useState } from "react";
@@ -64,8 +65,7 @@ function categoryBadgeClass(cat: AuditRow["category"]) {
 
 function formatTimestamp(iso: string) {
   try {
-    const d = new Date(iso);
-    return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "medium" });
+    return formatDateTime(iso) || iso;
   } catch {
     return iso;
   }

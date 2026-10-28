@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { formatDate } from "@/lib/date-format";
 import { useEffect, useMemo, useState } from "react";
 import { useStore, formatUSD, generateId } from "@/lib/store";
 import { useCan, useCurrentUser } from "@/lib/rbac";
@@ -379,7 +380,7 @@ function FieldPortal() {
                           {r.department || "Field receipt"}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {r.date} · {r.method}
+                          {formatDate(r.date) || r.date} · {r.method}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">

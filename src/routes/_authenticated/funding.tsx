@@ -866,9 +866,9 @@ function FundingInflowsTab() {
             <table className="w-full text-sm">
               <thead className="bg-surface text-muted-foreground">
                 <tr>
-                  <th className="text-left px-4 py-2 font-medium">Date</th>
-                  <th className="text-left px-4 py-2 font-medium">Source</th>
-                  <th className="text-left px-4 py-2 font-medium">Kind</th>
+                  <th className="text-left px-4 py-2 font-medium">{t("platform.ui.date")}</th>
+                  <th className="text-left px-4 py-2 font-medium">{t("platform.ui.source")}</th>
+                  <th className="text-left px-4 py-2 font-medium">{t("platform.ui.kind")}</th>
                   <th className="text-right px-4 py-2 font-medium">{t("funding.amount_sar")}</th>
                   <th className="text-left px-4 py-2 font-medium">{t("funding.reference")}</th>
                   <th className="text-left px-4 py-2 font-medium">{t("funding.note")}</th>
@@ -962,14 +962,14 @@ function FundingInflowsTab() {
                           <button
                             onClick={saveEdit}
                             className="p-1.5 rounded bg-success/20 text-success hover:bg-success/30"
-                            title="Save"
+                            title={t("platform.ui.save")}
                           >
                             <Save className="size-4" />
                           </button>
                           <button
                             onClick={cancelEdit}
                             className="p-1.5 rounded hover:bg-muted text-muted-foreground"
-                            title="Cancel"
+                            title={t("platform.ui.cancel")}
                           >
                             <X className="size-4" />
                           </button>
@@ -996,7 +996,7 @@ function FundingInflowsTab() {
                           <button
                             onClick={() => startEdit(e)}
                             className="p-1.5 rounded hover:bg-primary/10 text-primary"
-                            title="Edit"
+                            title={t("platform.ui.edit")}
                           >
                             <Pencil className="size-4" />
                           </button>
@@ -1005,7 +1005,7 @@ function FundingInflowsTab() {
                               if (confirm(t("funding.delete_this_funding_entry"))) remove(e.id);
                             }}
                             className="p-1.5 rounded hover:bg-destructive/10 text-destructive"
-                            title="Delete"
+                            title={t("platform.ui.delete")}
                           >
                             <Trash2 className="size-4" />
                           </button>
@@ -1158,7 +1158,7 @@ function VatPaymentsTab() {
             <table className="w-full text-sm">
               <thead className="bg-surface text-muted-foreground">
                 <tr>
-                  <th className="text-left px-4 py-2 font-medium">Date</th>
+                  <th className="text-left px-4 py-2 font-medium">{t("platform.ui.date")}</th>
                   <th className="text-right px-4 py-2 font-medium">{t("funding.amount_sar")}</th>
                   <th className="text-left px-4 py-2 font-medium">{t("funding.reference")}</th>
                   <th className="text-left px-4 py-2 font-medium">{t("funding.note")}</th>
@@ -1180,7 +1180,7 @@ function VatPaymentsTab() {
                           if (confirm(t("funding.delete_this_vat_payment"))) remove(e.id);
                         }}
                         className="p-1.5 rounded hover:bg-destructive/10 text-destructive"
-                        title="Delete"
+                        title={t("platform.ui.delete")}
                       >
                         <Trash2 className="size-4" />
                       </button>

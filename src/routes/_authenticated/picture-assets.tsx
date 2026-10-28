@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { formatAmount } from "@/lib/format-number";
 import { assertUploadAllowed } from "@/lib/upload-policy";
 import { DateInput } from "@/components/ui/date-input";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -495,16 +496,14 @@ function PictureAssetsPage() {
           <div className="text-xs text-muted-foreground uppercase tracking-wider">
             {t("picture_assets.total_agreed_cost")}
           </div>
-          <div className="text-2xl font-semibold mt-1">
-            SAR {totals.agreed.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-          </div>
+          <div className="text-2xl font-semibold mt-1">{formatAmount(totals.agreed, 0)} SAR</div>
         </Panel>
         <Panel>
           <div className="text-xs text-muted-foreground uppercase tracking-wider">
             {t("picture_assets.paid_to_date")}
           </div>
           <div className="text-2xl font-semibold mt-1 text-success">
-            SAR {totals.paidAmt.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            {formatAmount(totals.paidAmt, 0)} SAR
           </div>
         </Panel>
         <Panel>
@@ -685,11 +684,8 @@ function PictureAssetsPage() {
                       <td className="px-3 py-2 text-sm">
                         {row.budget_code || <span className="text-muted-foreground">—</span>}
                       </td>
-                      <td className="px-3 py-2 text-sm text-right whitespace-nowrap">
-                        {row.currency}{" "}
-                        {Number(row.agreed_cost || 0).toLocaleString(undefined, {
-                          maximumFractionDigits: 2,
-                        })}
+                      <td className="px-3 py-2 text-sm text-end whitespace-nowrap tabular-nums">
+                        {formatAmount(Number(row.agreed_cost || 0), 2)} {row.currency}
                       </td>
                       <td className="px-3 py-2">
                         <span

@@ -5,6 +5,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { useMemo, useState } from "react";
+import { formatDateTime } from "@/lib/date-format";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Download, FileText, Loader2 } from "lucide-react";
@@ -19,7 +20,6 @@ const money = (n: number | null) => (n == null ? "—" : formatAmount(n, 2));
 
 export function BudgetChangeLogReport() {
   const { t, i18n } = useTranslation();
-  const locale = i18n.language === "ar" ? "ar-EG" : "en-US";
   const project = useStore((s) => s.projects.find((p) => p.id === s.activeProjectId) ?? null);
   const projectId = project?.id ?? null;
 
@@ -59,7 +59,7 @@ export function BudgetChangeLogReport() {
     t("refs.bcl_reason"),
   ];
   const tableRows = rows.map((r) => [
-    new Date(r.changed_at).toLocaleString(locale),
+    formatDateTime(r.changed_at),
     [r.budget_code, r.description].filter(Boolean).join(" — "),
     r.version_name ?? "",
     t(`refs.action_${r.action}`),
@@ -210,7 +210,7 @@ export function BudgetChangeLogReport() {
                 return (
                   <tr key={r.id} className="border-t border-border align-top">
                     <td className="px-3 py-2 whitespace-nowrap text-xs tabular-nums">
-                      {new Date(r.changed_at).toLocaleString(locale)}
+                      {formatDateTime(r.changed_at)}
                     </td>
                     <td className="px-3 py-2">
                       <span className="font-mono text-xs" dir="ltr">

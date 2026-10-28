@@ -102,7 +102,12 @@ function SettingsPage() {
 
   const tabs = useMemo(() => {
     const list: { key: TabKey; label: string; icon: React.ReactNode; visible: boolean }[] = [
-      { key: "personal", label: t("platform.settings.tabPersonal"), icon: <User className="size-4" />, visible: true },
+      {
+        key: "personal",
+        label: t("platform.settings.tabPersonal"),
+        icon: <User className="size-4" />,
+        visible: true,
+      },
       {
         key: "project",
         label: t("platform.settings.tabProject"),

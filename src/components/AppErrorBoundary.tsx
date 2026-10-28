@@ -77,9 +77,15 @@ export class AppErrorBoundary extends Component<Props, State> {
           }}
         >
           <div style={{ maxWidth: "28rem", textAlign: "center" }}>
-            <h1 style={{ fontSize: "1.25rem", margin: "0 0 0.5rem" }}>This page didn’t load</h1>
+            <h1 style={{ fontSize: "1.25rem", margin: "0 0 0.5rem" }}>
+              {safeT("error_page.this_page_didnt_load", "This page didn’t load")}
+            </h1>
             <p style={{ color: "#9ca3af", margin: "0 0 1.5rem", fontSize: "0.875rem" }}>
-              {this.state.message ?? "Something went wrong on our end."}
+              {this.state.message ??
+                safeT(
+                  "error_page.something_went_wrong_on_our_end_you_can",
+                  "Something went wrong on our end.",
+                )}
             </p>
             <button
               type="button"
@@ -93,7 +99,7 @@ export class AppErrorBoundary extends Component<Props, State> {
                 cursor: "pointer",
               }}
             >
-              Reload
+              {safeT("platform.common.reload", "Reload")}
             </button>
           </div>
         </div>
@@ -120,11 +126,21 @@ export class AppErrorBoundary extends Component<Props, State> {
               onClick={() => window.location.reload()}
               className="px-4 py-2 rounded-xl border border-border hover:bg-muted text-sm font-medium"
             >
-              Reload
+              {i18n.t("platform.common.reload")}
             </button>
           </div>
         </div>
       </div>
     );
+  }
+}
+
+/** The shell fallback renders when i18n itself may have failed: never throw here. */
+function safeT(key: string, fallback: string): string {
+  try {
+    const v = i18n.t(key, { defaultValue: fallback });
+    return typeof v === "string" && v && v !== key ? v : fallback;
+  } catch {
+    return fallback;
   }
 }

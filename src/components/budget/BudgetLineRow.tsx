@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { formatAmount } from "@/lib/format-number";
 import { Check, Pencil, Trash2, X } from "lucide-react";
 import { SarAmount, CurrencySymbol } from "@/components/ui/currency";
 import { formatStaticUSD } from "@/lib/format-number";
@@ -292,7 +293,7 @@ function BudgetLineRowInner({
         ) : (
           <span>
             <CurrencySymbol code={(l.currency ?? "USD") as BudgetCurrency} />{" "}
-            {Math.round(Number(l.rate)).toLocaleString()}
+            {formatAmount(Math.round(Number(l.rate)), 0)}
           </span>
         )}
       </Td>

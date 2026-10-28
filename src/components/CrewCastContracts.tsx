@@ -205,6 +205,7 @@ function CopyValueButton({ value, label }: { value: string; label: string }) {
 }
 
 function ContactCell({ phone, email }: { phone?: string | null; email?: string | null }) {
+  const { t } = useTranslation();
   const p = (phone ?? "").trim();
   const e = (email ?? "").trim();
   if (!p && !e) return <span className="text-muted-foreground">—</span>;
@@ -215,7 +216,7 @@ function ContactCell({ phone, email }: { phone?: string | null; email?: string |
           <a href={`tel:${p}`} className="truncate font-mono text-xs hover:underline">
             {p}
           </a>
-          <CopyValueButton value={p} label="Phone number" />
+          <CopyValueButton value={p} label={t("platform.ui.phoneNumber")} />
         </div>
       )}
       {e && (
@@ -223,7 +224,7 @@ function ContactCell({ phone, email }: { phone?: string | null; email?: string |
           <a href={`mailto:${e}`} className="truncate text-xs hover:underline">
             {e}
           </a>
-          <CopyValueButton value={e} label="Email" />
+          <CopyValueButton value={e} label={t("platform.ui.email")} />
         </div>
       )}
     </div>
@@ -250,10 +251,7 @@ function ContractStatusBadge({ status }: { status: ContractStatus }) {
 /** Platform standard: grouped amount followed by the ISO code ("1,200 USD"). */
 function formatCcy(n: number, ccy: string | undefined): string {
   const code = ccy || "USD";
-  const amt = (Number.isFinite(n) ? n : 0).toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
+  const amt = formatAmount(Number.isFinite(n) ? n : 0, 2);
   return `${amt} ${code}`;
 }
 
@@ -684,7 +682,7 @@ export function PeoplePage({
                     .concat(
                       <th
                         key="contact"
-                        data-card-label="Contact"
+                        data-card-label={t("platform.ui.contact")}
                         className="text-start px-3 py-2 font-medium text-xs uppercase tracking-wider"
                       >
                         {t("crewcastcontracts.contact")}
@@ -759,7 +757,10 @@ export function PeoplePage({
                       </td>
                       <td className="px-3 py-3">{p.nationality}</td>
                       <td className="px-3 py-3 font-mono text-xs">{p.idNumber}</td>
-                      <td className="px-3 py-3 min-w-[180px]" data-card-label="Contact">
+                      <td
+                        className="px-3 py-3 min-w-[180px]"
+                        data-card-label={t("platform.ui.contact")}
+                      >
                         <ContactCell phone={p.phoneNumber} email={p.email} />
                       </td>
                       <td className="px-3 py-3 font-mono text-xs">{p.iban}</td>
@@ -904,7 +905,7 @@ export function PeoplePage({
                                     className="px-2 py-1 rounded-lg text-xs hover:bg-muted"
                                     title={t("crewcastcontracts.cancel_request")}
                                   >
-                                    Cancel
+                                    {t("platform.ui.cancel")}
                                   </button>
                                 </>
                               )}
@@ -944,7 +945,7 @@ export function PeoplePage({
                               <button
                                 onClick={() => onDelete(p)}
                                 className="p-1.5 rounded-lg hover:bg-destructive/20 text-destructive"
-                                title="Delete"
+                                title={t("platform.ui.delete")}
                               >
                                 <Trash2 className="size-4" />
                               </button>
@@ -1129,20 +1130,20 @@ export function PeoplePage({
               }}
             >
               <label className="text-sm">
-                <div className="text-muted-foreground mb-1">Reason</div>
+                <div className="text-muted-foreground mb-1">{t("platform.ui.reason")}</div>
                 <select
                   value={modReason}
                   onChange={(e) => setModReason(e.target.value as "Overtime" | "Contract Addendum")}
                   className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 outline-none focus:ring-2 ring-brand"
                 >
-                  <option value="Overtime">Overtime</option>
+                  <option value="Overtime">{t("platform.ui.overtime")}</option>
                   <option value="Contract Addendum">
                     {t("crewcastcontracts.contract_addendum")}
                   </option>
                 </select>
               </label>
               <label className="text-sm">
-                <div className="text-muted-foreground mb-1">Description</div>
+                <div className="text-muted-foreground mb-1">{t("platform.ui.description")}</div>
                 <textarea
                   value={modDescription}
                   onChange={(e) => setModDescription(e.target.value)}
@@ -1157,7 +1158,7 @@ export function PeoplePage({
                   onClick={closeModRequest}
                   className="px-4 py-2 rounded-xl hover:bg-muted text-sm"
                 >
-                  Cancel
+                  {t("platform.ui.cancel")}
                 </button>
                 <button
                   type="submit"
@@ -2507,7 +2508,10 @@ function ContractForm({
                       placeholder="+966 …"
                     />
                     {(f.phoneNumber ?? "").trim() && (
-                      <CopyValueButton value={(f.phoneNumber ?? "").trim()} label="Phone number" />
+                      <CopyValueButton
+                        value={(f.phoneNumber ?? "").trim()}
+                        label={t("platform.ui.phoneNumber")}
+                      />
                     )}
                   </div>
                   {errors.phoneNumber && (
@@ -2516,7 +2520,8 @@ function ContractForm({
                 </label>
                 <label className="text-sm col-span-2">
                   <div className="text-muted-foreground mb-1">
-                    Email <span className="text-[10px] text-muted-foreground/70">(optional)</span>
+                    {t("platform.ui.email")}{" "}
+                    <span className="text-[10px] text-muted-foreground/70">(optional)</span>
                   </div>
                   <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
                     <input
@@ -2532,7 +2537,10 @@ function ContractForm({
                       placeholder={t("crewcastcontracts.nameexamplecom")}
                     />
                     {(f.email ?? "").trim() && (
-                      <CopyValueButton value={(f.email ?? "").trim()} label="Email" />
+                      <CopyValueButton
+                        value={(f.email ?? "").trim()}
+                        label={t("platform.ui.email")}
+                      />
                     )}
                   </div>
                   {errors.email && (
@@ -2889,7 +2897,7 @@ function ContractForm({
               />
             </label>
             <label className="text-sm">
-              <div className="text-muted-foreground mb-1">Per</div>
+              <div className="text-muted-foreground mb-1">{t("platform.ui.per")}</div>
               <select
                 value={f.overtimeUnit ?? ""}
                 onChange={(e) =>
@@ -3135,9 +3143,9 @@ function ContractForm({
           >
             {/* Column headers — must match row column template exactly */}
             <div className="grid grid-cols-[1fr_120px_1fr_32px] gap-3 items-center px-1 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              <span>Date</span>
-              <span className="text-center">Percent</span>
-              <span className="text-end">Amount</span>
+              <span>{t("platform.ui.date")}</span>
+              <span className="text-center">{t("platform.ui.percent")}</span>
+              <span className="text-end">{t("platform.ui.amount")}</span>
               <span />
             </div>
 
@@ -3184,7 +3192,7 @@ function ContractForm({
                         type="button"
                         onClick={() => removeScheduleRow(row.id)}
                         className="size-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors justify-self-end"
-                        aria-label="Remove milestone"
+                        aria-label={t("platform.ui.removeMilestone")}
                       >
                         <Trash2 className="size-4" />
                       </button>
@@ -3227,7 +3235,7 @@ function ContractForm({
                 type="button"
                 onClick={addScheduleRow}
                 className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline shrink-0"
-                title="Add milestone (Enter inside a percent/amount field)"
+                title={t("platform.ui.addMilestoneEnterInsideAPercentAmountField")}
               >
                 Add row <Plus className="size-3.5" />
               </button>
@@ -3357,7 +3365,7 @@ function ContractForm({
           </div>
           <StoredFileBadge
             path={initial?.idAttachmentPath}
-            label="Currently uploaded ID document"
+            label={t("platform.ui.currentlyUploadedIdDocument")}
           />
           <div className="flex items-center gap-2 bg-surface-2 border border-border rounded-xl px-3 py-2">
             {idDocument ? (
@@ -3395,7 +3403,7 @@ function ContractForm({
           </div>
           <StoredFileBadge
             path={initial?.ibanAttachmentPath}
-            label="Currently uploaded IBAN certificate"
+            label={t("platform.ui.currentlyUploadedIbanCertificate")}
           />
           <div className="flex items-center gap-2 bg-surface-2 border border-border rounded-xl px-3 py-2">
             {ibanCertificate ? (
@@ -3431,7 +3439,10 @@ function ContractForm({
           <div className="text-muted-foreground mb-1">
             {t("crewcastcontracts.contract_attachment_pdf")}
           </div>
-          <StoredFileBadge path={initial?.contractPath} label="Currently uploaded contract" />
+          <StoredFileBadge
+            path={initial?.contractPath}
+            label={t("platform.ui.currentlyUploadedContract")}
+          />
           <div className="flex items-center gap-2 bg-surface-2 border border-border rounded-xl px-3 py-2">
             {attachment ? (
               <FileText className="size-4 text-success" />

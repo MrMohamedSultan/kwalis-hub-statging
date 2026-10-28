@@ -19,4 +19,3 @@ export function LegalLinks({ className = "" }: { className?: string }) {
     </nav>
   );
 }
-

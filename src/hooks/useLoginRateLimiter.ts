@@ -104,21 +104,24 @@ export function useLoginRateLimiter() {
   );
 
   /** Fallback (no server lockout): count locally for the display only. */
-  const recordFailure = useCallback((email: string): RecordFailureResult => {
-    const prev = stateRef.current;
-    const count = (prev.email === email ? prev.count : 0) + 1;
-    const lockedMinutes = lockMinutesFor(count);
-    const nowMs = Date.now();
-    setState({
-      count,
-      email,
-      lockedAt: lockedMinutes > 0 ? new Date(nowMs).toISOString() : null,
-      lockedUntil:
-        lockedMinutes > 0 ? new Date(nowMs + lockedMinutes * 60_000).toISOString() : null,
-    });
-    setNow(nowMs);
-    return { count, lockedMinutes };
-  }, [setState]);
+  const recordFailure = useCallback(
+    (email: string): RecordFailureResult => {
+      const prev = stateRef.current;
+      const count = (prev.email === email ? prev.count : 0) + 1;
+      const lockedMinutes = lockMinutesFor(count);
+      const nowMs = Date.now();
+      setState({
+        count,
+        email,
+        lockedAt: lockedMinutes > 0 ? new Date(nowMs).toISOString() : null,
+        lockedUntil:
+          lockedMinutes > 0 ? new Date(nowMs + lockedMinutes * 60_000).toISOString() : null,
+      });
+      setNow(nowMs);
+      return { count, lockedMinutes };
+    },
+    [setState],
+  );
 
   const resetAttempts = useCallback(() => setState(EMPTY_STATE), [setState]);
 

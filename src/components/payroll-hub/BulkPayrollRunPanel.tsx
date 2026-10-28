@@ -1,4 +1,4 @@
-import { formatDateTime } from "@/lib/date-format";
+import { formatDateTime, formatDate } from "@/lib/date-format";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DateInput } from "@/components/ui/date-input";
 import { toast } from "sonner";
@@ -422,7 +422,7 @@ function RunRow({
           <div className="min-w-0">
             <div className="font-medium truncate">{run.label}</div>
             <div className="text-xs text-muted-foreground">
-              {run.period_start} → {run.period_end} · {items.length} line
+              {formatDate(run.period_start)} → {formatDate(run.period_end)} · {items.length} line
               {items.length === 1 ? "" : "s"} · {run.kind}
             </div>
           </div>
@@ -903,7 +903,7 @@ function NewRunForm({
                     <span className="truncate">
                       {person?.fullName ?? "—"}{" "}
                       <span className="text-muted-foreground">
-                        · {s.period_start} → {s.period_end} · {daysWorked}d
+                        · {formatDate(s.period_start)} → {formatDate(s.period_end)} · {daysWorked}d
                       </span>
                     </span>
                   </div>
@@ -943,7 +943,8 @@ function NewRunForm({
                     <span className="truncate">
                       {o.person_name}{" "}
                       <span className="text-muted-foreground">
-                        · {o.work_date} · {Number(o.units).toLocaleString()} {o.overtime_unit}(s)
+                        · {formatDate(o.work_date)} · {Number(o.units).toLocaleString()}{" "}
+                        {o.overtime_unit}(s)
                       </span>
                     </span>
                   </div>

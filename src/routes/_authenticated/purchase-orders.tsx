@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { formatAmount } from "@/lib/format-number";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ClipboardList, Plus, X as XIcon, RotateCcw, Check } from "lucide-react";
@@ -258,7 +259,7 @@ function PurchaseOrdersPage() {
                           p.currency !== fx.baseCurrency &&
                           p.amount_original != null && (
                             <div className="text-[10px] text-muted-foreground" dir="ltr">
-                              {Number(p.amount_original).toLocaleString()} {p.currency} ×{" "}
+                              {formatAmount(Number(p.amount_original), 2)} {p.currency} ×{" "}
                               {Number(p.fx_rate ?? 1)}
                             </div>
                           )}

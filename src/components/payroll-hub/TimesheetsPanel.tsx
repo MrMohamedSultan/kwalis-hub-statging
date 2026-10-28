@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { formatDate } from "@/lib/date-format";
 import { DateInput } from "@/components/ui/date-input";
 import { toast } from "sonner";
 import {
@@ -195,7 +196,8 @@ function TimesheetRow({
           <div className="min-w-0">
             <div className="font-medium truncate">{peopleName}</div>
             <div className="text-xs text-muted-foreground">
-              {sheet.period_start} → {sheet.period_end} · {daysWorked} days · {otHours}h OT
+              {formatDate(sheet.period_start)} → {formatDate(sheet.period_end)} · {daysWorked} days
+              · {otHours}h OT
             </div>
           </div>
         </div>

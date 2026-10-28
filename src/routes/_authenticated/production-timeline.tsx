@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/date-format";
 import {
   MACRO_PHASES,
   MACRO_PHASE_AR,
@@ -840,7 +841,9 @@ export function ProductionTimelinePage() {
                     >
                       <div className="flex items-center gap-2">
                         <span className="font-semibold">{v.label}</span>
-                        <span className="text-muted-foreground">{v.date}</span>
+                        <span className="text-muted-foreground">
+                          {formatDate(v.date) || v.date}
+                        </span>
                       </div>
                       <span
                         className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] ${STATUS_BADGE[v.status]}`}

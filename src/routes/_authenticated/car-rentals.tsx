@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { formatAmount } from "@/lib/format-number";
 import { DateInput } from "@/components/ui/date-input";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
@@ -455,7 +456,7 @@ function CarRentalsPage() {
                       />
                     </td>
                     <td className="px-3 py-2 text-right font-mono tabular-nums text-sm whitespace-nowrap">
-                      {commitmentFor(row).toLocaleString()} {row.currency}
+                      {formatAmount(commitmentFor(row), 2)} {row.currency}
                     </td>
                     <td className="px-3 py-2">
                       <select
@@ -468,7 +469,7 @@ function CarRentalsPage() {
                         {vendorInvoices(row.vendor_id).map((inv) => (
                           <option key={inv.id} value={inv.id}>
                             {inv.invoiceNo || inv.id.slice(0, 6)} ·{" "}
-                            {Number(inv.price).toLocaleString()}
+                            {formatAmount(Number(inv.price), 2)}
                           </option>
                         ))}
                       </select>

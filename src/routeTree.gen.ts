@@ -19,6 +19,7 @@ import { Route as PlatformHubRouteRouteImport } from './routes/_platform-hub/rou
 import { Route as BoardRouteRouteImport } from './routes/_board/route'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as AuthenticatedVendorsRouteImport } from './routes/_authenticated/vendors'
 import { Route as AuthenticatedVendorPayablesRouteImport } from './routes/_authenticated/vendor-payables'
 import { Route as AuthenticatedTrashRouteImport } from './routes/_authenticated/trash'
@@ -68,6 +69,7 @@ import { Route as AuthenticatedAccountSettingsRouteImport } from './routes/_auth
 import { Route as AuthenticatedAccommodationRosterRouteImport } from './routes/_authenticated/accommodation-roster'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
+import { Route as ApiPublicNotificationsDispatchRouteImport } from './routes/api/public/notifications-dispatch'
 import { Route as ApiPublicAiJobRouteImport } from './routes/api/public/ai-job'
 import { Route as PlatformHubPlatformHubUsersRouteImport } from './routes/_platform-hub/platform-hub.users'
 import { Route as PlatformHubPlatformHubSettingsRouteImport } from './routes/_platform-hub/platform-hub.settings'
@@ -131,6 +133,11 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedVendorsRoute = AuthenticatedVendorsRouteImport.update({
   id: '/vendors',
@@ -400,6 +407,12 @@ const Char91DotmcpChar93ListToolsRoute =
     path: '/.mcp/list-tools',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicNotificationsDispatchRoute =
+  ApiPublicNotificationsDispatchRouteImport.update({
+    id: '/api/public/notifications-dispatch',
+    path: '/api/public/notifications-dispatch',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicAiJobRoute = ApiPublicAiJobRouteImport.update({
   id: '/api/public/ai-job',
   path: '/api/public/ai-job',
@@ -549,6 +562,7 @@ export interface FileRoutesByFullPath {
   '/trash': typeof AuthenticatedTrashRoute
   '/vendor-payables': typeof AuthenticatedVendorPayablesRoute
   '/vendors': typeof AuthenticatedVendorsRoute
+  '/api/health': typeof ApiHealthRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/series/$seasonId': typeof AuthenticatedSeriesSeasonIdRoute
@@ -563,6 +577,7 @@ export interface FileRoutesByFullPath {
   '/platform-hub/settings': typeof PlatformHubPlatformHubSettingsRoute
   '/platform-hub/users': typeof PlatformHubPlatformHubUsersRoute
   '/api/public/ai-job': typeof ApiPublicAiJobRoute
+  '/api/public/notifications-dispatch': typeof ApiPublicNotificationsDispatchRoute
   '/platform-hub/companies/$companyId': typeof PlatformHubPlatformHubCompaniesCompanyIdRoute
   '/platform-hub/users/$userId': typeof PlatformHubPlatformHubUsersUserIdRoute
 }
@@ -623,6 +638,7 @@ export interface FileRoutesByTo {
   '/trash': typeof AuthenticatedTrashRoute
   '/vendor-payables': typeof AuthenticatedVendorPayablesRoute
   '/vendors': typeof AuthenticatedVendorsRoute
+  '/api/health': typeof ApiHealthRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/series/$seasonId': typeof AuthenticatedSeriesSeasonIdRoute
@@ -637,6 +653,7 @@ export interface FileRoutesByTo {
   '/platform-hub/settings': typeof PlatformHubPlatformHubSettingsRoute
   '/platform-hub/users': typeof PlatformHubPlatformHubUsersRoute
   '/api/public/ai-job': typeof ApiPublicAiJobRoute
+  '/api/public/notifications-dispatch': typeof ApiPublicNotificationsDispatchRoute
   '/platform-hub/companies/$companyId': typeof PlatformHubPlatformHubCompaniesCompanyIdRoute
   '/platform-hub/users/$userId': typeof PlatformHubPlatformHubUsersUserIdRoute
 }
@@ -700,6 +717,7 @@ export interface FileRoutesById {
   '/_authenticated/trash': typeof AuthenticatedTrashRoute
   '/_authenticated/vendor-payables': typeof AuthenticatedVendorPayablesRoute
   '/_authenticated/vendors': typeof AuthenticatedVendorsRoute
+  '/api/health': typeof ApiHealthRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -715,6 +733,7 @@ export interface FileRoutesById {
   '/_platform-hub/platform-hub/settings': typeof PlatformHubPlatformHubSettingsRoute
   '/_platform-hub/platform-hub/users': typeof PlatformHubPlatformHubUsersRoute
   '/api/public/ai-job': typeof ApiPublicAiJobRoute
+  '/api/public/notifications-dispatch': typeof ApiPublicNotificationsDispatchRoute
   '/_platform-hub/platform-hub/companies_/$companyId': typeof PlatformHubPlatformHubCompaniesCompanyIdRoute
   '/_platform-hub/platform-hub/users_/$userId': typeof PlatformHubPlatformHubUsersUserIdRoute
 }
@@ -777,6 +796,7 @@ export interface FileRouteTypes {
     | '/trash'
     | '/vendor-payables'
     | '/vendors'
+    | '/api/health'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/series/$seasonId'
@@ -791,6 +811,7 @@ export interface FileRouteTypes {
     | '/platform-hub/settings'
     | '/platform-hub/users'
     | '/api/public/ai-job'
+    | '/api/public/notifications-dispatch'
     | '/platform-hub/companies/$companyId'
     | '/platform-hub/users/$userId'
   fileRoutesByTo: FileRoutesByTo
@@ -851,6 +872,7 @@ export interface FileRouteTypes {
     | '/trash'
     | '/vendor-payables'
     | '/vendors'
+    | '/api/health'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/series/$seasonId'
@@ -865,6 +887,7 @@ export interface FileRouteTypes {
     | '/platform-hub/settings'
     | '/platform-hub/users'
     | '/api/public/ai-job'
+    | '/api/public/notifications-dispatch'
     | '/platform-hub/companies/$companyId'
     | '/platform-hub/users/$userId'
   id:
@@ -927,6 +950,7 @@ export interface FileRouteTypes {
     | '/_authenticated/trash'
     | '/_authenticated/vendor-payables'
     | '/_authenticated/vendors'
+    | '/api/health'
     | '/_authenticated/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
@@ -942,6 +966,7 @@ export interface FileRouteTypes {
     | '/_platform-hub/platform-hub/settings'
     | '/_platform-hub/platform-hub/users'
     | '/api/public/ai-job'
+    | '/api/public/notifications-dispatch'
     | '/_platform-hub/platform-hub/companies_/$companyId'
     | '/_platform-hub/platform-hub/users_/$userId'
   fileRoutesById: FileRoutesById
@@ -958,9 +983,11 @@ export interface RootRouteChildren {
   TimelineRoute: typeof TimelineRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  ApiHealthRoute: typeof ApiHealthRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiPublicAiJobRoute: typeof ApiPublicAiJobRoute
+  ApiPublicNotificationsDispatchRoute: typeof ApiPublicNotificationsDispatchRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1034,6 +1061,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/vendors': {
       id: '/_authenticated/vendors'
@@ -1378,6 +1412,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/notifications-dispatch': {
+      id: '/api/public/notifications-dispatch'
+      path: '/api/public/notifications-dispatch'
+      fullPath: '/api/public/notifications-dispatch'
+      preLoaderRoute: typeof ApiPublicNotificationsDispatchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/ai-job': {
       id: '/api/public/ai-job'
       path: '/api/public/ai-job'
@@ -1670,9 +1711,11 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
+  ApiHealthRoute: ApiHealthRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiPublicAiJobRoute: ApiPublicAiJobRoute,
+  ApiPublicNotificationsDispatchRoute: ApiPublicNotificationsDispatchRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

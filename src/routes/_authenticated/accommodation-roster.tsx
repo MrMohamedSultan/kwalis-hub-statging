@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { formatAmount } from "@/lib/format-number";
 import { DateInput } from "@/components/ui/date-input";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
@@ -334,7 +335,7 @@ function AccommodationRosterPage() {
                           <option value="">—</option>
                           {propRooms.map((r) => (
                             <option key={r.id} value={r.id}>
-                              {r.name} · {r.nightly_rate.toLocaleString()} {r.currency}
+                              {r.name} · {formatAmount(r.nightly_rate, 2)} {r.currency}
                             </option>
                           ))}
                         </select>
@@ -406,7 +407,7 @@ function AccommodationRosterPage() {
                           return (
                             <>
                               <div>
-                                {stayTotal(n, row?.nightly_rate ?? 0).toLocaleString()}{" "}
+                                {formatAmount(stayTotal(n, row?.nightly_rate ?? 0), 2)}{" "}
                                 {row?.currency ?? "SAR"}
                               </div>
                               <div className="text-[10px] text-muted-foreground">
@@ -447,7 +448,7 @@ function AccommodationRosterPage() {
                             .map((inv) => (
                               <option key={inv.id} value={inv.id}>
                                 {inv.invoiceNo || inv.id.slice(0, 6)} ·{" "}
-                                {Number(inv.price).toLocaleString()}
+                                {formatAmount(Number(inv.price), 2)}
                               </option>
                             ))}
                         </select>

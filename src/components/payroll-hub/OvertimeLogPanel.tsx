@@ -588,7 +588,9 @@ export function OvertimeLogPanel() {
                       {r.notes ? ` · ${r.notes}` : ""}
                     </div>
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap">{r.work_date}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {formatDate(r.work_date) || r.work_date}
+                  </td>
                   <td className="px-3 py-2 text-end tabular-nums">
                     {Number(r.units).toLocaleString()}
                   </td>

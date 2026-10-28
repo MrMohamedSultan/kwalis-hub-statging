@@ -150,31 +150,24 @@ export function AccountSettingsPage() {
   return (
     <div className="space-y-6">
       <PageTitle title={t("nav.accountSettings", "Account Settings")} />
-      <p className="text-sm text-muted-foreground -mt-2">
-        {t(
-          "accountSettings.subtitle",
-          "Manage your personal profile and password. These changes affect only your account.",
-        )}
-      </p>
+      <p className="text-sm text-muted-foreground -mt-2">{t("platform.account.subtitle")}</p>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel>
           <div className="flex items-center gap-2 mb-4">
             <UserCircle className="h-5 w-5 text-brand" />
-            <h2 className="text-base font-semibold">{t("accountSettings.profile", "Profile")}</h2>
+            <h2 className="text-base font-semibold">{t("platform.account.profile")}</h2>
           </div>
           <form onSubmit={handleProfileSave} className="space-y-4">
             <label className="block text-sm">
               <div className="text-muted-foreground mb-1">
-                {t("accountSettings.email", "Email")}{" "}
-                <span className="text-[10px]">({t("accountSettings.readOnly", "read-only")})</span>
+                {t("platform.account.email")}{" "}
+                <span className="text-[10px]">({t("platform.account.readOnly")})</span>
               </div>
               <input type="email" value={email} readOnly disabled className={readOnlyCls} />
             </label>
             <label className="block text-sm">
-              <div className="text-muted-foreground mb-1">
-                {t("accountSettings.fullName", "Full Name")}
-              </div>
+              <div className="text-muted-foreground mb-1">{t("platform.account.fullName")}</div>
               <input
                 type="text"
                 value={displayName}
@@ -187,8 +180,10 @@ export function AccountSettingsPage() {
             </label>
             <label className="block text-sm">
               <div className="text-muted-foreground mb-1">
-                {t("accountSettings.jobTitle", "Job Title")}{" "}
-                <span className="text-[10px] text-muted-foreground/70">({t("platform.common.optional")})</span>
+                {t("platform.account.jobTitle")}{" "}
+                <span className="text-[10px] text-muted-foreground/70">
+                  ({t("platform.common.optional")})
+                </span>
               </div>
               <input
                 type="text"
@@ -209,7 +204,7 @@ export function AccountSettingsPage() {
               ) : (
                 <Save className="h-4 w-4" />
               )}
-              {t("accountSettings.saveProfile", "Save Profile")}
+              {t("platform.account.saveProfile")}
             </button>
           </form>
         </Panel>
@@ -217,15 +212,11 @@ export function AccountSettingsPage() {
         <Panel>
           <div className="flex items-center gap-2 mb-4">
             <KeyRound className="h-5 w-5 text-brand" />
-            <h2 className="text-base font-semibold">
-              {t("accountSettings.password", "Change Password")}
-            </h2>
+            <h2 className="text-base font-semibold">{t("platform.account.password")}</h2>
           </div>
           <form onSubmit={handlePasswordSave} className="space-y-4">
             <label className="block text-sm">
-              <div className="text-muted-foreground mb-1">
-                {t("accountSettings.newPassword", "New Password")}
-              </div>
+              <div className="text-muted-foreground mb-1">{t("platform.account.newPassword")}</div>
               <input
                 type="password"
                 value={password}
@@ -239,7 +230,7 @@ export function AccountSettingsPage() {
             </label>
             <label className="block text-sm">
               <div className="text-muted-foreground mb-1">
-                {t("accountSettings.confirmPassword", "Confirm New Password")}
+                {t("platform.account.confirmPassword")}
               </div>
               <input
                 type="password"
@@ -261,14 +252,9 @@ export function AccountSettingsPage() {
               ) : (
                 <KeyRound className="h-4 w-4" />
               )}
-              {t("accountSettings.updatePassword", "Update Password")}
+              {t("platform.account.updatePassword")}
             </button>
-            <p className="text-xs text-muted-foreground">
-              {t(
-                "accountSettings.passwordHint",
-                "You will remain signed in after changing your password.",
-              )}
-            </p>
+            <p className="text-xs text-muted-foreground">{t("platform.account.passwordHint")}</p>
           </form>
         </Panel>
         <MfaSettingsPanel />
