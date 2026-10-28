@@ -1433,7 +1433,7 @@ export function ExcelBudgetCreator({ onCreated }: { onCreated: () => void }) {
         open={pendingBulkRebate !== null}
         title={t("budget.confirm_bulk_rebate_qfe_update")}
         tone={pendingBulkRebate ? "success" : "default"}
-        message={`Are you sure you want to ${pendingBulkRebate ? "MARK" : "REMOVE"} the Rebate (QFE) tag on ${selected.size} selected row(s)? This affects rebate reporting.`}
+        message={`Are you sure you want to ${pendingBulkRebate ? "MARK" : "REMOVE"} the Rebate (QPE) tag on ${selected.size} selected row(s)? This affects rebate reporting.`}
         confirmLabel={pendingBulkRebate ? "Mark Eligible" : "Remove Tag"}
         onConfirm={confirmBulkRebate}
         onCancel={() => setPendingBulkRebate(null)}
@@ -4027,7 +4027,7 @@ export function ViewEditBudget() {
                     "Rate",
                     "Periods",
                     "Total (SAR)",
-                    "Rebate (QFE)",
+                    "Rebate (QPE)",
                   ];
                   const hdr = ws.getRow(2);
                   headers.forEach((h, i) => {
@@ -4340,7 +4340,7 @@ export function ViewEditBudget() {
                       "Total (native)",
                       "Total (SAR)",
                       "Total (USD)",
-                      "Rebate (QFE)",
+                      "Rebate (QPE)",
                       "Notes",
                     ];
                     const hdr = ws.getRow(2);
@@ -5407,7 +5407,7 @@ export function ViewEditBudget() {
         open={pendingViewRebate !== null}
         title={t("budget.confirm_bulk_rebate_qfe_update")}
         tone={pendingViewRebate ? "success" : "default"}
-        message={`Are you sure you want to ${pendingViewRebate ? "MARK" : "REMOVE"} the Rebate (QFE) tag on ${bulkSelected.size} selected line(s)? This will be saved immediately and affects rebate reporting.`}
+        message={`Are you sure you want to ${pendingViewRebate ? "MARK" : "REMOVE"} the Rebate (QPE) tag on ${bulkSelected.size} selected line(s)? This will be saved immediately and affects rebate reporting.`}
         confirmLabel={pendingViewRebate ? "Mark Eligible" : "Remove Tag"}
         onConfirm={confirmBulkRebateTag}
         onCancel={() => setPendingViewRebate(null)}

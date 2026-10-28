@@ -192,7 +192,7 @@ function buildColumns(t: (k: string) => string, moneyCcy: string | null): ColDef
       key: "qfe",
       label: t("reports.gltx_col_qfe"),
       className: txt,
-      raw: (r) => (r.qfe_eligible ? "QFE" : null),
+      raw: (r) => (r.qfe_eligible ? "QPE" : null),
       cell: (r) =>
         r.qfe_eligible ? (
           <span className="text-[11px] px-2 py-0.5 rounded-full border bg-accent/15 text-accent border-accent/30">
