@@ -5371,6 +5371,9 @@
     },
     "top_sheet_pdf": {
       "summary": "الملخص"
+    },
+    "gl": {
+      "qpe_review": "قيد المراجعة"
     }
   }
 }

@@ -13,6 +13,8 @@ import { formatAmount } from "@/lib/format-number";
 import { groupByAccount, ledgerTotals, type GeneralLedgerLine } from "@/lib/ledger-calc";
 import { useActiveProject, useGeneralLedger, useTrialBalance } from "./ledger-data";
 import { transactionFromLedgerLine } from "./ledger-drawer";
+import { enrichLedgerLines, useLedgerEnrichment, type LedgerQpeLine } from "./ledger-enrich";
+import { useStore } from "@/lib/store";
 import { GlTransactionDrawer } from "@/features/reports/gl-transactions/GlTransactionDrawer";
 import type { GlTransaction } from "@/features/reports/gl-transactions/gl-transactions-data";
 import {
@@ -50,13 +52,23 @@ export function GeneralLedgerReport({
   const [accountId, setAccountId] = useState<string | null>(initialAccountId);
   const [search, setSearch] = useState("");
   const accounts = useTrialBalance(projectId, "", "");
-  const { data, loading, error } = useGeneralLedger(projectId, from, to, accountId);
+  const { data: raw, loading, error } = useGeneralLedger(projectId, from, to, accountId);
+  // R03: QPE from rebate_transactions() (197), department from the budget header.
+  const budget = useStore((s) => s.budget);
+  const enrichment = useLedgerEnrichment(projectId, budget);
+  const data = useMemo(() => enrichLedgerLines(raw, enrichment), [raw, enrichment]);
+  const qpeLabel = (l: LedgerQpeLine) =>
+    l.qpe_status === "eligible"
+      ? t("journal.yes")
+      : l.qpe_status === "needs_review"
+        ? t("leftovers.gl.qpe_review")
+        : t("journal.no");
 
   const lines = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return data;
     return data.filter((l) =>
-      [l.party, l.budget_code, l.reference, l.description, l.entry_ref]
+      [l.party, l.budget_code, l.reference, l.description, l.entry_ref, l.department]
         .filter(Boolean)
         .some((s) => String(s).toLowerCase().includes(q)),
     );
@@ -100,7 +112,7 @@ export function GeneralLedgerReport({
       l.reference ?? "",
       l.department ?? "",
       l.status ?? "",
-      l.qpe_eligible ? t("journal.yes") : t("journal.no"),
+      qpeLabel(l),
       l.debit,
       l.credit,
       l.running_balance,
@@ -171,7 +183,9 @@ export function GeneralLedgerReport({
                 <th className={thCls}>{t("journal.col.party")}</th>
                 <th className={thCls}>{t("journal.col.budget_code")}</th>
                 <th className={thCls}>{t("journal.col.reference")}</th>
+                <th className={thCls}>{t("journal.col.department")}</th>
                 <th className={thCls}>{t("journal.col.status")}</th>
+                <th className={thCls}>{t("journal.col.qpe")}</th>
                 <th className={thNumCls}>{t("journal.col.debit")}</th>
                 <th className={thNumCls}>{t("journal.col.credit")}</th>
                 <th className={thNumCls}>{t("journal.col.running_balance")}</th>
@@ -184,7 +198,7 @@ export function GeneralLedgerReport({
                 return (
                   <Fragment key={acc}>
                     <tr className="bg-muted/50">
-                      <td colSpan={10} className="px-3 py-2 font-semibold">
+                      <td colSpan={12} className="px-3 py-2 font-semibold">
                         {accountLabel(ls[0].gl_code, ls[0].gl_name)}
                       </td>
                     </tr>
@@ -205,7 +219,9 @@ export function GeneralLedgerReport({
                         <td className={txtCls}>{l.party ?? "—"}</td>
                         <td className={txtCls}>{l.budget_code ?? "—"}</td>
                         <td className={txtCls}>{l.reference ?? "—"}</td>
+                        <td className={txtCls}>{l.department ?? "—"}</td>
                         <td className={txtCls}>{l.status ?? "—"}</td>
+                        <td className={txtCls}>{qpeLabel(l)}</td>
                         <td className={numCls}>
                           <Money v={l.debit} blankZero />
                         </td>
@@ -218,7 +234,7 @@ export function GeneralLedgerReport({
                       </tr>
                     ))}
                     <tr className="border-b border-border">
-                      <td colSpan={7} className="px-3 py-2 text-end text-xs text-muted-foreground">
+                      <td colSpan={9} className="px-3 py-2 text-end text-xs text-muted-foreground">
                         {t("journal.account_total")}
                       </td>
                       <td className={`${numCls} font-semibold`}>{formatAmount(sub.debit, 2)}</td>
@@ -233,7 +249,7 @@ export function GeneralLedgerReport({
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-border font-semibold">
-                <td colSpan={7} className="px-3 py-2 text-end">
+                <td colSpan={9} className="px-3 py-2 text-end">
                   {t("journal.total")}{" "}
                   <span className={totals.balanced ? "text-success" : "text-destructive"}>
                     ({totals.balanced ? t("journal.balanced") : t("journal.not_balanced")})
