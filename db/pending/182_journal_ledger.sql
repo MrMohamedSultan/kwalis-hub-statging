@@ -86,6 +86,10 @@
 -- SECURITY: new tables with RLS, SECURITY DEFINER engine, triggers on
 -- financial tables — per SECURITY.md apply only after owner approval.
 --
+-- Security review fix (secfix #18, before first apply): ledger rows may also
+-- be deleted when their organization is gone (organization delete cascade),
+-- not only when their project is.
+--
 -- Rollback (in this order):
 --   DROP TRIGGER trg_ledger_sync ON public.invoices, public.payroll, public.payments,
 --     public.project_funding, public.cash_advances, public.cash_advance_receipts,
@@ -574,12 +578,16 @@ DROP POLICY IF EXISTS "Project members read ledger lines" ON public.ledger_lines
 CREATE POLICY "Project members read ledger lines" ON public.ledger_lines FOR SELECT TO authenticated
   USING (public.can_access_project(auth.uid(), organization_id, project_id));
 
--- Immutable: corrections are reversing entries. Rows go only with their project.
+-- Immutable: corrections are reversing entries. Rows go only with their
+-- project or their organization (secfix #18: the organization cascade may
+-- reach the ledger before the project cascade does).
 CREATE OR REPLACE FUNCTION public.ledger_immutable()
 RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
-  IF TG_OP = 'DELETE' AND NOT EXISTS (SELECT 1 FROM public.projects WHERE id = OLD.project_id) THEN
-    RETURN OLD;                                   -- project deleted: cascade
+  IF TG_OP = 'DELETE'
+     AND (NOT EXISTS (SELECT 1 FROM public.projects WHERE id = OLD.project_id)
+          OR NOT EXISTS (SELECT 1 FROM public.organizations WHERE id = OLD.organization_id)) THEN
+    RETURN OLD;                                   -- project / organization deleted: cascade
   END IF;
   RAISE EXCEPTION 'The ledger is immutable: % on % is refused — post a reversing entry instead', TG_OP, TG_TABLE_NAME
     USING ERRCODE = '42501';

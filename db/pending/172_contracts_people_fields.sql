@@ -32,6 +32,10 @@
 --   · wht_rate  from the contract's own payroll row when it carries a
 --               WHT percent > 0
 --
+-- Security review fix (secfix #26, before first apply): the CHECKs are added
+-- NOT VALID and validated one by one afterwards; a live value that does not
+-- pass leaves that CHECK NOT VALID with a NOTICE instead of failing.
+--
 -- ADDITIVE and idempotent. Rollback:
 --   ALTER TABLE public.people
 --     DROP COLUMN IF EXISTS tax_residency, DROP COLUMN IF EXISTS wht_service_type,
@@ -55,34 +59,52 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'people_tax_residency_check'
                  AND conrelid = 'public.people'::regclass) THEN
     ALTER TABLE public.people ADD CONSTRAINT people_tax_residency_check
-      CHECK (tax_residency IS NULL OR tax_residency IN ('resident', 'non_resident'));
+      CHECK (tax_residency IS NULL OR tax_residency IN ('resident', 'non_resident')) NOT VALID;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'people_id_type_check'
                  AND conrelid = 'public.people'::regclass) THEN
     ALTER TABLE public.people ADD CONSTRAINT people_id_type_check
-      CHECK (id_type IS NULL OR id_type IN ('national_id', 'iqama', 'passport'));
+      CHECK (id_type IS NULL OR id_type IN ('national_id', 'iqama', 'passport')) NOT VALID;
   END IF;
   -- < 100: the gross-up divides by (1 − rate)
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'people_wht_rate_check'
                  AND conrelid = 'public.people'::regclass) THEN
     ALTER TABLE public.people ADD CONSTRAINT people_wht_rate_check
-      CHECK (wht_rate IS NULL OR (wht_rate >= 0 AND wht_rate < 100));
+      CHECK (wht_rate IS NULL OR (wht_rate >= 0 AND wht_rate < 100)) NOT VALID;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'people_wht_service_type_check'
                  AND conrelid = 'public.people'::regclass) THEN
     ALTER TABLE public.people ADD CONSTRAINT people_wht_service_type_check
-      CHECK (wht_service_type IS NULL OR length(wht_service_type) BETWEEN 1 AND 100);
+      CHECK (wht_service_type IS NULL OR length(wht_service_type) BETWEEN 1 AND 100) NOT VALID;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'people_wht_treatment_check'
                  AND conrelid = 'public.people'::regclass) THEN
     ALTER TABLE public.people ADD CONSTRAINT people_wht_treatment_check
-      CHECK (wht_treatment IN ('inclusive', 'exclusive'));
+      CHECK (wht_treatment IN ('inclusive', 'exclusive')) NOT VALID;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payroll_wht_treatment_check'
                  AND conrelid = 'public.payroll'::regclass) THEN
     ALTER TABLE public.payroll ADD CONSTRAINT payroll_wht_treatment_check
-      CHECK (wht_treatment IN ('inclusive', 'exclusive'));
+      CHECK (wht_treatment IN ('inclusive', 'exclusive')) NOT VALID;
   END IF;
+END $$;
+
+-- secfix #26: the CHECKs above are added NOT VALID (no full-table scan under
+-- the exclusive lock; new writes are checked at once) and validated here one
+-- by one. A live value that does not pass leaves that CHECK NOT VALID with a
+-- NOTICE instead of failing the migration: the owner lists the offending
+-- rows, fixes them, then runs ALTER TABLE ... VALIDATE CONSTRAINT ... again.
+DO $$
+DECLARE c record;
+BEGIN
+  FOR c IN SELECT conrelid::regclass AS tbl, conname FROM pg_constraint
+            WHERE conname IN ('people_tax_residency_check', 'people_id_type_check', 'people_wht_rate_check', 'people_wht_service_type_check', 'people_wht_treatment_check', 'payroll_wht_treatment_check') AND NOT convalidated LOOP
+    BEGIN
+      EXECUTE format('ALTER TABLE %s VALIDATE CONSTRAINT %I', c.tbl, c.conname);
+    EXCEPTION WHEN check_violation THEN
+      RAISE NOTICE '172: % on % left NOT VALID, existing rows do not pass it (%)', c.conname, c.tbl, SQLERRM;
+    END;
+  END LOOP;
 END $$;
 
 COMMENT ON COLUMN public.people.tax_residency IS
