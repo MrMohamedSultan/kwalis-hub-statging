@@ -21,6 +21,7 @@
 //          "1000  DEVELOPMENT COSTS").
 //   3. Everything else is a valid line item.
 
+import { normalizeKsaRegion } from "@/lib/ksa-regions";
 import type * as XLSXTypes from "xlsx";
 import { loadXlsx } from "@/lib/lazy-export-libs";
 import { generateId } from "./store";
@@ -74,7 +75,9 @@ export type CanonicalCol =
   | "QUANTITY"
   | "RATE"
   | "CURRENCY"
-  | "NOTES";
+  | "NOTES"
+  // db/pending/201: optional KSA region of the line (Film Commission budget by region)
+  | "REGION";
 
 export type SheetHeaderInfo = {
   rowNumber: number;
@@ -167,6 +170,8 @@ const HEADER_TO_CANON: Record<string, CanonicalCol> = {
   NOTES: "NOTES",
   NOTE: "NOTES",
   REMARKS: "NOTES",
+  REGION: "REGION",
+  "KSA REGION": "REGION",
   PREP: "PREP",
   SHOOTING: "SHOOTING",
   SHOOT: "SHOOTING",
@@ -198,6 +203,7 @@ const HEADER_TO_CANON: Record<string, CanonicalCol> = {
   العملة: "CURRENCY",
   ملاحظات: "NOTES",
   الملاحظات: "NOTES",
+  المنطقة: "REGION",
   التحضير: "PREP",
   التصوير: "SHOOTING",
   القسم: "SECTION",
@@ -487,6 +493,8 @@ export async function parseKwalisTemplatePreview(
       const unitRaw = norm(cell(row, "UNIT")) || "Flat";
       const currRaw = norm(cell(row, "CURRENCY")).toUpperCase();
       const notes = norm(cell(row, "NOTES"));
+      // unknown region names are dropped (the line then uses the project default)
+      const region = normalizeKsaRegion(norm(cell(row, "REGION")));
       const prep = coerceNumber(cell(row, "PREP"));
       const shooting = coerceNumber(cell(row, "SHOOTING"));
       const wrap = coerceNumber(cell(row, "WRAP"));
@@ -514,6 +522,7 @@ export async function parseKwalisTemplatePreview(
         shooting,
         wrap,
         notes: notes || undefined,
+        ...(region ? { region } : {}),
         group,
         currency: (currRaw === "USD" ? "USD" : "SAR") as BudgetLine["currency"],
         // Leave topsheetCode unset — the in-app backfill assigns it from the

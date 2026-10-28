@@ -45,7 +45,29 @@ export async function fetchFilmCommissionRebate(
     p_project_id: projectId,
     p_sections: sections && sections.length ? [...sections] : null,
   });
-  return data ?? { project_id: projectId, currency: "SAR" };
+  const out = data ?? { project_id: projectId, currency: "SAR" };
+  // db/pending/201: budget by region = estimate vs actual (line region, else
+  // the project default). Older databases keep the 197 actual-only rows.
+  if (out.budget && (!sections || sections.length === 0 || sections.includes("budget"))) {
+    try {
+      const rows = await call<any[]>("get_budget_by_region", {
+        p_project_id: uuid.parse(projectId),
+      });
+      out.budget = {
+        ...out.budget,
+        by_region: (rows ?? []).map((r) => ({
+          region: String(r.region),
+          estimate: Number(r.estimate_sar) || 0,
+          actual_total: Number(r.actual_sar) || 0,
+          actual_qpe: Number(r.actual_qpe_sar) || 0,
+          variance: Number(r.variance_sar) || 0,
+        })),
+      };
+    } catch {
+      /* get_budget_by_region not deployed yet */
+    }
+  }
+  return out;
 }
 
 export function useFilmCommissionRebate(projectId: string | null, sections?: readonly string[]) {

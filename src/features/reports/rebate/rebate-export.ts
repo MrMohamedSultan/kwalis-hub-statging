@@ -10,6 +10,7 @@
 // ═══════════════════════════════════════════════════════════════════
 import type ExcelJSNS from "exceljs";
 import i18n from "@/lib/i18n";
+import { regionSlug } from "@/lib/ksa-regions";
 import { loadExcelJs } from "@/lib/lazy-export-libs";
 import { excelDateFormat, toExcelDate } from "@/lib/date-format";
 import {
@@ -124,13 +125,23 @@ function budgetSections(d: FilmCommissionRebate): ReportSection[] {
       title: t("budget_by_region"),
       columns: [
         { header: t("col.region") },
+        { header: i18n.t("decisions.region.estimate"), type: "money" },
         { header: t("col.actual_total"), type: "money" },
         { header: t("col.actual_qpe"), type: "money" },
+        { header: i18n.t("decisions.region.variance"), type: "money" },
       ],
       rows: (b?.by_region ?? []).map((r) => [
-        r.region === "unassigned" ? t("region_unassigned") : r.region,
+        r.region === "unassigned"
+          ? t("region_unassigned")
+          : r.region === "outside_ksa"
+            ? i18n.t("decisions.region.outside_ksa")
+            : (i18n.t(`decisions.region.${regionSlug(r.region)}`, {
+                defaultValue: r.region,
+              }) as string),
+        r.estimate ?? 0,
         r.actual_total ?? 0,
         r.actual_qpe ?? 0,
+        r.variance ?? 0,
       ]),
     },
   ];

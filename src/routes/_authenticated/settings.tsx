@@ -29,6 +29,9 @@ import { OrganizationCurrencyPanel, ProjectCurrencyPanel } from "@/components/Cu
 import { ExportBrandingPanel } from "@/components/settings/ExportBrandingPanel";
 import { FilmCommissionSettingsPanel } from "@/components/settings/FilmCommissionSettingsPanel";
 import { ShootSchedulePanel } from "@/components/settings/ShootSchedulePanel";
+import { ProjectRegionPanel } from "@/components/decisions/ProjectRegionPanel";
+import { WhtRatesPanel } from "@/components/decisions/WhtRatesPanel";
+import { ContractFilesPanel } from "@/components/decisions/ContractFilesPanel";
 import { Button } from "@/components/ui/button";
 import { z } from "zod";
 
@@ -176,6 +179,7 @@ function SettingsPage() {
               <>
                 <ProjectSettingsPanel />
                 <FilmCommissionSettingsPanel />
+                <ProjectRegionPanel />
                 <ShootSchedulePanel />
                 <ProjectTeamPanel />
               </>
@@ -208,6 +212,18 @@ function SettingsPage() {
                     }
                   />
                 </Panel>
+                <Panel className="p-5">
+                  <WhtRatesPanel
+                    organizationId={
+                      selectedOrgId ?? roles.adminOrgIds[0] ?? roles.memberOrgIds[0] ?? null
+                    }
+                  />
+                </Panel>
+                {roles.isSuperAdmin && (
+                  <Panel className="p-5">
+                    <ContractFilesPanel />
+                  </Panel>
+                )}
                 <ProjectsManagementPanel />
                 <AccessControlSelfTest />
               </>

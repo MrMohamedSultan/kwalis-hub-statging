@@ -1,3 +1,4 @@
+import { normalizeKsaRegion } from "@/lib/ksa-regions";
 import type { BudgetLine as StoreBudgetLine } from "@/lib/store";
 import { generateId } from "@/lib/store";
 import type { BudgetLine as AdapterBudgetLine } from "@/lib/excelAdapter";
@@ -54,6 +55,10 @@ export function adapterLineToStoreLine(l: AdapterBudgetLine): StoreBudgetLine {
     shooting,
     wrap,
     notes: String(l.notes ?? "").trim() || undefined,
+    // db/pending/201: optional KSA region (unknown names dropped)
+    ...(normalizeKsaRegion((l as { region?: unknown }).region)
+      ? { region: normalizeKsaRegion((l as { region?: unknown }).region) }
+      : {}),
     group: storeGroupOfLine(l),
     excluded: false,
   };

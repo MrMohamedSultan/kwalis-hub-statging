@@ -186,7 +186,12 @@ export interface BudgetGroupRow {
   variance_qpe: number;
 }
 export interface BudgetRegionRow {
+  /** KSA region name, 'outside_ksa' or 'unassigned'. */
   region: string;
+  /** Budget estimate of the region (db/pending/201 get_budget_by_region). */
+  estimate?: number | null;
+  /** estimate − actual_total (positive = saving). */
+  variance?: number | null;
   actual_qpe?: number | null;
   actual_total?: number | null;
 }

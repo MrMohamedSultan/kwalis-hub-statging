@@ -7,6 +7,7 @@
 // every section. SAR, excl. VAT. Each section exports alone; "Export all"
 // writes one workbook with a sheet per section.
 // ═══════════════════════════════════════════════════════════════════
+import { KSA_REGIONS, regionSlug, type KsaRegion } from "@/lib/ksa-regions";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Loader2, Pencil, RotateCcw } from "lucide-react";
@@ -552,6 +553,15 @@ function PayrollSection({ d, includeAll }: { d: FilmCommissionRebate; includeAll
   );
 }
 
+/** Region row label: a KSA region, outside KSA or unassigned (db/pending/201). */
+export function regionLabel(t: (k: string) => string, region: string): string {
+  if (region === "unassigned") return t("rebate.region_unassigned");
+  if (region === "outside_ksa") return t("decisions.region.outside_ksa");
+  return KSA_REGIONS.includes(region as KsaRegion)
+    ? t(`decisions.region.${regionSlug(region)}`)
+    : region;
+}
+
 function BudgetSection({ d }: { d: FilmCommissionRebate }) {
   const { t } = useTranslation();
   const groups = d.budget?.by_group ?? [];
@@ -619,28 +629,30 @@ function BudgetSection({ d }: { d: FilmCommissionRebate }) {
           <thead className="bg-surface-2/60">
             <tr>
               <th className={thCls}>{t("rebate.col.region")}</th>
+              <th className={thNumCls}>{t("decisions.region.estimate")}</th>
               <th className={thNumCls}>{t("rebate.col.actual_total")}</th>
               <th className={thNumCls}>{t("rebate.col.actual_qpe")}</th>
+              <th className={thNumCls}>{t("decisions.region.variance")}</th>
             </tr>
           </thead>
           <tbody>
-            {regions.length === 0 && <EmptyRow cols={3} text={t("rebate.empty")} />}
+            {regions.length === 0 && <EmptyRow cols={5} text={t("rebate.empty")} />}
             {regions.map((r) => (
               <tr key={r.region} className="border-t border-border">
-                <td className={tdCls}>
-                  {r.region === "unassigned" ? t("rebate.region_unassigned") : r.region}
-                </td>
+                <td className={tdCls}>{regionLabel(t, r.region)}</td>
+                <td className={tdNumCls}>{r.estimate == null ? "—" : <Money v={r.estimate} />}</td>
                 <td className={tdNumCls}>
                   <Money v={r.actual_total ?? 0} />
                 </td>
                 <td className={tdNumCls}>
                   <Money v={r.actual_qpe ?? 0} />
                 </td>
+                <td className={tdNumCls}>{r.variance == null ? "—" : <Money v={r.variance} />}</td>
               </tr>
             ))}
           </tbody>
         </TableShell>
-        <p className="mt-1 text-xs text-muted-foreground">{t("rebate.region_hint")}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("decisions.region.reportHint")}</p>
       </div>
     </div>
   );

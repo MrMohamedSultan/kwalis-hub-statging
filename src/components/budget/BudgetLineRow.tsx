@@ -1,3 +1,4 @@
+import { KSA_REGIONS, regionSlug } from "@/lib/ksa-regions";
 import { memo } from "react";
 import { formatAmount } from "@/lib/format-number";
 import { Check, Pencil, Trash2, X } from "lucide-react";
@@ -289,6 +290,26 @@ function BudgetLineRowInner({
             else onUpdate(l.id, { topsheetCode: code });
           }}
         />
+        {l.region !== undefined && (
+          <select
+            value={v.region ?? ""}
+            aria-label={t("decisions.region.label")}
+            title={t("decisions.region.hint")}
+            onChange={(e) => {
+              const region = e.target.value || null;
+              if (isEdit) setDraft({ region });
+              else onUpdate(l.id, { region });
+            }}
+            className="mt-1 w-full bg-input border border-border rounded px-1.5 py-0.5 text-[11px] text-foreground outline-none"
+          >
+            <option value="">{t("decisions.region.projectDefault")}</option>
+            {KSA_REGIONS.map((r) => (
+              <option key={r} value={r}>
+                {t(`decisions.region.${regionSlug(r)}`)}
+              </option>
+            ))}
+          </select>
+        )}
       </Td>
       <Td className="min-w-[180px]">
         {isEdit ? (
