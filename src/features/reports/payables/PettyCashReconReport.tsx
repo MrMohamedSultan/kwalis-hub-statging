@@ -4,7 +4,8 @@
 // Film Commission cash limits: cash share of the qualifying spend and the
 // per-transaction limit. The limits are project settings (E10,
 // project_rebate_settings of the Film Commission batch); until they are set
-// the defaults are used and the screen says so.
+// the defaults are used and the screen says so. The QPE base and the
+// "never in cash" categories come from rebate_transactions() (197).
 // =====================================================================
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -27,7 +28,7 @@ import { usePettyData } from "./payables-data";
 const COLS = ["issued", "spent", "pending", "returned", "remaining"] as const;
 
 export function PettyCashReconReport() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { projectId } = useActiveProject();
   const q = usePettyData(projectId);
   const d = q.data;
@@ -39,6 +40,15 @@ export function PettyCashReconReport() {
   const shareOver = d != null && share != null && share > d.limits.pctOfQpe;
   const txnOver = d != null && d.largestCash > d.limits.perTxn + 0.005;
   const col = (k: string) => t(`reconcile.petty.col.${k}`);
+  const ar = (i18n.language ?? "").startsWith("ar");
+  const catLabel = (code: string | null) => {
+    if (!code) return "—";
+    const c = d?.categories.find((x) => x.code === code);
+    return c ? (ar ? c.label_ar : c.label_en) : code;
+  };
+  const srcLabel = (s: string) => t(`leftovers.petty.src_${s}`, { defaultValue: s });
+  const qpeNote =
+    d?.qpeSource === "qpe" ? t("leftovers.petty.qpe_note") : t("reconcile.petty.qpeNote");
 
   useReportExport(() =>
     !d || !recon
@@ -89,8 +99,28 @@ export function PettyCashReconReport() {
                   d.limits.source === "default"
                     ? t("reconcile.petty.defaultLimits")
                     : t("reconcile.petty.settingsLimits"),
-                  t("reconcile.petty.qpeNote"),
+                  qpeNote,
                 ],
+              },
+              {
+                title: t("leftovers.petty.forbidden_title"),
+                notes: [t("leftovers.petty.forbidden_hint")],
+                columns: [
+                  { header: t("leftovers.petty.col_ref") },
+                  { header: t("leftovers.petty.col_source") },
+                  { header: t("leftovers.petty.col_party") },
+                  { header: t("leftovers.petty.col_date"), type: "date" as const },
+                  { header: t("leftovers.petty.col_category") },
+                  { header: t("leftovers.petty.col_cash"), type: "money" as const },
+                ],
+                rows: d.forbidden.map((a) => [
+                  a.ref ?? "",
+                  srcLabel(a.source),
+                  a.party ?? "",
+                  a.date,
+                  catLabel(a.category),
+                  a.cash,
+                ]),
               },
             ],
           },
@@ -131,8 +161,45 @@ export function PettyCashReconReport() {
             {d.limits.source === "default"
               ? t("reconcile.petty.defaultLimits")
               : t("reconcile.petty.settingsLimits")}{" "}
-            {t("reconcile.petty.qpeNote")}
+            {qpeNote}
           </p>
+          {d.forbidden.length > 0 && (
+            <div className="mb-4 rounded-xl border border-destructive/40 bg-destructive/10 p-3">
+              <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-destructive">
+                <AlertTriangle className="size-4" />
+                {t("leftovers.petty.forbidden_count", { count: d.forbidden.length })}
+              </div>
+              <p className="mb-2 text-xs text-muted-foreground">
+                {t("leftovers.petty.forbidden_hint")}
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-border">
+                    <tr>
+                      <th className={thCls}>{t("leftovers.petty.col_ref")}</th>
+                      <th className={thCls}>{t("leftovers.petty.col_source")}</th>
+                      <th className={thCls}>{t("leftovers.petty.col_party")}</th>
+                      <th className={thCls}>{t("leftovers.petty.col_category")}</th>
+                      <th className={thNumCls}>{t("leftovers.petty.col_cash")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.forbidden.map((a) => (
+                      <tr key={`${a.source}:${a.sourceId}`} className="border-b border-border/50">
+                        <td className={`${txtCls} font-mono text-xs`}>{a.ref ?? "—"}</td>
+                        <td className={txtCls}>{srcLabel(a.source)}</td>
+                        <td className={txtCls}>{a.party ?? "—"}</td>
+                        <td className={txtCls}>{catLabel(a.category)}</td>
+                        <td className={numCls}>
+                          <Money v={a.cash} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           {recon.rows.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

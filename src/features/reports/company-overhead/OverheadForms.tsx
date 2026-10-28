@@ -5,7 +5,9 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Input, inputBaseClass } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
+import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
 import { useCostReportRows } from "@/lib/cost-report";
 import { monthsBetween } from "@/features/reports/live-balance/live-balance";
@@ -151,10 +153,14 @@ export function CompanyEmployeeDialog({
             />
           </Field>
           <Field label={t("taxlive.oh.col.start")}>
-            <Input type="date" value={f.start} onChange={(e) => set("start", e.target.value)} />
+            <DateInput
+              className={inputBaseClass}
+              value={f.start}
+              onChange={(v) => set("start", v)}
+            />
           </Field>
           <Field label={t("taxlive.oh.col.end")}>
-            <Input type="date" value={f.end} onChange={(e) => set("end", e.target.value)} />
+            <DateInput className={inputBaseClass} value={f.end} onChange={(v) => set("end", v)} />
           </Field>
           <Field label={t("taxlive.oh.col.budgetLine")}>
             <BudgetCodeSelect value={f.code} onChange={(v) => set("code", v)} />
@@ -286,10 +292,18 @@ export function OverheadItemDialog({
                 />
               </Field>
               <Field label={t("taxlive.oh.col.start")}>
-                <Input type="date" value={f.start} onChange={(e) => set("start", e.target.value)} />
+                <DateInput
+                  className={inputBaseClass}
+                  value={f.start}
+                  onChange={(v) => set("start", v)}
+                />
               </Field>
               <Field label={t("taxlive.oh.col.end")}>
-                <Input type="date" value={f.end} onChange={(e) => set("end", e.target.value)} />
+                <DateInput
+                  className={inputBaseClass}
+                  value={f.end}
+                  onChange={(v) => set("end", v)}
+                />
               </Field>
             </>
           ) : (

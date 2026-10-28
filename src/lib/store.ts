@@ -39,6 +39,19 @@ import {
  * invalidating any previously stored value.
  */
 export type BudgetUnit = string;
+/**
+ * Budget lines are planned in SAR or USD only — on purpose (D03).
+ * A budget line's SAR value is recomputed everywhere (budget_line_total_sar
+ * in ~10 database views, lineTotalSAR here, the Top Sheet, the Film
+ * Commission budget) from ONE locked project rate SAR↔USD, so the approved
+ * budget never moves with daily FX. Spending in any other currency (EUR,
+ * AED, …) is recorded on the documents — invoices, POs, petty cash — with a
+ * dated rate and its source (project_currency_rates, db/pending/190,
+ * src/lib/fx-dated.ts) and is converted to SAR on the transaction date.
+ * Opening budget lines to EUR would need a dated rate per line inside every
+ * budget view and would make the approved budget total drift, so it is not
+ * done; a foreign-currency quote is budgeted at its SAR (or USD) value.
+ */
 export type BudgetCurrency = "USD" | "SAR";
 /** Units whose total is qty × rate only (no period multiplier). Legacy list kept intact. */
 export const UNITS_NO_PERIODS: readonly BudgetUnit[] = ["Package", "Epi"] as const;

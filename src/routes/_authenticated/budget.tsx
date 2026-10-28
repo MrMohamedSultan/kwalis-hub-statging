@@ -4090,62 +4090,50 @@ export function ViewEditBudget() {
                   );
                 };
 
-                const onExportPDF = () => {
+                // Branded PDF (G02): the shared Kwalis header / footer and file name.
+                const onExportPDF = async () => {
                   const rows = rowsForExport();
-                  const esc = (s: any) =>
-                    String(s ?? "").replace(
-                      /[&<>"']/g,
-                      (m) =>
-                        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-                          m
-                        ] as string,
-                    );
-                  const fmt = (n: number) => formatAmount(Number(n) || 0, 2);
-                  const body = rows
-                    .map(
-                      ({ line: l, section, totalSAR }) => `
-                <tr>
-                  <td>${esc(section)}</td>
-                  <td>${esc(l.headerCode)}</td>
-                  <td>${esc(l.mainCode)}</td>
-                  <td>${esc(l.description)}</td>
-                  <td class="r">${fmt(Number(l.amount) || 0)}</td>
-                  <td class="r">${fmt(Number(l.rate) || 0)}</td>
-                  <td class="r">${l.x ?? 1}</td>
-                  <td class="r">${fmt(totalSAR)}</td>
-                </tr>`,
-                    )
-                    .join("");
-                  const html = `<!doctype html><html><head><meta charset="utf-8"/>
-                <title>Budget — ${esc(filterLabel)}</title>
-                <style>
-                  *{box-sizing:border-box;} body{font:11px/1.35 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;margin:24px;}
-                  h1{font-size:16px;margin:0 0 4px;} .sub{color:#666;font-size:11px;margin-bottom:12px;}
-                  table{border-collapse:collapse;width:100%;} th,td{border:1px solid #ddd;padding:5px 7px;vertical-align:top;}
-                  th{background:#1F3A5F;color:#fff;text-align:left;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.04em;}
-                  .r{text-align:right;font-variant-numeric:tabular-nums;} tfoot td{font-weight:700;background:#f5f7fb;}
-                  @media print{@page{size:A4 landscape;margin:12mm;}}
-                </style></head><body>
-                <h1>Budget Export — ${esc(filterLabel)}</h1>
-                <div class="sub">${rows.length} line${rows.length === 1 ? "" : "s"} · Generated ${esc(dateStr)}</div>
-                <table>
-                  <thead><tr><th>${esc(t("platform.ui.section"))}</th><th>${esc(t("platform.ui.header"))}</th><th>${esc(t("budget.code"))}</th><th>${esc(t("budget.description"))}</th><th class="r">${esc(t("platform.ui.qty"))}</th><th class="r">${esc(t("platform.ui.rate"))}</th><th class="r">${esc(t("platform.ui.periods"))}</th><th class="r">${esc(t("budget.total_sar_2"))}</th></tr></thead>
-                  <tbody>${body}</tbody>
-                  <tfoot><tr><td colspan="7" class="r">${esc(t("budget.total_sar"))}</td><td class="r">${fmt(filteredSAR)}</td></tr></tfoot>
-                </table>
-                <script>window.onload=()=>{window.print();};</script>
-              </body></html>`;
-                  const w = window.open("", "_blank");
-                  if (!w) {
-                    toast.error(t("budget.popup_blocked_allow_popups_to_export_pdf"));
+                  if (!rows.length) {
+                    toast.error(t("budget.nothing_to_export_for_this_filter"));
                     return;
                   }
-                  w.document.open();
-                  w.document.write(html);
-                  w.document.close();
-                  toast.success(
-                    `Prepared PDF · ${filterLabel} (${rows.length} row${rows.length === 1 ? "" : "s"})`,
-                  );
+                  const { exportReportPdf } = await import("@/lib/export/xlsx-report");
+                  await exportReportPdf({
+                    report: `Budget ${filterSuffix}`,
+                    title: t("leftovers.budget_pdf.title"),
+                    subtitle: t("leftovers.budget_pdf.subtitle", {
+                      filter: filterLabel,
+                      count: rows.length,
+                    }),
+                    sections: [
+                      {
+                        columns: [
+                          { header: t("platform.ui.section") },
+                          { header: t("platform.ui.header") },
+                          { header: t("budget.code") },
+                          { header: t("budget.description") },
+                          { header: t("platform.ui.qty"), type: "number" },
+                          { header: t("platform.ui.rate"), type: "money" },
+                          { header: t("platform.ui.periods"), type: "number" },
+                          { header: t("budget.total_sar_2"), type: "money" },
+                        ],
+                        rows: rows.map(({ line: l, section, totalSAR }) => [
+                          section,
+                          l.headerCode,
+                          l.mainCode,
+                          l.description,
+                          Number(l.amount) || 0,
+                          Number(l.rate) || 0,
+                          Number(l.x ?? 1) || 0,
+                          totalSAR,
+                        ]),
+                        totals: [
+                          [t("budget.total_sar"), null, null, null, null, null, null, filteredSAR],
+                        ],
+                      },
+                    ],
+                  });
+                  toast.success(t("leftovers.budget_pdf.done", { count: rows.length }));
                 };
 
                 const btn =
@@ -6402,108 +6390,70 @@ async function exportTopSheetExcel(a: TopSheetExportArgs) {
   await saveBrandedWorkbook(wb, "Budget", "Budget — Top Sheet");
 }
 
-function exportTopSheetPDF(a: TopSheetExportArgs) {
+// Branded Top Sheet PDF (G02): the shared Kwalis header / footer, page X of Y
+// and the standard file name — the same writer every report uses.
+async function exportTopSheetPDF(a: TopSheetExportArgs) {
   const curCode = a.display?.code ?? "SAR";
   const baseCode = a.display?.base ?? "SAR";
   const cv = a.display?.convert ?? ((n: number) => n);
-  const fmt = (n: number) => formatAmount(cv(n), 0);
   const t = (k: string, o?: Record<string, unknown>) => i18n.t(k, o) as string;
-  const rtl = (i18n.language || "en").toLowerCase().startsWith("ar");
-  const esc = (s: unknown) =>
-    String(s ?? "").replace(
-      /[&<>"']/g,
-      (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string,
-    );
-  const sectionHTML = a.sections
-    .map((s) => {
-      const rows = a.accounts.filter((x) => x.section === s.key);
-      if (!rows.length) return "";
-      const sub = a.sectionSubtotal(s.key);
-      return `
-      <tr class="section"><td colspan="3">${esc(s.label.toUpperCase())}</td></tr>
-      ${rows
-        .map((r) => {
-          const v = a.totals[r.code] ?? { sar: 0, usd: 0 };
-          return `<tr><td class="code">${esc(r.code)}</td><td>${esc(r.name)}</td><td class="num">${fmt(v.sar)}</td></tr>`;
-        })
-        .join("")}
-      <tr class="subtotal"><td></td><td>${esc(t("export.total"))} ${esc(s.label)}</td><td class="num">${fmt(sub.sar)}</td></tr>
-    `;
-    })
-    .join("");
-
-  const adjHTML = a.adjAmounts
-    .map(
-      (adj) =>
-        `<tr class="adj"><td></td><td>${esc(adj.name)}${adj.override ? (adj.override.mode === "percent" ? ` (${adj.override.pct}%)` : ` (${t("export.fixed")} ${baseCode})`) : adj.default_pct != null ? ` (${adj.default_pct}%)` : ""}</td><td class="num">${fmt(adj.sar)}</td></tr>`,
-    )
-    .join("");
-
+  const { exportReportPdf } = await import("@/lib/export/xlsx-report");
+  type Doc = Parameters<typeof exportReportPdf>[0];
+  const columns: Doc["sections"][number]["columns"] = [
+    { header: t("budget.columns.code") },
+    { header: t("budget.columns.account") },
+    { header: `${t("budget.columns.total")} (${curCode})`, type: "money" },
+  ];
   const hm = a.headerMeta;
-  const headerRowsHTML = [
+  const meta = [
     [t("export.budgetVersion"), hm?.version || "—"],
     [t("export.versionDate"), hm?.versionDate || ""],
     ...(hm?.fields ?? [])
       .filter((f) => f.label)
-      .map(
-        (f) => [f.label, (f.values ?? []).filter(Boolean).join(", ") || "—"] as [string, string],
-      ),
+      .map((f) => [f.label, (f.values ?? []).filter(Boolean).join(", ") || "—"]),
   ]
-    .map(
-      ([k, v]) =>
-        `<div class="hdr-cell"><div class="hdr-k">${esc(k)}</div><div class="hdr-v">${esc(v)}</div></div>`,
-    )
-    .join("");
-
-  const html = `<!doctype html><html lang="${rtl ? "ar" : "en"}" dir="${rtl ? "rtl" : "ltr"}"><head><meta charset="utf-8"><title>${esc(t("export.budgetTopSheet"))} — ${esc(a.projectName || "Project")}</title>
-  <style>
-    body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#111;margin:32px;}
-    h1{font-size:14px;text-transform:uppercase;letter-spacing:.15em;color:#666;margin:0;}
-    h2{font-size:22px;margin:4px 0 16px;}
-    .hdr{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0 0 24px;border:1px solid #e5e7eb;padding:12px;border-radius:8px;background:#fafafa;}
-    .hdr-cell{font-size:11px;}
-    .hdr-k{text-transform:uppercase;letter-spacing:.08em;font-size:9px;color:#666;}
-    .hdr-v{font-weight:600;color:#111;margin-top:2px;}
-    table{width:100%;border-collapse:collapse;font-size:12px;}
-    th,td{padding:8px 10px;border-bottom:1px solid #e5e7eb;}
-    th{text-align:${rtl ? "right" : "left"};background:#f9fafb;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#666;}
-    td.num{text-align:${rtl ? "left" : "right"};font-variant-numeric:tabular-nums;}
-    td.code{font-family:ui-monospace,Menlo,monospace;color:#666;}
-    tr.section td{background:#111;color:#fff;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.1em;padding:6px 10px;}
-    tr.subtotal td{background:#f3f4f6;font-weight:600;}
-    tr.adj td{background:#fef3c7;}
-    tr.grand td{background:#111;color:#fff;font-weight:700;font-size:14px;}
-    .meta{margin-top:32px;font-size:10px;color:#999;}
-    @media print { body{margin:16mm;} button{display:none;} }
-  </style></head><body>
-  <h1>${esc(t("export.budgetTopSheet"))}</h1>
-  <h2>${esc(a.projectName || "Project")}</h2>
-  <div style="font-size:11px;color:#666;margin:-8px 0 16px;">${esc(t("export.allFiguresIn", { code: curCode }))}${curCode !== baseCode ? esc(t("export.convertedFrom", { base: baseCode })) : ""}</div>
-  <div class="hdr">${headerRowsHTML}</div>
-  <table>
-    <thead><tr><th>${esc(t("budget.columns.code"))}</th><th>${esc(t("budget.columns.account"))}</th><th style="text-align:right">${esc(t("budget.columns.total"))} (${esc(curCode)})</th></tr></thead>
-    <tbody>
-      ${sectionHTML}
-      ${
-        a.unassigned.sar !== 0 || a.unassigned.usd !== 0
-          ? `<tr class="adj"><td></td><td>${esc(t("export.unassigned"))}</td><td class="num">${fmt(a.unassigned.sar)}</td></tr>`
-          : ""
-      }
-      <tr class="subtotal"><td></td><td>${esc(t("export.directCosts"))}</td><td class="num">${fmt(a.subtotalSAR)}</td></tr>
-      ${adjHTML}
-      <tr class="grand"><td></td><td>${esc(t("export.grandTotalExVat"))}</td><td class="num">${fmt(a.grandSAR)}</td></tr>
-    </tbody>
-  </table>
-  <div class="meta">${esc(t("export.generated", { stamp: formatDateTime(new Date()) }))} · Kwalis HUB</div>
-  <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
-  </body></html>`;
-
-  const w = window.open("", "_blank");
-  if (!w) {
-    toast.error(t("export.popupBlocked"));
-    return;
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}: ${v}`);
+  const sections: Doc["sections"] = a.sections
+    .map((s) => {
+      const rows = a.accounts.filter((x) => x.section === s.key);
+      if (!rows.length) return null;
+      const sub = a.sectionSubtotal(s.key);
+      return {
+        title: s.label,
+        columns,
+        rows: rows.map((r) => [r.code, r.name, cv((a.totals[r.code] ?? { sar: 0 }).sar)]),
+        totals: [[null, `${t("export.total")} ${s.label}`, cv(sub.sar)]],
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null);
+  const summary: Doc["sections"][number]["rows"] = [];
+  if (a.unassigned.sar !== 0 || a.unassigned.usd !== 0)
+    summary.push([null, t("export.unassigned"), cv(a.unassigned.sar)]);
+  summary.push([null, t("export.directCosts"), cv(a.subtotalSAR)]);
+  for (const adj of a.adjAmounts) {
+    const note = adj.override
+      ? adj.override.mode === "percent"
+        ? ` (${adj.override.pct}%)`
+        : ` (${t("export.fixed")} ${baseCode})`
+      : adj.default_pct != null
+        ? ` (${adj.default_pct}%)`
+        : "";
+    summary.push([null, `${adj.name}${note}`, cv(adj.sar)]);
   }
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
+  sections.push({
+    title: t("leftovers.top_sheet_pdf.summary"),
+    columns,
+    rows: summary,
+    totals: [[null, t("export.grandTotalExVat"), cv(a.grandSAR)]],
+  });
+  sections[0] = { ...sections[0], notes: meta };
+  await exportReportPdf({
+    report: "Budget Top Sheet",
+    title: t("export.budgetTopSheet"),
+    subtitle: `${t("export.allFiguresIn", { code: curCode })}${
+      curCode !== baseCode ? t("export.convertedFrom", { base: baseCode }) : ""
+    }`,
+    sections,
+  });
 }

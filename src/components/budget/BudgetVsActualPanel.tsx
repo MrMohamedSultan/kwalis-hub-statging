@@ -189,6 +189,7 @@ export function BudgetVsActualPanel({ isDraft }: { isDraft: boolean }) {
       `${project?.code ?? ""} ${project?.name ?? ""} — Budget vs Spend (SAR) — ${formatDate(new Date())}`,
     ];
     ws.getRow(1).font = { bold: true, size: 13 };
+    ws.getRow(1).height = 32;
     ws.getRow(3).values = [
       "Code",
       "Description",
@@ -257,7 +258,9 @@ export function BudgetVsActualPanel({ isDraft }: { isDraft: boolean }) {
     );
     // Shared Kwalis Hub identity + standard file name (G02).
     const { saveBrandedWorkbook } = await import("@/lib/export/xlsx-report");
-    await saveBrandedWorkbook(wb, "Budget vs Spend");
+    await saveBrandedWorkbook(wb, "Budget vs Spend", undefined, {
+      logo: { col: 7.05, row: 0.05, maxWidth: 120, maxHeight: 38 },
+    });
   }
 
   const money = (n: number, tone = "") => (

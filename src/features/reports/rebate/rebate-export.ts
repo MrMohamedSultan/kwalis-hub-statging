@@ -18,6 +18,7 @@ import {
   exportReportPdf,
   exportReportXlsx,
   saveBrandedWorkbook,
+  addWorkbookLogo,
   type ReportCell,
   type ReportDoc,
   type ReportSection,
@@ -568,6 +569,7 @@ function writeFormSheet(
     rows: ReportCell[][];
     totalsLabelCol: number;
     rtl: boolean;
+    logoDataUrl?: string | null;
   },
 ): ExcelJSNS.Worksheet {
   const ws = wb.addWorksheet(opts.name.slice(0, 31), {
@@ -592,6 +594,15 @@ function writeFormSheet(
   ws.getCell(2, 2).value = `Project Name - أسم المشروع: ${opts.projectName}`;
   ws.getCell(3, 2).value = `Production Company Name - أسم شركة الإنتاج: ${opts.companyName}`;
   ws.getCell(2, 2).font = ws.getCell(3, 2).font = { bold: true, color: { argb: FORM_TEXT } };
+  // Client logo in the free block at the end of rows 2-4 (G02); the form's
+  // own cell layout is unchanged.
+  addWorkbookLogo(wb, opts.logoDataUrl ?? null, {
+    col: Math.max(2, n - 2),
+    row: 1,
+    maxWidth: 140,
+    maxHeight: 48,
+    sheets: [ws.name],
+  });
   // Row 5 bands, row 6 headers, row 7 column numbers
   let col = 1;
   for (const b of opts.bands) {
@@ -659,7 +670,12 @@ function writeFormSheet(
   return ws;
 }
 
-type FormContext = { projectName: string; companyName: string; rtl: boolean };
+type FormContext = {
+  projectName: string;
+  companyName: string;
+  rtl: boolean;
+  logoDataUrl?: string | null;
+};
 
 async function formContext(): Promise<FormContext> {
   const [{ getExportBranding }, { isRtlUi }] = await Promise.all([
@@ -671,6 +687,7 @@ async function formContext(): Promise<FormContext> {
     projectName: [b.projectCode, b.projectName].filter(Boolean).join(" — "),
     companyName: b.companyName,
     rtl: isRtlUi(),
+    logoDataUrl: b.logoDataUrl,
   };
 }
 
@@ -813,6 +830,7 @@ export async function exportRebateWorkbook(
     projectName: [b.projectCode, b.projectName].filter(Boolean).join(" — "),
     companyName: b.companyName,
     rtl,
+    logoDataUrl: b.logoDataUrl,
   };
   const ge = addGeneralExpensesForm(wb, d, ctx, !!opts.includeAll);
   const pr = addPayrollForm(wb, d, ctx, !!opts.includeAll);

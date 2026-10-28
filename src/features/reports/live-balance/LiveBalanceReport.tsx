@@ -7,7 +7,9 @@ import { WHT_BUDGET_CODE } from "@/lib/company-wht";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Panel } from "@/components/AppShell";
-import { Input } from "@/components/ui/input";
+import { Input, inputBaseClass } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
+import { cn } from "@/lib/utils";
 import { formatDate, riyadhToday } from "@/lib/date-format";
 import { HEADER_ACCOUNTS } from "@/lib/data";
 import { useCan } from "@/lib/rbac";
@@ -27,6 +29,7 @@ import {
   computeLiveBalance,
   groupLiveBalance,
   decision12Inputs,
+  serviceAccrualInputs,
   sumLiveBalance,
   type AccrualMethod,
   type LiveBalanceGrouping,
@@ -50,7 +53,7 @@ export function LiveBalanceReport() {
   const rows = useMemo(() => {
     const d = q.data;
     if (!d) return [];
-    return d.contracts.flatMap((c) =>
+    const contracts = d.contracts.flatMap((c) =>
       decision12Inputs(
         {
           id: c.id,
@@ -69,12 +72,23 @@ export function LiveBalanceReport() {
         c.payments.filter((p) => p.date && p.date <= asOf).reduce((a, p) => a + p.amount, 0),
         WHT_BUDGET_CODE,
       ).map((input) =>
-        computeLiveBalance(input, asOf, {
-          dates: d.shootDates,
-          fallbackDays: c.shootingDays || d.projectShootDays,
-        }),
+        computeLiveBalance(
+          input,
+          asOf,
+          { dates: d.shootDates, fallbackDays: c.shootingDays || d.projectShootDays },
+          { weekend: d.weekend },
+        ),
       ),
     );
+    // N02: vendor invoices / POs with a service period, evenly over the period.
+    const paidBy = (kind: "invoice" | "po", id: string) =>
+      (d.docPayments.get(`${kind}:${id}`) ?? [])
+        .filter((p) => p.date && p.date <= asOf)
+        .reduce((a, p) => a + p.amount, 0);
+    const services = serviceAccrualInputs(d.invoices, d.pos, paidBy).map((c) =>
+      computeLiveBalance(c, asOf, { dates: null }, { weekend: d.weekend }),
+    );
+    return [...contracts, ...services];
   }, [q.data, asOf]);
   const personOf = useMemo(
     () => new Map((q.data?.contracts ?? []).map((c) => [c.id, c.personId])),
@@ -138,7 +152,9 @@ export function LiveBalanceReport() {
               ],
               rows: g.rows.map((r) => [
                 r.ref,
-                r.party,
+                r.source && r.source !== "contract"
+                  ? `${r.party} (${t(`leftovers.live.source_${r.source}`)})`
+                  : r.party,
                 r.budgetCode ?? "",
                 r.value,
                 methodLabel(r.method),
@@ -197,11 +213,10 @@ export function LiveBalanceReport() {
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             {t("taxlive.live.asOf")}
-            <Input
-              type="date"
+            <DateInput
               value={asOf}
-              className="h-9 w-40"
-              onChange={(e) => setAsOf(e.target.value || riyadhToday())}
+              className={cn(inputBaseClass, "h-9 w-40")}
+              onChange={(v) => setAsOf(v || riyadhToday())}
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -306,6 +321,11 @@ export function LiveBalanceReport() {
                             {t("decisions.wht7099.badge")}
                           </span>
                         )}
+                        {r.source && r.source !== "contract" && (
+                          <span className="ms-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            {t(`leftovers.live.source_${r.source}`)}
+                          </span>
+                        )}
                         {r.cancelledAt && (
                           <span className="ms-1.5 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive">
                             {t("glossary.contract.cancelled")}
@@ -406,6 +426,7 @@ export function LiveBalanceReport() {
             <p className="mt-2 text-xs text-muted-foreground">{t("taxlive.live.missingDates")}</p>
           )}
           <p className="mt-2 text-xs text-muted-foreground">{t("taxlive.live.paidNote")}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t("leftovers.live.services_note")}</p>
         </div>
       )}
     </Panel>

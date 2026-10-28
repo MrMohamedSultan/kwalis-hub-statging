@@ -880,13 +880,13 @@ export async function exportBudgetExcel(
   projectDetails: ProjectDetails = {},
 ): Promise<void> {
   const workbook = await buildBudgetWorkbook(data, projectDetails);
-  const buf = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buf], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  downloadBlob(
-    `${projectDetails.projectTitle || "Budget"}_${projectDetails.budgetVersion || "v1"}.xlsx`,
-    blob,
+  // Shared Kwalis Hub identity (print header / footer) + standard file name (G02).
+  // Cells are untouched, so the file still re-imports.
+  const { saveBrandedWorkbook } = await import("@/lib/export/xlsx-report");
+  await saveBrandedWorkbook(
+    workbook,
+    `Budget ${projectDetails.budgetVersion || "v1"}`,
+    projectDetails.projectTitle || "Budget",
   );
 }
 

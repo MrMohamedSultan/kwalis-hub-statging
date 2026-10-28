@@ -10,6 +10,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { invoiceAmountDue, round2 } from "@/lib/ap-calc";
 import {
   resolveCashLimits,
+  forbiddenCashAlerts,
+  qpeTotal,
+  type ForbiddenCashAlert,
+  type QpeCategoryLite,
+  type RebateTxLite,
   type CashLimits,
   type DueItem,
   type FloatInput,
@@ -214,9 +219,14 @@ export type PettyData = {
   limits: CashLimits;
   /** Cash spent: approved receipts + payments made in cash (SAR). */
   cashSpent: number;
-  /** Spend the cash share is measured against (see the screen note). */
+  /** Spend the cash share is measured against: the QPE total, else Actual. */
   qpeBase: number;
+  /** "qpe" = eligible spend from rebate_transactions() (197); "actual" = fallback. */
+  qpeSource: "qpe" | "actual";
   largestCash: number;
+  /** Cash spent in categories the Film Commission never accepts in cash. */
+  forbidden: ForbiddenCashAlert[];
+  categories: QpeCategoryLite[];
 };
 
 /** N08: floats, receipts, returns, cash limits (project_rebate_settings when present). */
@@ -262,6 +272,31 @@ export function usePettyData(projectId: string | null) {
       } catch {
         settings = null;
       }
+      // N08: the eligibility source of 197 gives the QPE total and the
+      // cash-forbidden categories; an older server falls back to Actual.
+      let tx: RebateTxLite[] | null = null;
+      let categories: QpeCategoryLite[] = [];
+      try {
+        const [txr, cats] = await Promise.all([
+          (supabase.rpc as any)("rebate_transactions", { p_project_id: projectId }),
+          from("qpe_categories").select("code, label_en, label_ar, cash_forbidden"),
+        ]);
+        if (!txr.error)
+          tx = ((txr.data ?? []) as any[]).map((r) => ({
+            source: String(r.source),
+            source_id: String(r.source_id),
+            ref_no: r.ref_no ?? null,
+            party: r.party ?? null,
+            entry_date: r.entry_date ?? null,
+            qpe_category: r.qpe_category ?? null,
+            status: String(r.status ?? ""),
+            amount_excl_vat: n(r.amount_excl_vat),
+            cash_paid: n(r.cash_paid),
+          }));
+        if (!cats.error) categories = (cats.data ?? []) as QpeCategoryLite[];
+      } catch {
+        tx = null;
+      }
       const paidToFloat = new Map<string, number>();
       for (const p of pays as any[])
         if (p.source_type === "petty_cash" || p.source_type === "cash_advance")
@@ -290,8 +325,11 @@ export function usePettyData(projectId: string | null) {
         })),
         limits: resolveCashLimits(settings),
         cashSpent: round2([...approved, ...cashPays].reduce((a, b) => a + b, 0)),
-        qpeBase: n((pos as any[])[0]?.actual_sar),
+        qpeBase: tx ? qpeTotal(tx) : n((pos as any[])[0]?.actual_sar),
+        qpeSource: tx ? "qpe" : "actual",
         largestCash: Math.max(0, ...approved, ...cashPays),
+        forbidden: tx ? forbiddenCashAlerts(tx, categories) : [],
+        categories,
       };
     },
   });

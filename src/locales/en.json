@@ -4818,7 +4818,6 @@
       "paid": "Actual Paid",
       "final": "Final Report",
       "rebate": "Saudi Film Commission Rebate",
-      "qfe": "QFE Rebate Report",
       "tracking": "Rebate Tracking",
       "vat": "Tax & VAT Compliance",
       "gosi": "GOSI & Localization"
@@ -5466,6 +5465,61 @@
         "skipped": "unchanged (files remain)",
         "no storage schema": "no storage"
       }
+    }
+  },
+  "leftovers": {
+    "budget_pdf": {
+      "title": "Budget",
+      "subtitle": "{{filter}} · {{count}} lines",
+      "done": "Budget PDF exported ({{count}} lines)"
+    },
+    "top_sheet_pdf": {
+      "summary": "Summary"
+    },
+    "gl": {
+      "qpe_review": "Review"
+    },
+    "live": {
+      "source_invoice": "Invoice",
+      "source_po": "PO",
+      "services_note": "Vendor invoices and purchase orders with a service period accrue evenly over that period (amount excl. VAT). A PO accrues only the part not yet invoiced; an invoice without its own period uses its PO's period. Working days follow the project's working week (Film Commission settings)."
+    },
+    "po": {
+      "period_order": "The service period ends before it starts.",
+      "period_hint": "Optional. With a service period the PO accrues evenly over it in Live Balance (only the part not yet invoiced)."
+    },
+    "petty": {
+      "qpe_note": "The cash share is measured against the QPE total (eligible spend excl. VAT) from the Film Commission eligibility rules.",
+      "forbidden_title": "Cash in categories not allowed in cash",
+      "forbidden_count_one": "{{count}} payment in cash in a category the Film Commission does not accept in cash",
+      "forbidden_count_other": "{{count}} payments in cash in categories the Film Commission does not accept in cash",
+      "forbidden_hint": "Wages, location / rent fees, accommodation, flights, insurance, professional services and the other categories marked \"never in cash\" must be paid by bank transfer; these amounts are not eligible.",
+      "col_ref": "Reference",
+      "col_source": "Document",
+      "col_party": "Party",
+      "col_date": "Date",
+      "col_category": "QPE category",
+      "col_cash": "Paid in cash (SAR)",
+      "src_invoice": "Invoice",
+      "src_petty_cash": "Petty cash receipt",
+      "src_payroll": "Contract",
+      "src_overtime": "Overtime",
+      "src_per_diem": "Per diem"
+    },
+    "data_export": {
+      "title": "Export all project data",
+      "hint": "One Excel workbook with every table of this project (budget, contracts, invoices, purchase orders, payments, general ledger, petty cash, per diem, funding, logistics, file library), one sheet per table, plus the list of attachment links, in a single zip. Only what your account may read is exported.",
+      "include_bank": "Include bank and ID details (IBAN, bank, SWIFT, ID number)",
+      "button": "Export project data",
+      "progress": "Reading tables {{done}} / {{total}}…",
+      "done": "Exported {{rows}} rows from {{tables}} tables and {{attachments}} attachment links",
+      "failed": "The project data export failed",
+      "workbook_title": "Project data",
+      "contents": "Contents",
+      "table": "Table",
+      "rows": "Rows",
+      "note_no_bank": "Bank and ID details are not included.",
+      "note_with_bank": "Bank and ID details are included — handle this file as confidential."
     }
   }
 }

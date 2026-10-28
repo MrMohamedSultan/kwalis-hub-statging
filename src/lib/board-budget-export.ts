@@ -114,6 +114,8 @@ export async function exportBoardBudgetExcel(payload: BoardExportPayload): Promi
   const title = ws.addRow([`${payload.projectName} — Budget Review`]);
   ws.mergeCells(title.number, 1, title.number, COLUMNS.length);
   title.font = { bold: true, size: 14, color: { argb: NAVY } };
+  title.height = 34;
+  title.alignment = { vertical: "middle" };
 
   const meta = ws.addRow([
     `Project code: ${payload.projectCode || "—"}   |   Status: ${payload.status}   |   Generated: ${formatDateTime(new Date())}`,
@@ -151,7 +153,10 @@ export async function exportBoardBudgetExcel(payload: BoardExportPayload): Promi
 
   // Shared Kwalis Hub identity + standard file name (G02).
   const { saveBrandedWorkbook } = await import("@/lib/export/xlsx-report");
-  await saveBrandedWorkbook(wb, "Board Budget", "Board Budget Review");
+  // Client logo over the free end of the title row (column G).
+  await saveBrandedWorkbook(wb, "Board Budget", "Board Budget Review", {
+    logo: { col: 6.05, row: 0.05, maxWidth: 120, maxHeight: 40 },
+  });
 }
 
 export function exportBoardBudgetPdf(payload: BoardExportPayload): void {

@@ -255,6 +255,74 @@ export function cashShareOfQpe(cashSpent: number, qpe: number): number | null {
   return qpe > 0.005 ? round2((cashSpent / qpe) * 100) : null;
 }
 
+/** One row of rebate_transactions() (db/pending/197) — only what N08 reads. */
+export type RebateTxLite = {
+  source: string;
+  source_id: string;
+  ref_no: string | null;
+  party: string | null;
+  entry_date: string | null;
+  qpe_category: string | null;
+  status: string;
+  amount_excl_vat: number;
+  cash_paid: number;
+};
+export type QpeCategoryLite = {
+  code: string;
+  label_en: string;
+  label_ar: string;
+  cash_forbidden: boolean;
+};
+export type ForbiddenCashAlert = {
+  source: string;
+  sourceId: string;
+  ref: string | null;
+  party: string | null;
+  date: string | null;
+  category: string | null;
+  cash: number;
+};
+
+/**
+ * N08: spending paid in cash in a category the Film Commission never accepts
+ * in cash (wages, rent / locations, accommodation, flights, insurance,
+ * professional services …) — the same rule as rebate_transactions() of 197:
+ * qpe_categories.cash_forbidden, and wages (payroll / overtime) always.
+ */
+export function forbiddenCashAlerts(
+  tx: RebateTxLite[],
+  categories: QpeCategoryLite[],
+): ForbiddenCashAlert[] {
+  const forbidden = new Set(categories.filter((c) => c.cash_forbidden).map((c) => c.code));
+  return tx
+    .filter(
+      (r) =>
+        (Number(r.cash_paid) || 0) > 0.005 &&
+        ((r.qpe_category != null && forbidden.has(r.qpe_category)) ||
+          r.source === "payroll" ||
+          r.source === "overtime"),
+    )
+    .map((r) => ({
+      source: r.source,
+      sourceId: r.source_id,
+      ref: r.ref_no,
+      party: r.party,
+      date: r.entry_date,
+      category: r.qpe_category,
+      cash: round2(Number(r.cash_paid) || 0),
+    }))
+    .sort((a, b) => b.cash - a.cash);
+}
+
+/** N08: the QPE total (eligible spend excl. VAT) from rebate_transactions(). */
+export function qpeTotal(tx: RebateTxLite[]): number {
+  return round2(
+    tx
+      .filter((r) => r.status === "eligible")
+      .reduce((a, r) => a + (Number(r.amount_excl_vat) || 0), 0),
+  );
+}
+
 // ------------------------------------------------------------ R12 Payments Register
 
 export type RegisterRow = {

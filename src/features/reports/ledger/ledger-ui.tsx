@@ -4,7 +4,9 @@ import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Input } from "@/components/ui/input";
+import { Input, inputBaseClass } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
+import { cn } from "@/lib/utils";
 import { formatAmount } from "@/lib/format-number";
 import { monthRange } from "@/lib/ledger-calc";
 import {
@@ -55,25 +57,23 @@ export function PeriodFilter({
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         {t("journal.from")}
-        <Input
-          type="date"
+        <DateInput
           value={from}
-          className="h-9 w-40"
-          onChange={(e) => {
+          className={cn(inputBaseClass, "h-9 w-40")}
+          onChange={(v) => {
             setMonth("");
-            onChange(e.target.value, to);
+            onChange(v, to);
           }}
         />
       </label>
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         {t("journal.to")}
-        <Input
-          type="date"
+        <DateInput
           value={to}
-          className="h-9 w-40"
-          onChange={(e) => {
+          className={cn(inputBaseClass, "h-9 w-40")}
+          onChange={(v) => {
             setMonth("");
-            onChange(from, e.target.value);
+            onChange(from, v);
           }}
         />
       </label>

@@ -120,12 +120,7 @@ function ReportsPage() {
         title={t("reports.reports")}
         action={
           // Tabs with their own export buttons.
-          isLedgerTab(tab) ||
-          tab === "budgetlog" ||
-          tab === "dealsummary" ||
-          tab === "rebate" ||
-          tab === "crewlist" ||
-          tab === "perdiem" ? null : (
+          isLedgerTab(tab) || tab === "rebate" || tab === "crewlist" || tab === "perdiem" ? null : (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => runExport("excel")}

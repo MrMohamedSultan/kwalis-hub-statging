@@ -32,6 +32,7 @@ import { ShootSchedulePanel } from "@/components/settings/ShootSchedulePanel";
 import { ProjectRegionPanel } from "@/components/decisions/ProjectRegionPanel";
 import { WhtRatesPanel } from "@/components/decisions/WhtRatesPanel";
 import { ContractFilesPanel } from "@/components/decisions/ContractFilesPanel";
+import { ProjectDataExportPanel } from "@/components/settings/ProjectDataExportPanel";
 import { Button } from "@/components/ui/button";
 import { z } from "zod";
 
@@ -182,6 +183,7 @@ function SettingsPage() {
                 <ProjectRegionPanel />
                 <ShootSchedulePanel />
                 <ProjectTeamPanel />
+                <ProjectDataExportPanel />
               </>
             ) : (
               <AccessDenied section={t("platform.settings.sectionProject")} />

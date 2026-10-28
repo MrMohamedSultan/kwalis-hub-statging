@@ -482,15 +482,65 @@ export function applyWorkbookBranding(
   });
 }
 
+/**
+ * Where to float the client logo on a hand-built sheet. The caller picks a
+ * cell area its own layout leaves free (fixed templates have no spare rows,
+ * so nothing is inserted or shifted).
+ */
+export type WorkbookLogo = {
+  /** 0-based column / row of the logo's top-left corner (fractions allowed). */
+  col: number;
+  row: number;
+  maxWidth?: number;
+  maxHeight?: number;
+  /** Only these sheets (default: every sheet). */
+  sheets?: string[];
+};
+
+/** Pure: which sheets get the logo and at what size (unit-tested). */
+export function planWorkbookLogo(
+  sheetNames: string[],
+  logo: WorkbookLogo,
+  size: { width: number; height: number } | null,
+): { sheet: string; ext: { width: number; height: number } }[] {
+  if (!size) return [];
+  const ext = fitBox(size, logo.maxWidth ?? 120, logo.maxHeight ?? 36);
+  const only = logo.sheets ? new Set(logo.sheets) : null;
+  return sheetNames.filter((n) => !only || only.has(n)).map((sheet) => ({ sheet, ext }));
+}
+
+/** Float the client logo on the sheets of a hand-built workbook (G02). */
+export function addWorkbookLogo(
+  wb: ExcelJSNS.Workbook,
+  dataUrl: string | null,
+  logo: WorkbookLogo,
+): number {
+  const ext = dataUrl ? imageExt(dataUrl) : null;
+  if (!dataUrl || !ext) return 0;
+  const names: string[] = [];
+  wb.eachSheet((ws) => names.push(ws.name));
+  const plan = planWorkbookLogo(names, logo, imageSize(dataUrl));
+  if (!plan.length) return 0;
+  const id = wb.addImage({ base64: dataUrl, extension: ext });
+  for (const p of plan) {
+    const ws = wb.getWorksheet(p.sheet);
+    ws?.addImage(id, { tl: { col: logo.col, row: logo.row }, ext: p.ext, editAs: "oneCell" });
+  }
+  return plan.length;
+}
+
 /** Brand a hand-built workbook and download it under the standard file name. */
 export async function saveBrandedWorkbook(
   wb: ExcelJSNS.Workbook,
   report: string,
   title: string = report,
+  opts: { logo?: WorkbookLogo | WorkbookLogo[] } = {},
 ): Promise<string> {
   const { getExportBranding } = await import("./branding");
   const b = await getExportBranding();
   applyWorkbookBranding(wb, b, title);
+  const logos = opts.logo ? (Array.isArray(opts.logo) ? opts.logo : [opts.logo]) : [];
+  for (const logo of logos) addWorkbookLogo(wb, b.logoDataUrl, logo);
   const buffer = await wb.xlsx.writeBuffer();
   const filename = exportFileName({ projectCode: b.projectCode, report, ext: "xlsx" });
   downloadBlob(
