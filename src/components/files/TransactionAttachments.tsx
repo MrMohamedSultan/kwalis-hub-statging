@@ -10,8 +10,8 @@ import { openSignedFile } from "@/lib/signed-file";
 /**
  * D08 — central archive: every file or link attached to a transaction of the
  * project (invoices, petty cash, per diem, contracts, payment proofs…), from
- * public.v_project_attachments (db/pending/195). The view is
- * security_invoker, so storage and table RLS decide what each user sees;
+ * public.get_project_attachments() (db/pending/195). The function is
+ * SECURITY INVOKER, so storage and table RLS decide what each user sees;
  * files open through 5-minute signed URLs.
  */
 type Attachment = {
@@ -43,11 +43,10 @@ const TYPES = [
 async function fetchAttachments(projectId: string): Promise<Attachment[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
-    .from("v_project_attachments")
+    .rpc("get_project_attachments", { p_project_id: projectId })
     .select(
       "source_type, source_id, reference, counterparty, bucket_id, storage_path, external_url, file_name, size_bytes, attached_at",
     )
-    .eq("project_id", projectId)
     .order("attached_at", { ascending: false })
     .limit(1000);
   if (error) throw error;
@@ -140,7 +139,10 @@ export function TransactionAttachments({ projectId }: { projectId: string }) {
               {rows.map((r, i) => {
                 const href = safeHttpUrl(r.external_url);
                 return (
-                  <tr key={`${r.storage_path ?? r.external_url}-${i}`} className="border-t border-border">
+                  <tr
+                    key={`${r.storage_path ?? r.external_url}-${i}`}
+                    className="border-t border-border"
+                  >
                     <td className="py-2 pe-3 whitespace-nowrap">
                       {t(`platform.files.kind.${r.source_type}`, r.source_type)}
                     </td>
@@ -172,7 +174,11 @@ export function TransactionAttachments({ projectId }: { projectId: string }) {
                           <button
                             type="button"
                             onClick={() =>
-                              void openSignedFile(r.bucket_id!, r.storage_path!, r.file_name ?? "file")
+                              void openSignedFile(
+                                r.bucket_id!,
+                                r.storage_path!,
+                                r.file_name ?? "file",
+                              )
                             }
                             className="inline-flex items-center gap-1 text-brand hover:underline"
                           >

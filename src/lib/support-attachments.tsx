@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { assertUploadAllowed } from "@/lib/upload-policy";
+import { assertUploadAllowed, uploadContentType } from "@/lib/upload-policy";
 import { storageAudited } from "@/lib/storage-audit";
 import { useEffect, useState } from "react";
 import { Paperclip } from "lucide-react";
@@ -23,7 +23,7 @@ export async function uploadSupportAttachment(params: {
   const path = `${params.userId}/${params.ticketId}/${Date.now()}_${safeName}`;
   const { error } = await storageAudited
     .from(SUPPORT_BUCKET)
-    .upload(path, params.file, { upsert: false, contentType: params.file.type });
+    .upload(path, params.file, { upsert: false, contentType: uploadContentType(params.file) });
   if (error) throw new Error(error.message);
   return { path, name: params.file.name };
 }

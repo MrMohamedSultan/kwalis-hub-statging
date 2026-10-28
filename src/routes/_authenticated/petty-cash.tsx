@@ -1,6 +1,6 @@
 import { formatDate } from "@/lib/date-format";
 import { formatAmount } from "@/lib/format-number";
-import { assertUploadAllowed } from "@/lib/upload-policy";
+import { assertUploadAllowed, uploadContentType } from "@/lib/upload-policy";
 import { createFileRoute } from "@tanstack/react-router";
 import { DateInput } from "@/components/ui/date-input";
 import { storageAudited } from "@/lib/storage-audit";
@@ -1020,7 +1020,10 @@ function PettyCashPage() {
                 const path = `${projectId}/petty-cash/${inserted.id}/${Date.now()}_${safeName}`;
                 const up = await storageAudited
                   .from("project-documents")
-                  .upload(path, v.attachment, { upsert: false, contentType: v.attachment.type });
+                  .upload(path, v.attachment, {
+                    upsert: false,
+                    contentType: uploadContentType(v.attachment),
+                  });
                 if (up.error) throw up.error;
                 await supabase
                   .from("cash_advance_receipts")

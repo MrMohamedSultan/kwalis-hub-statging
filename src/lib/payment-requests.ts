@@ -4,7 +4,7 @@
 // rejection and cancellation run in database functions (db/pending/176), which
 // also send the notifications.
 import { storageAudited } from "@/lib/storage-audit";
-import { assertUploadAllowed, safeStorageName } from "@/lib/upload-policy";
+import { assertUploadAllowed, safeStorageName, uploadContentType } from "@/lib/upload-policy";
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthRoles } from "@/lib/auth-roles";
@@ -366,7 +366,7 @@ export async function executePaymentRequest(input: {
     const prefix = owner?.project_id ? `${owner.project_id}/` : "";
     path = `${prefix}payment_requests/${input.id}/${Date.now()}-${safeStorageName(input.proofFile.name)}`;
     const up = await storageAudited.from("contracts").upload(path, input.proofFile, {
-      contentType: input.proofFile.type,
+      contentType: uploadContentType(input.proofFile),
       upsert: false,
     });
     if (up.error) throw up.error;

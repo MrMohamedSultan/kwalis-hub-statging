@@ -9,7 +9,7 @@
 // folder pathway derived from the source entity (e.g. Crew → "Crew Profiles
 // → {name}").
 import { storageAudited } from "@/lib/storage-audit";
-import { assertUploadAllowed } from "@/lib/upload-policy";
+import { assertUploadAllowed, uploadContentType } from "@/lib/upload-policy";
 import { supabase } from "@/integrations/supabase/client";
 
 export const BUCKET = "project-documents";
@@ -162,7 +162,7 @@ export async function uploadProjectFile(params: {
 
   const { error: upErr } = await storageAudited.from(BUCKET).upload(storagePath, file, {
     upsert: false,
-    contentType: file.type || "application/octet-stream",
+    contentType: uploadContentType(file),
   });
   if (upErr) throw upErr;
 

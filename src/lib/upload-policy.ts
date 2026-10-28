@@ -48,8 +48,48 @@ const ALLOWED_MIME_PREFIXES = [
   "text/plain",
   "application/zip",
   "application/x-zip-compressed",
+  // generic type some browsers report; the extension check decides, and the
+  // upload is sent with the extension's own type (uploadContentType)
   "application/octet-stream",
 ];
+
+/** MIME type sent to Storage for each allowed extension. */
+const MIME_BY_EXTENSION: Record<(typeof ALLOWED_UPLOAD_EXTENSIONS)[number], string> = {
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  heic: "image/heic",
+  heif: "image/heif",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  csv: "text/csv",
+  txt: "text/plain",
+  zip: "application/zip",
+};
+
+/**
+ * Content type to upload with. The buckets do not accept
+ * application/octet-stream (it would let any file in), and browsers report an
+ * empty or generic type for some files (.heic, .csv on Windows…), so an
+ * allowed extension always sends its own type.
+ */
+export function uploadContentType(file: { name: string; type?: string }): string {
+  const given = (file.type ?? "").toLowerCase();
+  const specific =
+    given !== "" &&
+    given !== "application/octet-stream" &&
+    ALLOWED_MIME_PREFIXES.some((p) => given.startsWith(p));
+  if (specific) return given;
+  const byExt = MIME_BY_EXTENSION[fileExtension(file.name) as keyof typeof MIME_BY_EXTENSION];
+  return byExt ?? (given || "application/octet-stream");
+}
 
 export type UploadProblem = "empty" | "tooLarge" | "badType";
 

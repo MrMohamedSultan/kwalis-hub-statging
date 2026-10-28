@@ -1,5 +1,5 @@
 import { formatDateTime, formatDate } from "@/lib/date-format";
-import { assertUploadAllowed } from "@/lib/upload-policy";
+import { assertUploadAllowed, uploadContentType } from "@/lib/upload-policy";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { LockGuard } from "@/components/chrome/LockGuard";
@@ -2207,7 +2207,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
         const path = `${activeProjectId}/invoices/${id}/${kind}-${crypto.randomUUID()}${safeExt}`;
         const { error } = await supabase.storage
           .from("contracts")
-          .upload(path, file, { contentType: file.type || "application/pdf", upsert: false });
+          .upload(path, file, { contentType: uploadContentType(file), upsert: false });
         if (error) throw error;
       };
       const uploads: Promise<void>[] = [];
