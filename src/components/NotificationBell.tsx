@@ -6,6 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { openWorkspacePanel } from "@/lib/workspace-panels";
 import { useAuthRoles } from "@/lib/auth-roles";
 import { useStore } from "@/lib/store";
+import { notificationTarget, notificationText } from "@/lib/notification-display";
+import { useBudgetAlertsRunner } from "@/lib/budget-alerts";
 
 import { useTranslation } from "react-i18next";
 type NotifRow = {
@@ -17,22 +19,12 @@ type NotifRow = {
   created_at: string;
   read_at: string | null;
   project_id: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 const PAGE = 10;
 
-function targetFor(n: NotifRow): { to: string; search?: Record<string, unknown> } | null {
-  // Platform-level CRM alerts are not project scoped.
-  if (n.category === "access_request") return { to: "/platform-hub/registration-requests" };
-  if (!n.project_id) return null;
-  if (n.category === "budget" || n.category === "budget_approval") {
-    return { to: "/budget", search: { focus: "governance" } };
-  }
-  if (n.category === "payment" || n.category === "payment_request") {
-    return { to: "/payment-approvals" };
-  }
-  return null;
-}
+const targetFor = notificationTarget;
 
 export function NotificationBell() {
   const { t } = useTranslation();
@@ -41,6 +33,8 @@ export function NotificationBell() {
   const navigate = useNavigate();
   const setActiveProject = useStore((s) => s.setActiveProject);
   const activeProjectId = useStore((s) => s.activeProjectId);
+  // D04: overspend check for the open project (in-app alert without the cron).
+  useBudgetAlertsRunner(activeProjectId);
 
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotifRow[]>([]);
@@ -53,7 +47,7 @@ export function NotificationBell() {
       if (!roles.userId) return;
       const { data } = await supabase
         .from("notifications" as any)
-        .select("id,title,body,severity,category,created_at,read_at,project_id")
+        .select("id,title,body,severity,category,created_at,read_at,project_id,metadata")
         .eq("user_id", roles.userId)
         .order("created_at", { ascending: false })
         .limit(lim + 1);
@@ -140,7 +134,7 @@ export function NotificationBell() {
       >
         <Bell className="size-5" />
         {unread > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-destructive text-white text-[10px] font-bold flex items-center justify-center px-1">
+          <span className="absolute -top-0.5 -end-0.5 min-w-[18px] h-[18px] rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center px-1">
             {unread > 9 ? "9+" : unread}
           </span>
         )}
@@ -166,6 +160,7 @@ export function NotificationBell() {
             ) : (
               items.map((n) => {
                 const clickable = !!targetFor(n);
+                const text = notificationText(n, t);
                 return (
                   <button
                     key={n.id}
@@ -184,9 +179,9 @@ export function NotificationBell() {
                         }`}
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-foreground truncate">{n.title}</div>
-                        {n.body && (
-                          <div className="text-muted-foreground line-clamp-2">{n.body}</div>
+                        <div className="font-semibold text-foreground truncate">{text.title}</div>
+                        {text.body && (
+                          <div className="text-muted-foreground line-clamp-2">{text.body}</div>
                         )}
                         <div className="text-[10px] text-muted-foreground/70 mt-0.5">
                           {formatDateTime(n.created_at)}
