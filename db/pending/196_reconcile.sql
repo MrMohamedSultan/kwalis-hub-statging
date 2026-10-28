@@ -62,6 +62,10 @@
 --   SELECT public.ledger_resync_project('<project id>'); -- re-apply the rules
 --   SELECT public.ledger_phases_match('<project id>');   -- must be true
 --
+-- Security review fix (secfix #6, before first apply): apply_request_payment
+-- adopts / updates and refuse_duplicate_request_payment compares only
+-- payments of the request's (payment's) own organization and project.
+--
 -- Rollback (in this order):
 --   DROP TRIGGER trg_ledger_sync ON public.payroll_instalments;
 --   DROP TRIGGER trg_payment_request_payment ON public.payment_requests;
@@ -557,14 +561,19 @@ BEGIN
      SET amount = v_amount, payment_date = v_date, method = v_method,
          proof_path = COALESCE(r.proof_path, proof_path), updated_at = now()
    WHERE payment_request_id = r.id
+     AND organization_id = r.organization_id                               -- secfix #6
+     AND project_id IS NOT DISTINCT FROM r.project_id
   RETURNING id INTO v_id;
   IF v_id IS NOT NULL THEN RETURN v_id; END IF;
 
   -- adopt a payment recorded by hand for this document with the same amount
+  -- (secfix #6: only a payment of the request's own organization and project)
   UPDATE public.payments
      SET payment_request_id = r.id, updated_at = now()
    WHERE id = (SELECT p.id FROM public.payments p
                 WHERE p.source_id = r.source_id AND p.source_type = ANY (v_types)
+                  AND p.organization_id = r.organization_id
+                  AND p.project_id IS NOT DISTINCT FROM r.project_id
                   AND p.payment_request_id IS NULL AND p.payroll_milestone_id IS NULL
                   AND p.amount = v_amount
                 ORDER BY p.payment_date, p.created_at LIMIT 1)
@@ -610,6 +619,8 @@ BEGIN
   END IF;
   SELECT COALESCE(p.ref_no, p.id::text) INTO v_ref FROM public.payments p
    WHERE p.source_id = NEW.source_id AND p.payment_request_id IS NOT NULL AND p.amount = NEW.amount
+     AND p.organization_id = NEW.organization_id                           -- secfix #6
+     AND p.project_id IS NOT DISTINCT FROM NEW.project_id
      AND p.id IS DISTINCT FROM NEW.id
    LIMIT 1;
   IF v_ref IS NOT NULL THEN

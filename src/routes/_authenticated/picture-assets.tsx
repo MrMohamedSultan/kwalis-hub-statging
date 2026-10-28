@@ -1,7 +1,7 @@
 import { formatDate } from "@/lib/date-format";
 import { createFileRoute } from "@tanstack/react-router";
 import { formatAmount } from "@/lib/format-number";
-import { assertUploadAllowed } from "@/lib/upload-policy";
+import { assertUploadAllowed, uploadContentType } from "@/lib/upload-policy";
 import { DateInput } from "@/components/ui/date-input";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
@@ -917,7 +917,7 @@ function AssetModal({
     const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const path = `${projectId}/picture-assets/${crypto.randomUUID()}-${safe}`;
     const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-      contentType: file.type || "application/octet-stream",
+      contentType: uploadContentType(file),
       upsert: false,
     });
     setUploading(null);

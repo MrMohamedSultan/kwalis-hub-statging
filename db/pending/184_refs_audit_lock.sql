@@ -54,6 +54,10 @@
 -- SECURITY: new policies, revoked grants on the audit tables and a
 -- lock trigger on financial tables — apply only after owner approval.
 --
+-- Security review fix (secfix #29, before first apply): v_budget_change_log
+-- casts audit JSON values safely (import_try_numeric, guarded boolean / uuid),
+-- so one malformed audit row can no longer break the view.
+--
 -- Rollback (manual):
 --   DROP VIEW IF EXISTS public.v_budget_change_log, public.v_audit_trail, public.v_document_refs;
 --   for each table t in the lists below:
@@ -658,6 +662,7 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 COMMENT ON COLUMN public.budget_lines.change_reason IS
   'Why the line was last changed; written with the edit and read back from the audit trail by v_budget_change_log.';
 
+-- secfix #29: safe casts — one malformed audit row must not break the view
 CREATE OR REPLACE VIEW public.v_budget_change_log WITH (security_invoker = on) AS
  SELECT ah.id,
         ah.created_at AS changed_at,
@@ -673,20 +678,22 @@ CREATE OR REPLACE VIEW public.v_budget_change_log WITH (security_invoker = on) A
         bv.version_name,
         bv.status AS version_status,
         CASE WHEN ah.old_row IS NULL THEN NULL ELSE round(public.budget_line_total_sar(
-          (ah.old_row->>'amount')::numeric, (ah.old_row->>'rate')::numeric, (ah.old_row->>'x')::numeric,
-          (ah.old_row->>'prep')::numeric, (ah.old_row->>'shooting')::numeric, (ah.old_row->>'wrap')::numeric,
-          ah.old_row->>'unit', ah.old_row->>'currency', (ah.old_row->>'excluded')::boolean, pr.fx_rate), 2) END AS before_sar,
+          public.import_try_numeric(ah.old_row->>'amount'), public.import_try_numeric(ah.old_row->>'rate'), public.import_try_numeric(ah.old_row->>'x'),
+          public.import_try_numeric(ah.old_row->>'prep'), public.import_try_numeric(ah.old_row->>'shooting'), public.import_try_numeric(ah.old_row->>'wrap'),
+          ah.old_row->>'unit', ah.old_row->>'currency', (lower(ah.old_row->>'excluded') IN ('true', 't', '1')), pr.fx_rate), 2) END AS before_sar,
         CASE WHEN ah.new_row IS NULL THEN NULL ELSE round(public.budget_line_total_sar(
-          (ah.new_row->>'amount')::numeric, (ah.new_row->>'rate')::numeric, (ah.new_row->>'x')::numeric,
-          (ah.new_row->>'prep')::numeric, (ah.new_row->>'shooting')::numeric, (ah.new_row->>'wrap')::numeric,
-          ah.new_row->>'unit', ah.new_row->>'currency', (ah.new_row->>'excluded')::boolean, pr.fx_rate), 2) END AS after_sar,
+          public.import_try_numeric(ah.new_row->>'amount'), public.import_try_numeric(ah.new_row->>'rate'), public.import_try_numeric(ah.new_row->>'x'),
+          public.import_try_numeric(ah.new_row->>'prep'), public.import_try_numeric(ah.new_row->>'shooting'), public.import_try_numeric(ah.new_row->>'wrap'),
+          ah.new_row->>'unit', ah.new_row->>'currency', (lower(ah.new_row->>'excluded') IN ('true', 't', '1')), pr.fx_rate), 2) END AS after_sar,
         CASE WHEN ah.operation = 'UPDATE' AND NOT (ah.changed_fields ? 'change_reason') THEN NULL
              ELSE NULLIF(btrim(COALESCE(ah.new_row->>'change_reason', ah.old_row->>'change_reason')), '') END AS reason,
         ah.changed_fields
    FROM public.audit_history ah
    LEFT JOIN public.projects pr ON pr.id = ah.project_id
    LEFT JOIN public.budget_versions bv
-     ON bv.id = NULLIF(COALESCE(ah.new_row->>'version_id', ah.old_row->>'version_id'), '')::uuid
+     ON bv.id = CASE WHEN COALESCE(ah.new_row->>'version_id', ah.old_row->>'version_id')
+                          ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                     THEN COALESCE(ah.new_row->>'version_id', ah.old_row->>'version_id')::uuid END
   WHERE ah.table_name = 'budget_lines';
 COMMENT ON VIEW public.v_budget_change_log IS
   'N10 Budget Change Log: each budget line change with the line total before/after in SAR, user, date and reason. db/pending/184.';

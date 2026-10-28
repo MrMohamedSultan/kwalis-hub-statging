@@ -56,25 +56,46 @@
 --     the screen, the ledger view and the reports always agree.
 --   * D08  public.supporting_document_links replaces the browser-only
 --     (localStorage) "supporting document" links used by the Film Commission
---     export. public.v_project_attachments lists every file attached to a
+--     export. public.get_project_attachments() lists every file attached to a
 --     transaction of a project (project-prefixed objects in the private
 --     buckets + the per diem / payment request / payment / payroll proofs
 --     stored outside the project folder + external links). It is
 --     security_invoker, so storage and table RLS decide who sees what.
 --   * D06  The test proved that payment_requests were readable (and
 --     insertable) by every member of the organization across projects.
---     Section 8 replaces those two policies with project-scoped ones.
+--     Section 8 replaces those policies (and, secfix #23, the UPDATE /
+--     DELETE ones) with project-scoped ones.
 --     FLAG FOR OWNER: this is an RLS change.
 --   * X25  public.health_check(): a tiny anon-callable function the health
 --     endpoint uses to prove the database answers. Returns no data.
 --
+-- Security review fixes (secfix, before first apply):
+--   #3  the payment_requests INSERT policy also requires the project to belong
+--       to the organization sent with the row;
+--   #16 the attachments archive is public.get_project_attachments(project)
+--       (SECURITY INVOKER plpgsql function) instead of the view
+--       v_project_attachments, so nothing in public depends on storage.objects;
+--   #17 supporting_document_links rows are stamped with the organization /
+--       project of their document by trigger (direct inserts included);
+--   #22 the bucket values before the update are saved in
+--       public.storage_bucket_limits_backup; application/octet-stream is no
+--       longer an allowed type;
+--   #23 the payment_requests UPDATE / DELETE policies are project-scoped too.
+--
 -- ADDITIVE: new tables, columns (with defaults), functions, triggers and
--- views. No existing data is changed. No existing function or view is
--- redefined. Two existing RLS policies on payment_requests are replaced
--- (section 8). No auth / storage structure is changed.
+-- views. No existing data is changed (storage.buckets limits aside, saved
+-- first). No existing function or view is redefined. The four existing RLS
+-- policies on payment_requests are replaced (section 8). No auth / storage
+-- structure is changed.
 --
 -- Rollback
---   DROP VIEW IF EXISTS public.v_project_attachments, public.v_org_project_counts;
+--   DROP VIEW IF EXISTS public.v_org_project_counts;
+--   DROP FUNCTION IF EXISTS public.get_project_attachments(uuid);
+--   DROP TRIGGER IF EXISTS trg_stamp_supporting_document_link ON public.supporting_document_links;
+--   DROP FUNCTION IF EXISTS public.stamp_supporting_document_link();
+--   storage limits: UPDATE storage.buckets b SET public = k.public, file_size_limit = k.file_size_limit,
+--     allowed_mime_types = k.allowed_mime_types FROM public.storage_bucket_limits_backup k WHERE k.id = b.id;
+--   DROP TABLE IF EXISTS public.storage_bucket_limits_backup;
 --   DROP TRIGGER IF EXISTS trg_notification_email_outbox ON public.notifications;
 --   DROP TRIGGER IF EXISTS trg_admin_unlock_clears_throttle ON public.auth_security_log;
 --   DROP TRIGGER IF EXISTS trg_projects_max_projects ON public.projects;
@@ -88,7 +109,9 @@
 --     public.enforce_max_projects(), public.guard_org_billing_fields(), public.per_diem_compute_total(),
 --     public.set_supporting_doc_link(text,uuid,text), public.health_check(),
 --     public.is_payment_request_approver(uuid);
---   (and re-create the two payment_requests policies, section 8)
+--   (and re-create the four payment_requests policies from the live schema, section 8:
+--    payment_requests_select_org_members / _insert_org_members / _update_creator_or_admin /
+--    _delete_admin_or_draft_owner, dropping the *_project_scope ones)
 --   DROP TABLE IF EXISTS public.login_throttle, public.notification_email_outbox, public.budget_alert_log,
 --     public.budget_alert_responsibles, public.supporting_document_links;
 --   ALTER TABLE public.organizations DROP COLUMN IF EXISTS require_mfa;
@@ -274,9 +297,27 @@ GRANT EXECUTE ON FUNCTION public.set_org_require_mfa(uuid, boolean), public.my_m
 -- ---------------------------------------------------------------------
 -- 2. X06 — upload limits on the private buckets (data, not structure)
 -- ---------------------------------------------------------------------
+-- secfix #22: the previous values are kept in public.storage_bucket_limits_backup
+-- (first run only) so the rollback can restore them; application/octet-stream
+-- is not allowed (it would accept any file and defeat the MIME list).
+CREATE TABLE IF NOT EXISTS public.storage_bucket_limits_backup (
+  id                 text PRIMARY KEY,
+  public             boolean,
+  file_size_limit    bigint,
+  allowed_mime_types text[],
+  saved_at           timestamptz NOT NULL DEFAULT now()
+);
+REVOKE ALL ON public.storage_bucket_limits_backup FROM PUBLIC, anon, authenticated;
+GRANT ALL ON public.storage_bucket_limits_backup TO service_role;
+ALTER TABLE public.storage_bucket_limits_backup ENABLE ROW LEVEL SECURITY;   -- no policy: service role only
 DO $$
 BEGIN
   IF to_regclass('storage.buckets') IS NOT NULL THEN
+    INSERT INTO public.storage_bucket_limits_backup (id, public, file_size_limit, allowed_mime_types)
+    SELECT b.id, b.public, b.file_size_limit, b.allowed_mime_types
+      FROM storage.buckets b
+     WHERE b.id IN ('contracts', 'project-documents', 'receipts', 'org-documents', 'support-attachments')
+    ON CONFLICT (id) DO NOTHING;
     UPDATE storage.buckets
        SET public = false,
            file_size_limit = 20971520,          -- 20 MB, same as src/lib/upload-policy.ts
@@ -289,8 +330,7 @@ BEGIN
              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
              'application/vnd.ms-powerpoint',
              'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-             'text/csv', 'text/plain', 'application/zip', 'application/x-zip-compressed',
-             'application/octet-stream']
+             'text/csv', 'text/plain', 'application/zip', 'application/x-zip-compressed']
      WHERE id IN ('contracts', 'project-documents', 'receipts', 'org-documents', 'support-attachments');
   END IF;
 END $$;
@@ -644,6 +684,35 @@ DROP POLICY IF EXISTS supporting_document_links_delete ON public.supporting_docu
 CREATE POLICY supporting_document_links_delete ON public.supporting_document_links
   FOR DELETE TO authenticated USING (public.can_access_project(auth.uid(), organization_id, project_id));
 
+-- secfix #17: organization and project of a link are always those of its
+-- document (direct inserts too), so a link can only be attached to a
+-- document of a project the caller can open (RLS checks the stamped row).
+CREATE OR REPLACE FUNCTION public.stamp_supporting_document_link()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_proj uuid; v_org uuid;
+BEGIN
+  IF NEW.source_kind = 'invoice' THEN
+    SELECT project_id, organization_id INTO v_proj, v_org FROM public.invoices WHERE id = NEW.source_id;
+  ELSIF NEW.source_kind = 'receipt' THEN
+    SELECT project_id, organization_id INTO v_proj, v_org FROM public.cash_advance_receipts WHERE id = NEW.source_id;
+  ELSIF NEW.source_kind = 'payroll' THEN
+    SELECT project_id, organization_id INTO v_proj, v_org FROM public.payroll WHERE id = NEW.source_id;
+  END IF;
+  IF v_proj IS NULL THEN
+    RAISE EXCEPTION 'Document not found' USING ERRCODE = '42501';
+  END IF;
+  NEW.project_id := v_proj;
+  NEW.organization_id := v_org;
+  NEW.updated_by := auth.uid();
+  NEW.updated_at := now();
+  RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION public.stamp_supporting_document_link() FROM PUBLIC, anon, authenticated;
+DROP TRIGGER IF EXISTS trg_stamp_supporting_document_link ON public.supporting_document_links;
+CREATE TRIGGER trg_stamp_supporting_document_link
+  BEFORE INSERT OR UPDATE ON public.supporting_document_links
+  FOR EACH ROW EXECUTE FUNCTION public.stamp_supporting_document_link();
+
 -- Set / clear a link; the project is taken from the document itself, never from the caller.
 CREATE OR REPLACE FUNCTION public.set_supporting_doc_link(_kind text, _source uuid, _url text)
 RETURNS void LANGUAGE plpgsql SECURITY INVOKER SET search_path = public AS $$
@@ -677,93 +746,116 @@ REVOKE ALL ON FUNCTION public.set_supporting_doc_link(text, uuid, text) FROM PUB
 GRANT EXECUTE ON FUNCTION public.set_supporting_doc_link(text, uuid, text) TO authenticated, service_role;
 
 -- Every file attached to a transaction of a project.
-CREATE OR REPLACE VIEW public.v_project_attachments WITH (security_invoker = on) AS
-WITH obj AS (
-  SELECT o.bucket_id, o.name, o.created_at,
-         NULLIF(o.metadata ->> 'size', '')::bigint AS size_bytes,
-         o.metadata ->> 'mimetype' AS mime_type,
-         split_part(o.name, '/', 1) AS seg1,
-         split_part(o.name, '/', 2) AS seg2,
-         split_part(o.name, '/', 3) AS seg3
-    FROM storage.objects o
-   WHERE o.bucket_id IN ('contracts', 'project-documents', 'receipts')
-), files AS (
-  -- objects stored under the project folder: {project}/{kind}/{document id}/...
-  SELECT p.id AS project_id, p.organization_id,
-         CASE obj.seg2
-           WHEN 'invoices' THEN 'invoice'
-           WHEN 'petty-cash' THEN 'petty_cash'
-           WHEN 'per-diem' THEN 'per_diem'
-           WHEN 'crew' THEN 'crew_contract'
-           WHEN 'cast' THEN 'cast_contract'
-           WHEN 'payroll' THEN 'payroll'
-           WHEN 'payment_requests' THEN 'payment_request'
-           WHEN 'locations' THEN 'location'
-           ELSE 'other' END AS source_type,
-         CASE WHEN obj.seg3 ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-              THEN obj.seg3::uuid END AS source_id,
-         obj.bucket_id, obj.name AS storage_path, NULL::text AS external_url,
-         regexp_replace(obj.name, '^.*/', '') AS file_name,
-         obj.size_bytes, obj.mime_type, obj.created_at AS attached_at
-    FROM obj
-    JOIN public.projects p ON p.id::text = obj.seg1
-   WHERE obj.seg3 <> ''        -- library files ({project}/{file}) stay in the File Library
-  UNION ALL
-  -- proofs saved outside the project folder by older app versions
-  SELECT d.project_id, d.organization_id, 'per_diem', d.id, 'contracts', d.receipt_path, NULL,
-         regexp_replace(d.receipt_path, '^.*/', ''), NULL::bigint, NULL::text, d.updated_at
-    FROM public.per_diem_ledger d
-   WHERE COALESCE(d.receipt_path, '') <> '' AND split_part(d.receipt_path, '/', 1) <> d.project_id::text
-  UNION ALL
-  SELECT pr.project_id, pr.organization_id, 'payment_request', pr.id, 'contracts', pr.proof_path, NULL,
-         regexp_replace(pr.proof_path, '^.*/', ''), NULL::bigint, NULL::text, pr.updated_at
-    FROM public.payment_requests pr
-   WHERE COALESCE(pr.proof_path, '') <> '' AND split_part(pr.proof_path, '/', 1) <> pr.project_id::text
-  UNION ALL
-  SELECT pay.project_id, pay.organization_id, 'payment', pay.id, 'contracts', pay.proof_path, NULL,
-         regexp_replace(pay.proof_path, '^.*/', ''), NULL::bigint, NULL::text, pay.created_at
-    FROM public.payments pay
-   WHERE COALESCE(pay.proof_path, '') <> '' AND split_part(pay.proof_path, '/', 1) <> pay.project_id::text
-  UNION ALL
-  SELECT pa.project_id, pa.organization_id, 'payroll', pa.id, 'contracts', e.proof, NULL,
-         regexp_replace(e.proof, '^.*/', ''), NULL::bigint, NULL::text, pa.created_at
-    FROM public.payroll pa
-    CROSS JOIN LATERAL (
-      SELECT DISTINCT COALESCE(NULLIF(x ->> 'proofPath', ''), NULLIF(x ->> 'receiptPath', '')) AS proof
-        FROM jsonb_array_elements(CASE WHEN jsonb_typeof(pa.payment_schedule) = 'array'
-                                       THEN pa.payment_schedule ELSE '[]'::jsonb END
-                                  || CASE WHEN jsonb_typeof(pa.ledger) = 'array'
-                                          THEN pa.ledger ELSE '[]'::jsonb END) x
-    ) e
-   WHERE e.proof IS NOT NULL AND split_part(e.proof, '/', 1) <> pa.project_id::text
-  UNION ALL
-  -- external links (invoice attachment URL, supporting document links)
-  SELECT i.project_id, i.organization_id, 'invoice', i.id, NULL, NULL, i.attachment_url,
-         i.attachment_url, NULL::bigint, NULL::text, i.created_at
-    FROM public.invoices i
-   WHERE COALESCE(i.attachment_url, '') ~* '^https?://'
-  UNION ALL
-  SELECT s.project_id, s.organization_id,
-         CASE s.source_kind WHEN 'receipt' THEN 'petty_cash' ELSE s.source_kind END,
-         s.source_id, NULL, NULL, s.url, s.url, NULL::bigint, NULL::text, s.updated_at
-    FROM public.supporting_document_links s
-)
-SELECT f.project_id, f.organization_id, f.source_type, f.source_id,
-       COALESCE(i.ref_no, i.invoice_no, r.ref_no, pd.ref_no, pay.ref_no, pa.ref_no) AS reference,
-       COALESCE(i.vendor_name, r.vendor, r.recipient, pe.full_name, pr.source_label, pa.name) AS counterparty,
-       f.bucket_id, f.storage_path, f.external_url, f.file_name, f.size_bytes, f.mime_type, f.attached_at
-  FROM files f
-  LEFT JOIN public.invoices i ON f.source_type = 'invoice' AND i.id = f.source_id
-  LEFT JOIN public.cash_advance_receipts r ON f.source_type = 'petty_cash' AND r.id = f.source_id
-  LEFT JOIN public.per_diem_ledger pd ON f.source_type = 'per_diem' AND pd.id = f.source_id
-  LEFT JOIN public.people pe ON pe.id = pd.person_id
-  LEFT JOIN public.payment_requests pr ON f.source_type = 'payment_request' AND pr.id = f.source_id
-  LEFT JOIN public.payments pay ON f.source_type = 'payment' AND pay.id = f.source_id
-  LEFT JOIN public.payroll pa ON f.source_type IN ('payroll', 'crew_contract', 'cast_contract') AND pa.id = f.source_id;
-COMMENT ON VIEW public.v_project_attachments IS
-  'D08: files and links attached to the transactions of a project. security_invoker: storage.objects and table RLS decide visibility; downloads go through signed URLs.';
-REVOKE ALL ON public.v_project_attachments FROM PUBLIC, anon;
-GRANT SELECT ON public.v_project_attachments TO authenticated, service_role;
+-- secfix #16: a SECURITY INVOKER function, not a view — a view over
+-- storage.objects is a hard dependency that can block Supabase storage
+-- upgrades (plpgsql bodies are not tracked as dependencies). Storage and
+-- table RLS still decide what the caller sees.
+DROP VIEW IF EXISTS public.v_project_attachments;
+CREATE OR REPLACE FUNCTION public.get_project_attachments(p_project_id uuid)
+RETURNS TABLE (project_id uuid, organization_id uuid, source_type text, source_id uuid,
+               reference text, counterparty text, bucket_id text, storage_path text,
+               external_url text, file_name text, size_bytes bigint, mime_type text,
+               attached_at timestamptz)
+LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path = public AS $fn$
+#variable_conflict use_column
+BEGIN
+  RETURN QUERY
+  SELECT a.project_id::uuid, a.organization_id::uuid, a.source_type::text, a.source_id::uuid,
+         a.reference::text, a.counterparty::text, a.bucket_id::text, a.storage_path::text,
+         a.external_url::text, a.file_name::text, a.size_bytes::bigint, a.mime_type::text,
+         a.attached_at::timestamptz
+    FROM (
+  WITH obj AS (
+    SELECT o.bucket_id, o.name, o.created_at,
+           NULLIF(o.metadata ->> 'size', '')::bigint AS size_bytes,
+           o.metadata ->> 'mimetype' AS mime_type,
+           split_part(o.name, '/', 1) AS seg1,
+           split_part(o.name, '/', 2) AS seg2,
+           split_part(o.name, '/', 3) AS seg3
+      FROM storage.objects o
+     WHERE o.bucket_id IN ('contracts', 'project-documents', 'receipts')
+       AND split_part(o.name, '/', 1) = p_project_id::text
+  ), files AS (
+    -- objects stored under the project folder: {project}/{kind}/{document id}/...
+    SELECT p.id AS project_id, p.organization_id,
+           CASE obj.seg2
+             WHEN 'invoices' THEN 'invoice'
+             WHEN 'petty-cash' THEN 'petty_cash'
+             WHEN 'per-diem' THEN 'per_diem'
+             WHEN 'crew' THEN 'crew_contract'
+             WHEN 'cast' THEN 'cast_contract'
+             WHEN 'payroll' THEN 'payroll'
+             WHEN 'payment_requests' THEN 'payment_request'
+             WHEN 'locations' THEN 'location'
+             ELSE 'other' END AS source_type,
+           CASE WHEN obj.seg3 ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                THEN obj.seg3::uuid END AS source_id,
+           obj.bucket_id, obj.name AS storage_path, NULL::text AS external_url,
+           regexp_replace(obj.name, '^.*/', '') AS file_name,
+           obj.size_bytes, obj.mime_type, obj.created_at AS attached_at
+      FROM obj
+      JOIN public.projects p ON p.id::text = obj.seg1
+     WHERE obj.seg3 <> ''        -- library files ({project}/{file}) stay in the File Library
+    UNION ALL
+    -- proofs saved outside the project folder by older app versions
+    SELECT d.project_id, d.organization_id, 'per_diem', d.id, 'contracts', d.receipt_path, NULL,
+           regexp_replace(d.receipt_path, '^.*/', ''), NULL::bigint, NULL::text, d.updated_at
+      FROM public.per_diem_ledger d
+     WHERE COALESCE(d.receipt_path, '') <> '' AND split_part(d.receipt_path, '/', 1) <> d.project_id::text
+    UNION ALL
+    SELECT pr.project_id, pr.organization_id, 'payment_request', pr.id, 'contracts', pr.proof_path, NULL,
+           regexp_replace(pr.proof_path, '^.*/', ''), NULL::bigint, NULL::text, pr.updated_at
+      FROM public.payment_requests pr
+     WHERE COALESCE(pr.proof_path, '') <> '' AND split_part(pr.proof_path, '/', 1) <> pr.project_id::text
+    UNION ALL
+    SELECT pay.project_id, pay.organization_id, 'payment', pay.id, 'contracts', pay.proof_path, NULL,
+           regexp_replace(pay.proof_path, '^.*/', ''), NULL::bigint, NULL::text, pay.created_at
+      FROM public.payments pay
+     WHERE COALESCE(pay.proof_path, '') <> '' AND split_part(pay.proof_path, '/', 1) <> pay.project_id::text
+    UNION ALL
+    SELECT pa.project_id, pa.organization_id, 'payroll', pa.id, 'contracts', e.proof, NULL,
+           regexp_replace(e.proof, '^.*/', ''), NULL::bigint, NULL::text, pa.created_at
+      FROM public.payroll pa
+      CROSS JOIN LATERAL (
+        SELECT DISTINCT COALESCE(NULLIF(x ->> 'proofPath', ''), NULLIF(x ->> 'receiptPath', '')) AS proof
+          FROM jsonb_array_elements(CASE WHEN jsonb_typeof(pa.payment_schedule) = 'array'
+                                         THEN pa.payment_schedule ELSE '[]'::jsonb END
+                                    || CASE WHEN jsonb_typeof(pa.ledger) = 'array'
+                                            THEN pa.ledger ELSE '[]'::jsonb END) x
+      ) e
+     WHERE e.proof IS NOT NULL AND split_part(e.proof, '/', 1) <> pa.project_id::text
+    UNION ALL
+    -- external links (invoice attachment URL, supporting document links)
+    SELECT i.project_id, i.organization_id, 'invoice', i.id, NULL, NULL, i.attachment_url,
+           i.attachment_url, NULL::bigint, NULL::text, i.created_at
+      FROM public.invoices i
+     WHERE COALESCE(i.attachment_url, '') ~* '^https?://'
+    UNION ALL
+    SELECT s.project_id, s.organization_id,
+           CASE s.source_kind WHEN 'receipt' THEN 'petty_cash' ELSE s.source_kind END,
+           s.source_id, NULL, NULL, s.url, s.url, NULL::bigint, NULL::text, s.updated_at
+      FROM public.supporting_document_links s
+  )
+  SELECT f.project_id, f.organization_id, f.source_type, f.source_id,
+         COALESCE(i.ref_no, i.invoice_no, r.ref_no, pd.ref_no, pay.ref_no, pa.ref_no) AS reference,
+         COALESCE(i.vendor_name, r.vendor, r.recipient, pe.full_name, pr.source_label, pa.name) AS counterparty,
+         f.bucket_id, f.storage_path, f.external_url, f.file_name, f.size_bytes, f.mime_type, f.attached_at
+    FROM files f
+    LEFT JOIN public.invoices i ON f.source_type = 'invoice' AND i.id = f.source_id
+    LEFT JOIN public.cash_advance_receipts r ON f.source_type = 'petty_cash' AND r.id = f.source_id
+    LEFT JOIN public.per_diem_ledger pd ON f.source_type = 'per_diem' AND pd.id = f.source_id
+    LEFT JOIN public.people pe ON pe.id = pd.person_id
+    LEFT JOIN public.payment_requests pr ON f.source_type = 'payment_request' AND pr.id = f.source_id
+    LEFT JOIN public.payments pay ON f.source_type = 'payment' AND pay.id = f.source_id
+    LEFT JOIN public.payroll pa ON f.source_type IN ('payroll', 'crew_contract', 'cast_contract') AND pa.id = f.source_id
+  ) a
+  WHERE a.project_id = p_project_id;
+END;
+$fn$;
+COMMENT ON FUNCTION public.get_project_attachments(uuid) IS
+  'D08: files and links attached to the transactions of a project. SECURITY INVOKER: storage.objects and table RLS decide visibility; downloads go through signed URLs.';
+REVOKE ALL ON FUNCTION public.get_project_attachments(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_project_attachments(uuid) TO authenticated, service_role;
 
 -- ---------------------------------------------------------------------
 -- 7. X25 — health check
@@ -808,8 +900,40 @@ CREATE POLICY payment_requests_select_project_scope ON public.payment_requests
          OR public.is_payment_request_approver(id));
 DROP POLICY IF EXISTS payment_requests_insert_org_members ON public.payment_requests;
 DROP POLICY IF EXISTS payment_requests_insert_project_scope ON public.payment_requests;
+-- secfix #3: the project must belong to the organization sent with the row
+-- (can_access_project alone passes for a project member whatever org id is
+-- sent, and the approver notification then reached the other organization).
 CREATE POLICY payment_requests_insert_project_scope ON public.payment_requests
   FOR INSERT TO authenticated
   WITH CHECK (requested_by = auth.uid()
+              AND (project_id IS NULL
+                   OR EXISTS (SELECT 1 FROM public.projects p
+                               WHERE p.id = payment_requests.project_id
+                                 AND p.organization_id = payment_requests.organization_id))
               AND (public.is_super_admin(auth.uid())
                    OR public.can_access_project(auth.uid(), organization_id, project_id)));
+-- secfix #23: UPDATE / DELETE follow the same project scope as reading: an
+-- org admin acts on the requests of the projects they can open (or that
+-- they approve); the requester on their own draft in a project they can open.
+DROP POLICY IF EXISTS payment_requests_update_creator_or_admin ON public.payment_requests;
+DROP POLICY IF EXISTS payment_requests_update_project_scope ON public.payment_requests;
+CREATE POLICY payment_requests_update_project_scope ON public.payment_requests
+  FOR UPDATE TO authenticated
+  USING (public.is_super_admin(auth.uid())
+         OR (public.is_org_admin(auth.uid(), organization_id)
+             AND (public.can_access_project(auth.uid(), organization_id, project_id)
+                  OR public.is_payment_request_approver(id)))
+         OR (requested_by = auth.uid() AND status = 'draft'
+             AND public.can_access_project(auth.uid(), organization_id, project_id)))
+  WITH CHECK (public.is_super_admin(auth.uid())
+              OR public.is_org_admin(auth.uid(), organization_id)
+              OR (requested_by = auth.uid() AND status = 'draft'));
+DROP POLICY IF EXISTS payment_requests_delete_admin_or_draft_owner ON public.payment_requests;
+DROP POLICY IF EXISTS payment_requests_delete_project_scope ON public.payment_requests;
+CREATE POLICY payment_requests_delete_project_scope ON public.payment_requests
+  FOR DELETE TO authenticated
+  USING (public.is_super_admin(auth.uid())
+         OR (public.is_org_admin(auth.uid(), organization_id)
+             AND public.can_access_project(auth.uid(), organization_id, project_id))
+         OR (requested_by = auth.uid() AND status = 'draft'
+             AND public.can_access_project(auth.uid(), organization_id, project_id)));

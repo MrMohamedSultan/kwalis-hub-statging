@@ -5,7 +5,7 @@
 //   - "Confirm & Pay" submits the full payload
 // ═══════════════════════════════════════════════════════════════════
 import { formatDate } from "@/lib/date-format";
-import { assertUploadAllowed } from "@/lib/upload-policy";
+import { assertUploadAllowed, uploadContentType } from "@/lib/upload-policy";
 import { DateInput } from "@/components/ui/date-input";
 import { storageAudited } from "@/lib/storage-audit";
 import { useState, type ReactNode } from "react";
@@ -39,7 +39,7 @@ async function uploadReceipt(file: File, milestoneId: string): Promise<string> {
   const { error: upErr } = await storageAudited.from("receipts").upload(path, file, {
     cacheControl: "3600",
     upsert: false,
-    contentType: file.type || undefined,
+    contentType: uploadContentType(file),
   });
   if (upErr) throw new Error(upErr.message);
 

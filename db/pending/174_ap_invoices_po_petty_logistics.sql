@@ -44,6 +44,10 @@
 -- SECURITY: touches a SECURITY-relevant trigger (maker-checker on POs) and a
 -- view read by the app — per SECURITY.md apply only after owner approval.
 --
+-- Security review fix (secfix #26, before first apply): the two gl_accounts
+-- CHECKs are added NOT VALID and validated separately; a live row that does
+-- not pass leaves the CHECK NOT VALID with a NOTICE instead of failing.
+--
 -- Rollback (manual):
 --   DROP TRIGGER IF EXISTS trg_purchase_order_maker_checker ON public.purchase_orders;
 --   DROP TRIGGER IF EXISTS trg_purchase_order_number ON public.purchase_orders;
@@ -72,10 +76,24 @@ ON CONFLICT (key) DO NOTHING;
 ALTER TABLE public.gl_accounts ADD COLUMN IF NOT EXISTS account_type text NOT NULL DEFAULT 'expense';
 ALTER TABLE public.gl_accounts DROP CONSTRAINT IF EXISTS gl_accounts_account_type_check;
 ALTER TABLE public.gl_accounts ADD CONSTRAINT gl_accounts_account_type_check
-  CHECK (account_type IN ('expense','bank','cash','petty_cash','payable','wht_payable','vat','funding'));
+  CHECK (account_type IN ('expense','bank','cash','petty_cash','payable','wht_payable','vat','funding')) NOT VALID;
 ALTER TABLE public.gl_accounts DROP CONSTRAINT IF EXISTS gl_accounts_category_check;
 ALTER TABLE public.gl_accounts ADD CONSTRAINT gl_accounts_category_check
-  CHECK (category IN ('ATL','BTL','Post-Production','Admin & Other','Balance Sheet'));
+  CHECK (category IN ('ATL','BTL','Post-Production','Admin & Other','Balance Sheet')) NOT VALID;
+-- secfix #26: added NOT VALID, validated separately. A live row that does not
+-- pass leaves the CHECK NOT VALID with a NOTICE (new writes are still
+-- checked); the owner fixes the row and runs VALIDATE CONSTRAINT again.
+DO $$
+DECLARE c text;
+BEGIN
+  FOREACH c IN ARRAY ARRAY['gl_accounts_account_type_check', 'gl_accounts_category_check'] LOOP
+    BEGIN
+      EXECUTE format('ALTER TABLE public.gl_accounts VALIDATE CONSTRAINT %I', c);
+    EXCEPTION WHEN check_violation THEN
+      RAISE NOTICE '174: % left NOT VALID, existing gl_accounts rows do not pass it (%)', c, SQLERRM;
+    END;
+  END LOOP;
+END $$;
 
 INSERT INTO public.gl_accounts (code, name, category, description, account_type) VALUES
   ('9100','Project Bank Account','Balance Sheet','Dedicated production bank account (funding in, payments out).','bank'),
