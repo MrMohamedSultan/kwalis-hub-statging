@@ -50,6 +50,14 @@
 -- (get_company_overhead, payments_gsr_snapshot, get_instalment_history) —
 -- per SECURITY.md apply only after owner approval.
 --
+-- Security review fixes (secfix, before first apply):
+--   #8  payment_snapshot_values only reads the contract / invoice / PO /
+--       person of the payment's own project (vendors: same project or
+--       org-wide);
+--   #14 snapshot values are cut to the column limits (bank 200, country 100)
+--       and the backfill writes only rows whose values change, so a re-run
+--       touches nothing.
+--
 -- Rollback:
 --   DROP FUNCTION public.get_instalment_history(uuid, text);
 --   DROP FUNCTION public.get_gsr_payments(uuid, date, date);
@@ -363,11 +371,13 @@ BEGIN
       INTO bank_country, bank_name, v_iban, currency, v_scope
       FROM public.payroll p
       LEFT JOIN LATERAL (SELECT pp.* FROM public.people pp
-                          WHERE pp.project_id = p.project_id
+                          WHERE pp.project_id = p.project_id AND pp.organization_id = p.organization_id
                             AND (pp.id::text = p.ref_id OR (COALESCE(p.ref_id, '') !~* '^[0-9a-f]{8}-' AND pp.full_name = p.name))
                           ORDER BY (pp.id::text = p.ref_id) DESC LIMIT 1) pe ON p.kind <> 'vendor'
       LEFT JOIN public.vendors v ON p.kind = 'vendor' AND v.id::text = p.ref_id
-     WHERE p.id = p_source_id;
+             AND v.organization_id = p.organization_id AND (v.project_id IS NULL OR v.project_id = p.project_id)
+     WHERE p.id = p_source_id
+       AND p.project_id IS NOT DISTINCT FROM p_project;                    -- secfix #8
   ELSIF p_source_type = 'invoice' THEN
     SELECT NULLIF(btrim(v.bank_country), ''), NULLIF(btrim(v.bank_name), ''), NULLIF(btrim(v.iban), ''),
            upper(NULLIF(btrim(i.currency), '')), v.vendor_scope
@@ -375,16 +385,20 @@ BEGIN
       FROM public.invoices i
       LEFT JOIN LATERAL (SELECT vv.* FROM public.vendors vv
                           WHERE vv.organization_id = i.organization_id AND lower(vv.name) = lower(i.vendor_name)
+                            AND (vv.project_id IS NULL OR vv.project_id = i.project_id)
                           ORDER BY (vv.project_id = i.project_id) DESC NULLS LAST, vv.created_at LIMIT 1) v ON true
-     WHERE i.id = p_source_id;
+     WHERE i.id = p_source_id
+       AND i.project_id IS NOT DISTINCT FROM p_project;                    -- secfix #8
   ELSIF p_source_type IN ('purchase_order', 'po') THEN
     SELECT NULLIF(btrim(v.bank_country), ''), NULLIF(btrim(v.bank_name), ''), NULLIF(btrim(v.iban), ''), v.vendor_scope
       INTO bank_country, bank_name, v_iban, v_scope
       FROM public.purchase_orders po
       LEFT JOIN LATERAL (SELECT vv.* FROM public.vendors vv
                           WHERE vv.organization_id = po.organization_id AND lower(vv.name) = lower(po.vendor_name)
+                            AND (vv.project_id IS NULL OR vv.project_id = po.project_id)
                           ORDER BY (vv.project_id = po.project_id) DESC NULLS LAST, vv.created_at LIMIT 1) v ON true
-     WHERE po.id = p_source_id;
+     WHERE po.id = p_source_id
+       AND po.project_id IS NOT DISTINCT FROM p_project;                   -- secfix #8
   ELSIF p_source_type IN ('overtime', 'per_diem') THEN
     SELECT NULLIF(btrim(pe.bank_country), ''), NULLIF(btrim(pe.bank), ''), NULLIF(btrim(pe.iban), ''),
            upper(NULLIF(btrim(pe.ccy), ''))
@@ -392,11 +406,16 @@ BEGIN
       FROM public.people pe
      WHERE pe.id = CASE p_source_type
                      WHEN 'overtime' THEN (SELECT o.person_id FROM public.overtime_entries o WHERE o.id = p_source_id)
-                     ELSE (SELECT d.person_id FROM public.per_diem_ledger d WHERE d.id = p_source_id) END;
+                     ELSE (SELECT d.person_id FROM public.per_diem_ledger d WHERE d.id = p_source_id) END
+       AND pe.project_id IS NOT DISTINCT FROM p_project;                   -- secfix #8
   ELSE
     -- petty cash floats / receipts: spent locally (decision 15)
     is_local := true;
   END IF;
+
+  -- secfix #14: never longer than the payments columns allow (CHECK below)
+  bank_country := left(bank_country, 100);
+  bank_name    := left(bank_name, 200);
 
   -- no recorded bank country: a Saudi IBAN, or a vendor marked Local, is Saudi Arabia
   IF bank_country IS NULL AND (upper(COALESCE(v_iban, '')) LIKE 'SA%' OR v_scope = 'Local') THEN
@@ -439,18 +458,29 @@ CREATE TRIGGER trg_payments_gsr_snapshot
   FOR EACH ROW EXECUTE FUNCTION public.payments_gsr_snapshot();
 
 -- Backfill the NEW columns of payments already recorded (current contract / vendor data).
+-- secfix #14: only rows whose values actually change are written (each write
+-- fires the audit / ledger / updated_at triggers), so a re-run touches nothing.
+WITH calc AS (
+  SELECT pm.id,
+         COALESCE(pm.bank_country, s.bank_country) AS bank_country,
+         COALESCE(pm.bank_name, s.bank_name) AS bank_name,
+         COALESCE(pm.currency, s.currency) AS currency,
+         COALESCE(pm.original_amount, s.original_amount) AS original_amount,
+         COALESCE(pm.spend_country,
+                  CASE WHEN s.is_local OR pm.method = 'Cash' THEN 'Saudi Arabia' END,
+                  COALESCE(pm.bank_country, s.bank_country)) AS spend_country
+    FROM public.payments pm
+    CROSS JOIN LATERAL public.payment_snapshot_values(pm.source_type, pm.source_id, pm.amount, pm.project_id) s
+   WHERE pm.spend_country IS NULL OR pm.currency IS NULL
+)
 UPDATE public.payments pm
-   SET bank_country    = COALESCE(pm.bank_country, s.bank_country),
-       bank_name       = COALESCE(pm.bank_name, s.bank_name),
-       currency        = COALESCE(pm.currency, s.currency),
-       original_amount = COALESCE(pm.original_amount, s.original_amount),
-       spend_country   = COALESCE(pm.spend_country,
-                                  CASE WHEN s.is_local OR pm.method = 'Cash' THEN 'Saudi Arabia' END,
-                                  COALESCE(pm.bank_country, s.bank_country))
-  FROM public.payments p2
-  CROSS JOIN LATERAL public.payment_snapshot_values(p2.source_type, p2.source_id, p2.amount, p2.project_id) s
- WHERE p2.id = pm.id
-   AND (pm.spend_country IS NULL OR pm.currency IS NULL);
+   SET bank_country = c.bank_country, bank_name = c.bank_name, currency = c.currency,
+       original_amount = c.original_amount, spend_country = c.spend_country
+  FROM calc c
+ WHERE c.id = pm.id
+   AND (pm.bank_country IS DISTINCT FROM c.bank_country OR pm.bank_name IS DISTINCT FROM c.bank_name
+        OR pm.currency IS DISTINCT FROM c.currency OR pm.original_amount IS DISTINCT FROM c.original_amount
+        OR pm.spend_country IS DISTINCT FROM c.spend_country);
 
 -- One row per payment (money out) for the GSR screen. SAR.
 --   payee_type  crew | cast | vendor | petty_cash | other

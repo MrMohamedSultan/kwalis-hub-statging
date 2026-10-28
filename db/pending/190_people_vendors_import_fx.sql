@@ -75,7 +75,7 @@
 -- triggers; one existing function redefined (import_budget_validate).
 -- No existing client value is rewritten; backfills fill new columns only.
 --
--- SECURITY: two new tenant tables with RLS (persons: organization members;
+-- SECURITY: two new tenant tables with RLS (persons: see secfix #4 below;
 -- project_currency_rates: project access, writes by company admins or the
 -- Funding editors); SECURITY DEFINER trigger functions check that a person /
 -- vendor belongs to the contract's / invoice's organization. Apply only
@@ -87,6 +87,21 @@
 --                        SELECT * FROM persons_backfill('<org id>', true);  -- link
 --   3. review "Possible duplicates" in Crew/Cast → People profiles and merge.
 --
+-- Security review fixes (secfix, before first apply):
+--   #4  persons rows are readable / editable only by org admins and by users
+--       who can open at least one of the person's contracts
+--       (can_read_person); changing a person's identity (pushed to all their
+--       contracts) needs access to EVERY contract of that person or an org
+--       admin (can_edit_person_identity, checked in persons_propagate); a new
+--       contract is never linked to a profile the user cannot read (by ID
+--       number or by a person_id sent by the client).
+--       Note: bank / IBAN stay on persons as defaults; they are now visible
+--       only to users who can open one of that person's contracts.
+--   #9  invoices_inherit_vendor takes the organization from the invoice's
+--       project (refused when they differ).
+--   #10 a contract that existed before this file is linked only by
+--       persons_backfill — a plain edit never links it or rewrites it.
+--
 -- Rollback (in this order):
 --   DROP TRIGGER IF EXISTS trg_people_link_person ON public.people;
 --   DROP TRIGGER IF EXISTS trg_people_push_person ON public.people;
@@ -96,7 +111,8 @@
 --     public.persons_propagate(), public.persons_backfill(uuid, boolean),
 --     public.persons_merge(uuid, uuid), public.person_id_key(text),
 --     public.invoices_inherit_vendor(), public.project_rate_on(uuid, text, date),
---     public.project_currency_rates_stamp_org();
+--     public.project_currency_rates_stamp_org(), public.can_edit_person_identity(uuid),
+--     public.can_read_person(uuid);
 --   ALTER TABLE public.people DROP COLUMN IF EXISTS person_id;
 --   DROP TABLE IF EXISTS public.persons;
 --   DROP TABLE IF EXISTS public.project_currency_rates;
@@ -148,16 +164,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.persons TO authenticated;
 GRANT ALL ON public.persons TO service_role;
 ALTER TABLE public.persons ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS persons_select ON public.persons;
-CREATE POLICY persons_select ON public.persons FOR SELECT TO authenticated
-  USING (public.is_super_admin(auth.uid()) OR public.is_org_member(auth.uid(), organization_id));
-DROP POLICY IF EXISTS persons_insert ON public.persons;
-CREATE POLICY persons_insert ON public.persons FOR INSERT TO authenticated
-  WITH CHECK (public.is_super_admin(auth.uid()) OR public.is_org_member(auth.uid(), organization_id));
-DROP POLICY IF EXISTS persons_update ON public.persons;
-CREATE POLICY persons_update ON public.persons FOR UPDATE TO authenticated
-  USING (public.is_super_admin(auth.uid()) OR public.is_org_member(auth.uid(), organization_id))
-  WITH CHECK (public.is_super_admin(auth.uid()) OR public.is_org_member(auth.uid(), organization_id));
 DROP POLICY IF EXISTS persons_delete ON public.persons;
 CREATE POLICY persons_delete ON public.persons FOR DELETE TO authenticated
   USING (public.is_super_admin(auth.uid()) OR public.is_org_admin(auth.uid(), organization_id));
@@ -174,6 +180,55 @@ CREATE INDEX IF NOT EXISTS people_person_id_idx ON public.people (person_id);
 COMMENT ON COLUMN public.people.person_id IS
   'The person this contract belongs to (public.persons). One person, many contracts. db/pending/190.';
 
+-- secfix #4: a profile holds ID number, IBAN, bank, phone and e-mail and is
+-- shared by the person's contracts, which are project-scoped. It is readable
+-- (and editable) only by organization admins and by users who can open at
+-- least one of the person's contracts (or who created a profile that has no
+-- contract yet). Changing the identity of a person (pushed to all of their
+-- contracts) additionally needs access to EVERY contract of that person —
+-- see persons_propagate.
+CREATE OR REPLACE FUNCTION public.can_read_person(_person uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT auth.uid() IS NULL OR EXISTS (
+    SELECT 1 FROM public.persons ps
+     WHERE ps.id = _person
+       AND (public.is_super_admin(auth.uid())
+            OR public.is_org_admin(auth.uid(), ps.organization_id)
+            OR EXISTS (SELECT 1 FROM public.people pe
+                        WHERE pe.person_id = ps.id AND pe.organization_id = ps.organization_id
+                          AND public.can_access_project(auth.uid(), pe.organization_id, pe.project_id))
+            OR (ps.created_by = auth.uid()
+                AND NOT EXISTS (SELECT 1 FROM public.people pe WHERE pe.person_id = ps.id))))
+$$;
+CREATE OR REPLACE FUNCTION public.can_edit_person_identity(_person uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT auth.uid() IS NULL OR EXISTS (
+    SELECT 1 FROM public.persons ps
+     WHERE ps.id = _person
+       AND (public.is_super_admin(auth.uid())
+            OR public.is_org_admin(auth.uid(), ps.organization_id)
+            OR (public.can_read_person(ps.id)
+                AND NOT EXISTS (SELECT 1 FROM public.people pe
+                                 WHERE pe.person_id = ps.id
+                                   AND NOT (pe.organization_id = ps.organization_id
+                                            AND public.can_access_project(auth.uid(), pe.organization_id, pe.project_id))))))
+$$;
+REVOKE ALL ON FUNCTION public.can_read_person(uuid), public.can_edit_person_identity(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.can_read_person(uuid), public.can_edit_person_identity(uuid) TO authenticated, service_role;
+
+DROP POLICY IF EXISTS persons_select ON public.persons;
+CREATE POLICY persons_select ON public.persons FOR SELECT TO authenticated
+  USING (public.is_org_member(auth.uid(), organization_id) AND public.can_read_person(id)
+         OR public.is_super_admin(auth.uid()));
+DROP POLICY IF EXISTS persons_insert ON public.persons;
+CREATE POLICY persons_insert ON public.persons FOR INSERT TO authenticated
+  WITH CHECK (public.is_super_admin(auth.uid()) OR public.is_org_member(auth.uid(), organization_id));
+DROP POLICY IF EXISTS persons_update ON public.persons;
+CREATE POLICY persons_update ON public.persons FOR UPDATE TO authenticated
+  USING (public.is_super_admin(auth.uid())
+         OR (public.is_org_member(auth.uid(), organization_id) AND public.can_read_person(id)))
+  WITH CHECK (public.is_super_admin(auth.uid()) OR public.is_org_member(auth.uid(), organization_id));
+
 -- BEFORE: link / create the profile, check the tenant, fill what the contract leaves empty.
 CREATE OR REPLACE FUNCTION public.people_link_person()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -188,11 +243,23 @@ BEGIN
   -- unlinked on purpose (or its profile was deleted): leave it unlinked
   IF TG_OP = 'UPDATE' AND OLD.person_id IS NOT NULL AND NEW.person_id IS NULL THEN RETURN NEW; END IF;
 
+  -- secfix #10: a contract that existed before this file (unlinked) is linked
+  -- only by persons_backfill (dry run, reviewed) — a plain edit never links it
+  -- and so never rewrites its identity from another contract's profile.
+  IF TG_OP = 'UPDATE' AND OLD.person_id IS NULL AND NEW.person_id IS NULL THEN RETURN NEW; END IF;
+
   IF NEW.person_id IS NULL THEN
     -- exact ID number only — never by name
     IF v_key IS NOT NULL THEN
       SELECT * INTO p FROM public.persons
        WHERE organization_id = NEW.organization_id AND id_number_key = v_key;
+      -- secfix #4: a profile the caller cannot read (all of its contracts are
+      -- in other projects) is not linked — linking would hand over its bank /
+      -- IBAN / phone. The contract stays unlinked for an org admin to link
+      -- (persons_backfill / the People profiles screen).
+      IF p.id IS NOT NULL AND NOT public.can_read_person(p.id) THEN
+        RETURN NEW;
+      END IF;
     END IF;
     IF p.id IS NULL THEN
       INSERT INTO public.persons (organization_id, full_name, id_type, id_number, nationality,
@@ -217,6 +284,11 @@ BEGIN
         USING ERRCODE = '42501';
     END IF;
     v_relink := TG_OP = 'UPDATE' AND OLD.person_id IS DISTINCT FROM NEW.person_id;
+    -- secfix #4: picking a profile needs read access to it
+    IF (TG_OP = 'INSERT' OR v_relink) AND NOT public.can_read_person(p.id) THEN
+      RAISE EXCEPTION 'This person profile belongs to another organization'
+        USING ERRCODE = '42501';
+    END IF;
   END IF;
 
   IF v_relink THEN
@@ -318,6 +390,12 @@ BEGIN
      AND NEW.mother_saudi IS NOT DISTINCT FROM OLD.mother_saudi AND NEW.related_party IS NOT DISTINCT FROM OLD.related_party
      AND NEW.phone_number IS NOT DISTINCT FROM OLD.phone_number AND NEW.email IS NOT DISTINCT FROM OLD.email THEN
     RETURN NULL;
+  END IF;
+  -- secfix #4: the identity reaches every contract of the person, so only
+  -- someone who can open all of them (or an org admin) may change it
+  IF NOT public.can_edit_person_identity(NEW.id) THEN
+    RAISE EXCEPTION 'This person also has contracts in projects you cannot open — ask an organization admin to change their name, ID or contact details'
+      USING ERRCODE = '42501';
   END IF;
   PERFORM set_config('kwalis.person_sync', 'on', true);
   UPDATE public.people pe SET
@@ -505,16 +583,26 @@ COMMENT ON COLUMN public.invoices.vendor_id IS 'Vendor profile the invoice was r
 
 CREATE OR REPLACE FUNCTION public.invoices_inherit_vendor()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE v public.vendors%ROWTYPE;
+DECLARE
+  v     public.vendors%ROWTYPE;
+  v_org uuid := NEW.organization_id;
 BEGIN
-  IF NEW.vendor_id IS NULL AND NULLIF(btrim(NEW.vendor_name), '') IS NOT NULL AND NEW.organization_id IS NOT NULL THEN
+  -- secfix #9: the organization is the one of the invoice's project, never
+  -- only what the caller sent (the insert policy does not tie the two)
+  IF NEW.project_id IS NOT NULL THEN
+    SELECT organization_id INTO v_org FROM public.projects WHERE id = NEW.project_id;
+    IF v_org IS DISTINCT FROM NEW.organization_id THEN
+      RAISE EXCEPTION 'invoices: the project belongs to another organization' USING ERRCODE = '42501';
+    END IF;
+  END IF;
+  IF NEW.vendor_id IS NULL AND NULLIF(btrim(NEW.vendor_name), '') IS NOT NULL AND v_org IS NOT NULL THEN
     SELECT * INTO v FROM public.vendors
-     WHERE organization_id = NEW.organization_id AND lower(btrim(name)) = lower(btrim(NEW.vendor_name))
+     WHERE organization_id = v_org AND lower(btrim(name)) = lower(btrim(NEW.vendor_name))
      ORDER BY created_at LIMIT 1;
     NEW.vendor_id := v.id;
   ELSIF NEW.vendor_id IS NOT NULL THEN
     SELECT * INTO v FROM public.vendors WHERE id = NEW.vendor_id;
-    IF NOT FOUND OR v.organization_id IS DISTINCT FROM NEW.organization_id THEN
+    IF NOT FOUND OR v.organization_id IS DISTINCT FROM v_org THEN
       RAISE EXCEPTION 'This vendor belongs to another organization' USING ERRCODE = '42501';
     END IF;
   END IF;

@@ -78,6 +78,13 @@
 -- SECURITY: new tables with RLS + policies, SECURITY DEFINER write RPCs that
 -- check the caller — apply only after owner approval (SECURITY.md).
 --
+-- Security review fixes (secfix, before first apply):
+--   #7  payments_rebate_defaults looks the payee IBAN up only inside the
+--       payment's organization / project (vendors: same project or org-wide);
+--   #13 budget_code_qpe_map.budget_code allows 64 characters (was 20; import
+--       allows 32) and longer codes are skipped instead of failing the write;
+--   #21 qpe_source_project is not executable by authenticated (internal).
+--
 -- Rollback (manual, in this order):
 --   DROP TRIGGER IF EXISTS trg_budget_lines_qpe_suggest ON public.budget_lines;
 --   DROP TRIGGER IF EXISTS trg_payments_rebate_defaults ON public.payments;
@@ -488,7 +495,7 @@ CREATE TABLE IF NOT EXISTS public.budget_code_qpe_map (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id    uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
   project_id         uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
-  budget_code        text NOT NULL CHECK (length(budget_code) BETWEEN 1 AND 20),
+  budget_code        text NOT NULL,     -- length check below (secfix #13)
   qpe_category       text REFERENCES public.qpe_categories(code),
   ineligible_reason  text CHECK (ineligible_reason IS NULL OR ineligible_reason IN (
                        'development', 'damage', 'travel_outside_ksa', 'government_fees', 'taxes',
@@ -508,6 +515,12 @@ CREATE TABLE IF NOT EXISTS public.budget_code_qpe_map (
   CONSTRAINT budget_code_qpe_map_one_of CHECK ((qpe_category IS NULL) <> (ineligible_reason IS NULL)),
   CONSTRAINT budget_code_qpe_map_unique UNIQUE (project_id, budget_code)
 );
+-- secfix #13: budget codes are up to 32 characters on import (190) and free
+-- text elsewhere; 64 here, and longer codes are simply not mapped
+ALTER TABLE public.budget_code_qpe_map DROP CONSTRAINT IF EXISTS budget_code_qpe_map_budget_code_check;
+ALTER TABLE public.budget_code_qpe_map DROP CONSTRAINT IF EXISTS budget_code_qpe_map_budget_code_len;
+ALTER TABLE public.budget_code_qpe_map ADD CONSTRAINT budget_code_qpe_map_budget_code_len
+  CHECK (length(budget_code) BETWEEN 1 AND 64);
 COMMENT ON TABLE public.budget_code_qpe_map IS
   'E12 single eligibility source: each budget code of a project -> Film Commission QPE category or non-eligibility reason. Suggested by the system, approved by the accountant (set_qpe_mapping). Transactions inherit it. db/pending/197.';
 GRANT SELECT ON public.budget_code_qpe_map TO authenticated;            -- writes: RPCs / trigger only
@@ -605,6 +618,7 @@ BEGIN
     INSERT INTO public.budget_code_qpe_map (organization_id, project_id, budget_code, qpe_category, ineligible_reason, status, suggestion_basis, created_by)
     SELECT v_org, p_project_id, o.code, s.category, s.reason, 'suggested', s.basis, auth.uid()
     FROM one o CROSS JOIN LATERAL public.qpe_suggest(o.code, o.descr) s
+    WHERE length(o.code) <= 64                                           -- secfix #13
     ON CONFLICT (project_id, budget_code) DO NOTHING
     RETURNING 1
   )
@@ -617,7 +631,10 @@ $$;
 CREATE OR REPLACE FUNCTION public.budget_lines_qpe_suggest()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
-  IF NEW.project_id IS NULL OR btrim(COALESCE(NEW.main_code, '')) = '' THEN RETURN NEW; END IF;
+  IF NEW.project_id IS NULL OR btrim(COALESCE(NEW.main_code, '')) = ''
+     OR length(NEW.main_code) > 64 THEN                                  -- secfix #13
+    RETURN NEW;
+  END IF;
   INSERT INTO public.budget_code_qpe_map (organization_id, project_id, budget_code, qpe_category, ineligible_reason, status, suggestion_basis, created_by)
   SELECT p.organization_id, NEW.project_id, NEW.main_code, s.category, s.reason, 'suggested', s.basis, auth.uid()
   FROM public.projects p CROSS JOIN LATERAL public.qpe_suggest(NEW.main_code, NEW.description) s
@@ -643,7 +660,7 @@ BEGIN
   IF NOT public.can_approve_qpe(p_project_id) THEN
     RAISE EXCEPTION 'You are not allowed to approve the Film Commission eligibility mapping' USING ERRCODE = '42501';
   END IF;
-  IF btrim(COALESCE(p_budget_code, '')) = '' OR length(p_budget_code) > 20 THEN
+  IF btrim(COALESCE(p_budget_code, '')) = '' OR length(btrim(p_budget_code)) > 64 THEN   -- secfix #13
     RAISE EXCEPTION 'A budget code is required' USING ERRCODE = '22023';
   END IF;
   IF (NULLIF(btrim(COALESCE(p_category, '')), '') IS NULL) = (NULLIF(btrim(COALESCE(p_reason, '')), '') IS NULL) THEN
@@ -726,7 +743,7 @@ RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
     WHEN 'per_diem'   THEN (SELECT project_id FROM public.per_diem_ledger WHERE id = p_source_id)
   END
 $$;
-REVOKE ALL ON FUNCTION public.qpe_source_project(text, uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.qpe_source_project(text, uuid) FROM PUBLIC, anon, authenticated;   -- secfix #21: internal (DEFINER RPCs)
 
 CREATE OR REPLACE FUNCTION public.set_qpe_override(
   p_project_id uuid, p_source_type text, p_source_id uuid, p_eligible boolean,
@@ -809,20 +826,31 @@ BEGIN
     NEW.bank_reference := NULLIF(btrim(substring(NEW.notes FROM '(?:^|·\s*)ref\s+([^·]+?)\s*$')), '');
   END IF;
   IF NEW.payee_iban IS NULL THEN
+    -- secfix #7: the payee is looked up only inside the payment's own
+    -- organization and project (the trigger is SECURITY DEFINER)
     NEW.payee_iban := CASE NEW.source_type
       WHEN 'payroll' THEN (
         SELECT pe.iban FROM public.payroll p
-          JOIN public.people pe ON pe.project_id = p.project_id
+          JOIN public.people pe ON pe.project_id = p.project_id AND pe.organization_id = p.organization_id
            AND (pe.id::text = p.ref_id OR (p.ref_id !~* '^[0-9a-f]{8}-' AND pe.full_name = p.name))
-         WHERE p.id = NEW.source_id ORDER BY (pe.id::text = p.ref_id) DESC LIMIT 1)
+         WHERE p.id = NEW.source_id
+           AND p.organization_id = NEW.organization_id AND p.project_id IS NOT DISTINCT FROM NEW.project_id
+         ORDER BY (pe.id::text = p.ref_id) DESC LIMIT 1)
       WHEN 'invoice' THEN (
         SELECT v.iban FROM public.invoices i JOIN public.vendors v
             ON v.organization_id = i.organization_id AND lower(v.name) = lower(i.vendor_name)
-         WHERE i.id = NEW.source_id ORDER BY (v.project_id = i.project_id) DESC NULLS LAST, v.created_at LIMIT 1)
+           AND (v.project_id IS NULL OR v.project_id = i.project_id)
+         WHERE i.id = NEW.source_id
+           AND i.organization_id = NEW.organization_id AND i.project_id IS NOT DISTINCT FROM NEW.project_id
+         ORDER BY (v.project_id = i.project_id) DESC NULLS LAST, v.created_at LIMIT 1)
       WHEN 'overtime' THEN (
-        SELECT pe.iban FROM public.overtime_entries o JOIN public.people pe ON pe.id = o.person_id WHERE o.id = NEW.source_id)
+        SELECT pe.iban FROM public.overtime_entries o JOIN public.people pe ON pe.id = o.person_id
+         WHERE o.id = NEW.source_id
+           AND pe.organization_id = NEW.organization_id AND pe.project_id IS NOT DISTINCT FROM NEW.project_id)
       WHEN 'per_diem' THEN (
-        SELECT pe.iban FROM public.per_diem_ledger d JOIN public.people pe ON pe.id = d.person_id WHERE d.id = NEW.source_id)
+        SELECT pe.iban FROM public.per_diem_ledger d JOIN public.people pe ON pe.id = d.person_id
+         WHERE d.id = NEW.source_id
+           AND pe.organization_id = NEW.organization_id AND pe.project_id IS NOT DISTINCT FROM NEW.project_id)
       ELSE NULL END;
     NEW.payee_iban := NULLIF(btrim(COALESCE(NEW.payee_iban, '')), '');
   END IF;
