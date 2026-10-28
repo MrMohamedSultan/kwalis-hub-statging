@@ -40,7 +40,13 @@ const statementSchema = z.object({
   narrative: z.string().trim().max(500),
 });
 const treasurySchema = z.object({
-  kind: z.enum(["wht_remittance", "vat_recovery", "petty_cash_return", "bank_charge"]),
+  kind: z.enum([
+    "wht_remittance",
+    "vat_payment",
+    "vat_recovery",
+    "petty_cash_return",
+    "bank_charge",
+  ]),
   date: isoDate,
   amount: z.number().finite().positive().max(1e12),
   cashAdvanceId: z.string().uuid().nullable(),
@@ -342,7 +348,7 @@ export function BankReconciliationReport() {
               >
                 {TREASURY_KINDS.map((k) => (
                   <option key={k} value={k}>
-                    {t(`journal.event.${k}`)}
+                    {t(`journal.event.${k}`, { defaultValue: t(`reconcile.event.${k}`) })}
                   </option>
                 ))}
               </select>

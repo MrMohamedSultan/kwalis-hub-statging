@@ -33,8 +33,9 @@ import {
   type FundingKind,
   type FundingEntry,
   type TaxPaymentKind,
+  FUNDING_TREASURY_KINDS,
+  treasurySign,
 } from "@/lib/funding-store";
-import { cashPosition } from "@/lib/budget-position";
 import { downloadCSV } from "@/lib/export-csv";
 import { exportPdfReport } from "@/lib/export-pdf";
 import { useTranslation } from "react-i18next";
@@ -136,7 +137,7 @@ function FundingPage() {
         {[
           { id: "cashflow", label: tr("funding.tabCashflow"), icon: TrendingUp },
           { id: "inflows", label: tr("funding.tabInflows"), icon: Landmark },
-          { id: "vat", label: tr("funding.tabVat"), icon: ReceiptText },
+          { id: "vat", label: tr("reconcile.treasury.tab"), icon: ReceiptText },
         ].map((t) => (
           <button
             key={t.id}
@@ -160,33 +161,48 @@ function FundingPage() {
 }
 
 /**
- * A12: the cash figures come from the database (get_funding_position), the
- * same definitions as the reports and the ledger:
- *   Cash Balance = Funding − Paid − VAT paid + VAT recovered − WHT remitted
- *   Upcoming     = approved, not paid yet; Expected balance = Cash − Upcoming
+ * A09 / A12: the cash figures come from the database (get_funding_position),
+ * read from the ledger (db/pending/196): the cash balance IS the bank account
+ * of the Trial Balance (9100) —
+ *   Funding − Paid from the bank − petty cash floats + returns − VAT paid
+ *   + VAT recovered − WHT remitted − bank charges
+ *   Upcoming = approved, not paid yet; Expected balance = Cash − Upcoming
  */
 function useTotals() {
   const { data } = useFundingPosition();
   return useMemo(() => {
     const d = data;
-    const pos = cashPosition({
-      funding: d?.funding ?? 0,
-      paid: d?.paid ?? 0,
-      vatPaid: d?.vat_paid ?? 0,
-      vatRecovered: d?.vat_recovered ?? 0,
-      whtRemitted: d?.wht_remitted ?? 0,
-      upcoming: d?.upcoming ?? 0,
-    });
+    const v = (k: keyof NonNullable<typeof d>) => Number(d?.[k] ?? 0) || 0;
+    const funding = v("funding");
+    const paid = v("paid");
     return {
-      ...pos,
       loaded: !!d,
-      fundingExpected: d?.funding_expected ?? 0,
-      upcomingInvoices: d?.upcoming_invoices ?? 0,
-      upcomingInstalments: d?.upcoming_instalments ?? 0,
-      actual: d?.actual ?? 0,
-      commitment: d?.commitment ?? 0,
-      payable: d?.payable ?? 0,
-      taxNet: pos.vatPaid - pos.vatRecovered + pos.whtRemitted,
+      funding,
+      fundingExpected: v("funding_expected"),
+      paid,
+      paidFromBank: v("paid_from_bank"),
+      paidNotFromBank: v("paid_not_from_bank"),
+      pettyIssued: v("petty_cash_issued"),
+      pettyReturned: v("petty_cash_returned"),
+      vatPaid: v("vat_paid"),
+      vatRecovered: v("vat_recovered"),
+      whtRemitted: v("wht_remitted"),
+      bankCharges: v("bank_charges"),
+      cashBalance: v("cash_balance"),
+      cashOnHand: v("cash_on_hand"),
+      pettyCash: v("petty_cash"),
+      upcoming: v("upcoming"),
+      expectedBalance: v("expected_balance"),
+      upcomingInvoices: v("upcoming_invoices"),
+      upcomingInstalments: v("upcoming_instalments"),
+      actual: v("actual"),
+      commitment: v("commitment"),
+      payable: v("payable"),
+      hasFunding: !!d?.has_funding,
+      overdrawn: !!d?.overdrawn,
+      paymentsExceedFunding: !!d?.payments_exceed_funding,
+      utilisationPct: funding > 0 ? Math.round((paid / funding) * 10000) / 100 : null,
+      taxNet: v("vat_paid") - v("vat_recovered") + v("wht_remitted"),
     };
   }, [data]);
 }
@@ -213,7 +229,13 @@ function CashFlowDashboard() {
     [tr("glossary.cash.vatPaid"), t.vatPaid],
     [tr("glossary.cash.vatRecovered"), t.vatRecovered],
     [tr("glossary.cash.whtRemitted"), t.whtRemitted],
-    [tr("glossary.term.cashBalance"), t.cashBalance],
+    [tr("reconcile.cash.paidFromBank"), t.paidFromBank],
+    [tr("reconcile.cash.pettyIssued"), t.pettyIssued],
+    [tr("reconcile.cash.pettyReturned"), t.pettyReturned],
+    [tr("reconcile.cash.bankCharges"), t.bankCharges],
+    [tr("reconcile.cash.bankBalance"), t.cashBalance],
+    [tr("reconcile.cash.cashOnHand"), t.cashOnHand],
+    [tr("reconcile.cash.pettyBalance"), t.pettyCash],
     [tr("glossary.cash.upcoming"), t.upcoming],
     [tr("glossary.cash.expectedBalance"), t.expectedBalance],
     [tr("glossary.term.actual"), t.actual],
@@ -318,7 +340,7 @@ function CashFlowDashboard() {
         <Kpi label={tr("glossary.term.paid")} value={t.paid} icon={TrendingDown} tone="neg" />
         <Kpi label={tr("glossary.cash.taxNet")} value={t.taxNet} icon={ReceiptText} tone="neg" />
         <Kpi
-          label={tr("glossary.term.cashBalance")}
+          label={tr("reconcile.cash.bankBalance")}
           value={t.cashBalance}
           icon={Banknote}
           tone={t.cashBalance >= 0 ? "pos" : "neg"}
@@ -418,7 +440,7 @@ function CashFlowDashboard() {
           <div className="grid gap-3 md:grid-cols-3 mt-4">
             <ReconTile label={tr("funding.tileBank")} value={snap.bankBalance} tone="neutral" />
             <ReconTile
-              label={tr("glossary.term.cashBalance")}
+              label={tr("reconcile.cash.bankBalance")}
               value={t.cashBalance}
               tone={t.cashBalance >= 0 ? "pos" : "neg"}
             />
@@ -454,19 +476,30 @@ function CashFlowDashboard() {
           title={tr("funding.equation")}
           rows={[
             { label: tr("glossary.term.funding"), value: t.funding },
-            { label: tr("glossary.cash.minusPaid"), value: -t.paid },
+            { label: tr("reconcile.cash.minusPaidFromBank"), value: -t.paidFromBank },
+            { label: tr("reconcile.cash.minusPettyIssued"), value: -t.pettyIssued },
+            { label: tr("reconcile.cash.plusPettyReturned"), value: t.pettyReturned },
             { label: tr("glossary.cash.minusVatPaid"), value: -t.vatPaid },
             { label: tr("glossary.cash.plusVatRecovered"), value: t.vatRecovered },
             { label: tr("glossary.cash.minusWht"), value: -t.whtRemitted },
-            { label: tr("glossary.term.cashBalance"), value: t.cashBalance, bold: true },
+            { label: tr("reconcile.cash.minusBankCharges"), value: -t.bankCharges },
+            { label: tr("reconcile.cash.bankBalance"), value: t.cashBalance, bold: true },
             { label: tr("glossary.cash.minusUpcoming"), value: -t.upcoming },
             { label: tr("glossary.cash.expectedBalance"), value: t.expectedBalance, bold: true },
+          ]}
+        />
+        <Breakdown
+          title={tr("reconcile.cash.outsideBank")}
+          rows={[
+            { label: tr("reconcile.cash.paidNotFromBank"), value: t.paidNotFromBank, muted: true },
+            { label: tr("reconcile.cash.cashOnHand"), value: t.cashOnHand },
+            { label: tr("reconcile.cash.pettyBalance"), value: t.pettyCash },
           ]}
         />
       </div>
 
       <p className="text-xs text-muted-foreground" dir={dir}>
-        {tr("glossary.cash.note")}
+        {tr("reconcile.cash.note")}
       </p>
     </div>
   );
@@ -1039,15 +1072,13 @@ function VatPaymentsTab() {
     amount: "",
     reference: "",
     note: "",
-    kind: "vat_paid" as TaxPaymentKind,
+    kind: "vat_payment" as TaxPaymentKind,
+    budgetCode: "",
   });
-  const kindLabel = (k?: TaxPaymentKind) => t(`glossary.cash.kind.${k ?? "vat_paid"}`);
+  const kindLabel = (k?: TaxPaymentKind) => t(`reconcile.treasury.${k ?? "vat_payment"}`);
   const [amtErr, setAmtErr] = useState<string | null>(null);
-  // net cash out to the tax authority: VAT paid + WHT remitted − VAT recovered
-  const total = items.reduce(
-    (s, e) => s + (e.kind === "vat_recovered" ? -1 : 1) * Number(e.amount || 0),
-    0,
-  );
+  // net cash out of the bank: VAT paid + WHT remitted + charges − VAT recovered − petty returns
+  const total = items.reduce((s, e) => s - treasurySign(e.kind) * Number(e.amount || 0), 0);
 
   const submit = () => {
     const err = validateAmount(form.amount);
@@ -1060,10 +1091,18 @@ function VatPaymentsTab() {
       kind: form.kind,
       date: form.date,
       amount: Number(form.amount),
+      budgetCode: form.budgetCode.trim() || undefined,
       reference: form.reference.trim() || undefined,
       note: form.note.trim() || undefined,
     });
-    setForm({ date: todayIso(), amount: "", reference: "", note: "", kind: form.kind });
+    setForm({
+      date: todayIso(),
+      amount: "",
+      reference: "",
+      note: "",
+      kind: form.kind,
+      budgetCode: form.budgetCode,
+    });
     toast.success(t("funding.vat_payment_logged"));
   };
 
@@ -1102,11 +1141,9 @@ function VatPaymentsTab() {
       <LegacyImportBanner count={legacy.length} onImport={importLegacy} />
       <div className="rounded-xl border border-border bg-[hsl(var(--surface-2))] p-4">
         <h3 className="text-sm font-semibold text-foreground mb-1">
-          {t("glossary.cash.taxTitle")}
+          {t("reconcile.treasury.title")}
         </h3>
-        <p className="text-xs text-muted-foreground mb-3">
-          {t("funding.track_vat_paid_directly_to_tax_authorities_outside")}
-        </p>
+        <p className="text-xs text-muted-foreground mb-3">{t("reconcile.treasury.hint")}</p>
         <div className="grid gap-2 md:grid-cols-6">
           <select
             value={form.kind}
@@ -1114,7 +1151,7 @@ function VatPaymentsTab() {
             aria-label={t("glossary.cash.kindLabel")}
             className="rounded-lg border border-border bg-[hsl(var(--surface-2))] px-3 py-2 text-sm text-foreground"
           >
-            {(["vat_paid", "vat_recovered", "wht_remitted"] as TaxPaymentKind[]).map((k) => (
+            {FUNDING_TREASURY_KINDS.map((k) => (
               <option key={k} value={k}>
                 {kindLabel(k)}
               </option>
@@ -1140,12 +1177,22 @@ function VatPaymentsTab() {
             />
             {amtErr && <p className="text-xs text-destructive mt-1">{amtErr}</p>}
           </div>
-          <input
-            placeholder={t("funding.reference")}
-            value={form.reference}
-            onChange={(e) => setForm({ ...form, reference: e.target.value })}
-            className="rounded-lg border border-border bg-[hsl(var(--surface-2))] px-3 py-2 text-sm text-foreground"
-          />
+          {form.kind === "bank_charge" ? (
+            <input
+              placeholder={t("reconcile.treasury.budgetCode")}
+              value={form.budgetCode}
+              maxLength={64}
+              onChange={(e) => setForm({ ...form, budgetCode: e.target.value })}
+              className="rounded-lg border border-border bg-[hsl(var(--surface-2))] px-3 py-2 text-sm text-foreground"
+            />
+          ) : (
+            <input
+              placeholder={t("funding.reference")}
+              value={form.reference}
+              onChange={(e) => setForm({ ...form, reference: e.target.value })}
+              className="rounded-lg border border-border bg-[hsl(var(--surface-2))] px-3 py-2 text-sm text-foreground"
+            />
+          )}
           <input
             placeholder={t("funding.note")}
             value={form.note}
@@ -1170,7 +1217,7 @@ function VatPaymentsTab() {
       <div className="rounded-xl border border-border bg-[hsl(var(--surface-2))] overflow-hidden">
         <div className="flex justify-between items-center p-4 border-b border-border flex-wrap gap-2">
           <h3 className="text-sm font-semibold text-foreground">
-            {t("glossary.cash.taxList", { count: items.length })}
+            {t("reconcile.treasury.list", { count: items.length })}
           </h3>
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-destructive">Total: {fmtSAR(total)}</span>
@@ -1214,10 +1261,14 @@ function VatPaymentsTab() {
                   <tr key={e.id} className="border-t border-border text-foreground">
                     <td className="px-4 py-2 tabular-nums">{formatDate(e.date)}</td>
                     <td className="px-4 py-2">{kindLabel(e.kind)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums font-medium text-destructive">
+                    <td
+                      className={`px-4 py-2 text-end tabular-nums font-medium ${treasurySign(e.kind) > 0 ? "text-success" : "text-destructive"}`}
+                    >
                       {fmt(e.amount)}
                     </td>
-                    <td className="px-4 py-2 text-muted-foreground">{e.reference || "—"}</td>
+                    <td className="px-4 py-2 text-muted-foreground">
+                      {e.reference || e.budgetCode || "—"}
+                    </td>
                     <td className="px-4 py-2 text-muted-foreground">{e.note || "—"}</td>
                     <td className="px-2 py-2">
                       <button
