@@ -23,7 +23,7 @@ export function ContractFilesPanel() {
   const go = async (dryRun: boolean) => {
     setBusy(true);
     try {
-      const r = await run({ data: { dryRun, ignoreOrphans, limit: 200 } });
+      const r = await run({ data: { dryRun, ignoreOrphans, limit: 25 } });
       setRes(r);
       if (!dryRun) {
         toast.success(
@@ -85,6 +85,21 @@ export function ContractFilesPanel() {
               </span>
             ))}
           </div>
+          {res.stranded.length > 0 && (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+              <p className="font-semibold">{t("decisions.files.stranded")}</p>
+              <ul className="list-disc ps-5">
+                {res.stranded.slice(0, 20).map((f) => (
+                  <li key={f.object_name} dir="ltr">
+                    {f.object_name} → {f.new_name}: {f.error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {res.plan.some((r) => r.action === "move") && (
+            <p className="text-xs text-muted-foreground">{t("decisions.files.batch", { n: 25 })}</p>
+          )}
           {res.failed.length > 0 && (
             <ul className="list-disc ps-5 text-xs text-destructive">
               {res.failed.slice(0, 20).map((f) => (
@@ -102,6 +117,7 @@ export function ContractFilesPanel() {
                   <th className="px-2 py-1 text-start">{t("decisions.files.newPath")}</th>
                   <th className="px-2 py-1 text-start">{t("decisions.files.owner")}</th>
                   <th className="px-2 py-1 text-start">{t("decisions.files.actionCol")}</th>
+                  <th className="px-2 py-1 text-start">{t("decisions.files.noteCol")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -115,6 +131,9 @@ export function ContractFilesPanel() {
                     </td>
                     <td className="px-2 py-1">{r.owner_table ?? "—"}</td>
                     <td className="px-2 py-1">{t(`decisions.files.action.${r.action}`)}</td>
+                    <td className="px-2 py-1 text-muted-foreground">
+                      {r.note ? t(`decisions.files.note.${r.note}`, { defaultValue: r.note }) : "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

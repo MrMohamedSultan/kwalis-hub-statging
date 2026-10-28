@@ -701,7 +701,7 @@ function PerDiemLedgerPage() {
     }
     assertUploadAllowed(file);
     // X06: under the project folder so project-scoped storage policies apply.
-    const path = `${activeProjectId ? `${activeProjectId}/` : ""}per-diem/${rowId}/${Date.now()}-${safeStorageName(file.name)}`;
+    const path = `${activeProjectId}/per-diem/${rowId}/${Date.now()}-${safeStorageName(file.name)}`;
     const { error: upErr } = await storageAudited
       .from("contracts")
       .upload(path, file, { upsert: false });

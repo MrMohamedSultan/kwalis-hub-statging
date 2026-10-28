@@ -1328,13 +1328,15 @@ function RecordPayrollPaymentModal({ row, onClose }: { row: PayrollRow; onClose:
     if (amount <= 0) return toast.error(t("crewpayrolltab.amount_must_be_greater_than_zero"));
     if (exceeds) return toast.error(`Amount exceeds remaining balance (${formatUSD(remaining)}).`);
     if (!proofFile) return toast.error(t("crewpayrolltab.proof_of_payment_is_required"));
+    // files always go under the project folder (project-scoped storage policies)
+    if (!activeProjectId) return toast.error(t("decisions.files.needsProject"));
     setSubmitting(true);
     try {
       // Upload proof to contracts bucket
       assertUploadAllowed(proofFile);
       const ext = proofFile.name.split(".").pop() || "pdf";
       // X06: under the project folder so project-scoped storage policies apply.
-      const path = `${activeProjectId ? `${activeProjectId}/` : ""}payroll/${row.id}/${crypto.randomUUID()}.${ext}`;
+      const path = `${activeProjectId}/payroll/${row.id}/${crypto.randomUUID()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from("contracts")
         .upload(path, proofFile, { upsert: false });

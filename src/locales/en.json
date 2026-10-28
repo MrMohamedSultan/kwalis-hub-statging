@@ -5359,7 +5359,8 @@
       "filter": "Filter by approval status",
       "allStatuses": "All approval statuses",
       "reason": "Reason",
-      "makerChecker": "You recorded this invoice — another user must approve or reject it"
+      "makerChecker": "You recorded this invoice — another user must approve or reject it",
+      "makerCheckerEditor": "You changed this invoice last — another user must approve or reject it"
     },
     "invoice": {
       "approved": "Invoice approved — it now counts as Actual",
@@ -5369,7 +5370,11 @@
       "cancelTitle": "Cancel approved invoice",
       "cancelHint": "An approved invoice is not deleted: it is cancelled with a reason, and its ledger entry is reversed. Not possible while it has payments or an open payment request.",
       "deleteApproved": "An approved invoice cannot be deleted — cancel it instead.",
-      "payNeedsApproval": "The invoice must be approved before it can be paid"
+      "payNeedsApproval": "The invoice must be approved before it can be paid",
+      "paidNotApproved_one": "{{count}} payment is on an invoice that is not approved — it is included here; ask the accountant to approve the invoice.",
+      "paidNotApproved_other": "{{count}} payments are on invoices that are not approved — they are included here; ask the accountant to approve the invoices.",
+      "notApprovedBadge": "invoice not approved",
+      "notApprovedBadgeHint": "Payment recorded on an invoice that is not approved (import / server). Approve the invoice."
     },
     "receipt": {
       "status": {
@@ -5381,7 +5386,8 @@
       "cancelTitle": "Cancel approved receipt",
       "cancelHint": "An approved receipt is locked and not deleted: it is cancelled with a reason and leaves Actual.",
       "cancelled": "Receipt cancelled — the cancellation is recorded",
-      "deleteApproved": "An approved receipt cannot be deleted — cancel it instead."
+      "deleteApproved": "An approved receipt cannot be deleted — cancel it instead.",
+      "makerChecker": "You logged or last changed this receipt — another user must approve or reject it"
     },
     "wht7099": {
       "badge": "WHT on 7099",
@@ -5457,14 +5463,26 @@
         "move": "To move",
         "repoint": "To repoint",
         "repointed": "Repointed",
-        "conflict": "Used by several projects",
+        "conflict": "Needs a manual check",
         "orphan": "Not used by any record"
       },
       "policy": {
         "switched": "project-scoped",
         "skipped": "unchanged (files remain)",
-        "no storage schema": "no storage"
-      }
+        "no storage schema": "no storage",
+        "not present": "project-scoped (the organization-wide policy was already gone)"
+      },
+      "noteCol": "Why",
+      "note": {
+        "unreferenced": "No record uses this file",
+        "no_project": "Also used by a record without a project",
+        "several_projects": "Used by records of different projects",
+        "other_project_record": "The file path names a record of another project",
+        "uploader_outside_org": "Not uploaded by a member of the organization that uses it"
+      },
+      "stranded": "Moved, but the records still point at the old path (the move could not be undone) — run the dry run again or fix these by hand:",
+      "batch": "Each run moves up to {{n}} files — run again until nothing is left to move.",
+      "needsProject": "Select a project first — files are saved in the project's folder"
     }
   },
   "leftovers": {
