@@ -18,6 +18,7 @@ import { formatDate } from "@/lib/date-format";
 import type ExcelJS from "exceljs";
 import { loadExcelJs } from "@/lib/lazy-export-libs";
 import { downloadBlob } from "@/lib/download";
+import { cleanText, parseImportNumber } from "@/lib/budget-import-clean";
 
 // ─────────────────────────────────────────────────────────────────
 // TYPES
@@ -134,7 +135,8 @@ const HEADER_LABELS = [
  *
  * Returns { code, name } or null.
  */
-function parseCategoryHeader(cellA: unknown): { code: string; name: string } | null {
+function parseCategoryHeader(rawA: unknown): { code: string; name: string } | null {
+  const cellA = cellPlainValue(rawA);
   if (typeof cellA !== "string" || !cellA.trim()) return null;
   const s = cellA.trim();
 
@@ -177,17 +179,51 @@ function isColumnHeaderRow(cellA: unknown, cellB: unknown): boolean {
   );
 }
 
+/**
+ * D01: ExcelJS returns objects for formulas ({ formula, result }), rich text
+ * ({ richText: [...] }), hyperlinks ({ text }) and shared formulas — read the
+ * value the user sees, not "[object Object]" / 0.
+ */
+export function cellPlainValue(v: unknown): unknown {
+  if (v === null || v === undefined) return v;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    if ("result" in o) return cellPlainValue(o.result);
+    if (Array.isArray(o.richText))
+      return (o.richText as { text?: string }[]).map((t) => t.text ?? "").join("");
+    if ("text" in o) return cellPlainValue(o.text);
+    if ("error" in o) return "";
+    return "";
+  }
+  return v;
+}
+
 /** Safe number extraction from a cell value */
 function toNum(v: unknown): number {
-  if (v === null || v === undefined || v === "") return 0;
-  const n = Number(v);
-  return isNaN(n) ? 0 : n;
+  const plain = cellPlainValue(v);
+  if (plain === null || plain === undefined || plain === "") return 0;
+  return parseImportNumber(plain) ?? 0;
 }
 
 /** Safe string extraction from a cell value */
 function toStr(v: unknown): string {
-  if (v === null || v === undefined) return "";
-  return String(v).trim();
+  const plain = cellPlainValue(v);
+  if (plain === null || plain === undefined) return "";
+  return cleanText(plain);
+}
+
+/** D01: "1- ATL", "1-ATL ", "ATL" … all find the ATL sheet. */
+const sheetKey = (n: string) => n.toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g, "");
+function findSheet(workbook: ExcelJS.Workbook, canonical: string): ExcelJS.Worksheet | undefined {
+  const exact = workbook.getWorksheet(canonical);
+  if (exact) return exact;
+  const want = sheetKey(canonical);
+  const wantWord = want.replace(/^\d+/, "");
+  return workbook.worksheets.find((ws) => {
+    const k = sheetKey(ws.name);
+    return k === want || k === wantWord || k.replace(/^\d+/, "") === wantWord;
+  });
 }
 
 /** Generate a deterministic ID for a line */
@@ -210,15 +246,15 @@ export async function parseBudgetExcel(file: File): Promise<BudgetLine[]> {
 
   // Process each data sheet (skip "Top Sheet")
   for (const [sheetName, group] of Object.entries(SHEET_TO_GROUP)) {
-    const worksheet = workbook.getWorksheet(sheetName);
+    const worksheet = findSheet(workbook, sheetName);
     if (!worksheet) continue;
 
     let currentHeader: { code: string; name: string } | null = null;
     let headerRowPassed = false;
 
     worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-      const cellA = row.getCell(COL.CODE).value;
-      const cellB = row.getCell(COL.ITEM).value;
+      const cellA = cellPlainValue(row.getCell(COL.CODE).value);
+      const cellB = cellPlainValue(row.getCell(COL.ITEM).value);
 
       // ── Skip: sheet title (row 1) and blank row (row 2) ──
       if (rowNumber <= 2) return;

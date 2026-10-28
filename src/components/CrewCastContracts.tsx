@@ -31,6 +31,10 @@ import {
 import { useCurrencyStore } from "@/stores/useCurrencyStore";
 import { storageAudited } from "@/lib/storage-audit";
 import { BankPicker, validateBankPicker } from "@/components/BankPicker";
+import { PersonPicker } from "@/components/people/PersonPicker";
+import { PeopleProfilesPanel } from "@/components/people/PeopleProfilesPanel";
+import { usePersons, profileToContractPatch } from "@/lib/persons";
+import { findSimilarPersons } from "@/lib/person-match";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
 import { TablePagination, usePagedRows } from "@/components/TablePagination";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
@@ -420,6 +424,7 @@ export function PeoplePage({
   const [modReason, setModReason] = useState<"Overtime" | "Contract Addendum">("Overtime");
   const [modDescription, setModDescription] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showProfiles, setShowProfiles] = useState(false);
 
   // Drop selections that no longer exist in the list
   useEffect(() => {
@@ -614,6 +619,13 @@ export function PeoplePage({
         action={
           <div className="flex items-center gap-2">
             <button
+              type="button"
+              onClick={() => setShowProfiles(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border bg-surface hover:bg-muted text-sm font-medium"
+            >
+              {t("people.profiles_button")}
+            </button>
+            <button
               onClick={openNew}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand text-brand-foreground font-semibold"
             >
@@ -624,6 +636,13 @@ export function PeoplePage({
         }
       />
 
+      {showProfiles && (
+        <PeopleProfilesPanel
+          organizationId={activeProject?.organizationId ?? null}
+          contracts={people}
+          onClose={() => setShowProfiles(false)}
+        />
+      )}
       <LockGuard scopeLabel={`${title}`}>
         <Panel>
           {selected.size > 0 && (
@@ -1490,6 +1509,17 @@ function ContractForm({
 
   const isEdit = !!initial && !isDuplicate;
   const baseCurrency = useBaseCurrency();
+  // E01: the person is picked from the organization's profiles.
+  const personsOrgId = useStore(
+    (s) => s.projects.find((p) => p.id === s.activeProjectId)?.organizationId ?? null,
+  );
+  const { persons, available: personsAvailable } = usePersons(personsOrgId);
+  const personContractCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of peopleForAttachmentChecks)
+      if (p.personId) m.set(p.personId, (m.get(p.personId) ?? 0) + 1);
+    return m;
+  }, [peopleForAttachmentChecks]);
   const [f, setF] = useState<Person>(() =>
     initial
       ? {
@@ -2179,7 +2209,7 @@ function ContractForm({
     }
     // Aggregate every required-field error so all invalid fields highlight at once.
     const nextErrors: Record<string, string> = {};
-    if (!f.fullName?.trim()) nextErrors.fullName = "Full Name is required.";
+    if (!f.fullName?.trim()) nextErrors.fullName = t("people.errors.name_required");
     if (kind === "crew" && !f.position?.trim())
       nextErrors.position =
         positionChoice === POSITION_OTHER
@@ -2293,6 +2323,22 @@ function ContractForm({
       toast.error(t("crewcastcontracts.validation_error_contract_attachment_must_be_a_pdf"));
       return;
     }
+    // E01: a new profile whose name looks like an existing one → ask first.
+    if (personsAvailable && !f.personId) {
+      const lookAlikes = findSimilarPersons(
+        { fullName: f.fullName, idNumber: f.idNumber },
+        persons,
+      ).filter((m) => m.reason === "similar_name");
+      if (
+        lookAlikes.length > 0 &&
+        !window.confirm(
+          t("people.confirm_new_profile", {
+            names: lookAlikes.map((m) => m.person.fullName).join(", "),
+          }),
+        )
+      )
+        return;
+    }
     setUploading(true);
     let attachmentPath: string | null = null;
     let idAttachmentPath: string | null = null;
@@ -2380,6 +2426,32 @@ function ContractForm({
     <>
       <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-3">
         {fields.map(([k, label, type]) => {
+          if (k === "fullName") {
+            return (
+              <PersonPicker
+                key="person-picker"
+                persons={persons}
+                available={personsAvailable}
+                personId={f.personId}
+                fullName={f.fullName ?? ""}
+                idNumber={f.idNumber ?? ""}
+                contractCounts={personContractCounts}
+                error={errors.fullName}
+                required
+                onTypeName={(name) => {
+                  setF((prev) => ({ ...prev, fullName: name }));
+                  clearErr("fullName");
+                }}
+                onPick={(profile) => {
+                  setF((prev) => ({ ...prev, ...profileToContractPatch(profile, prev) }));
+                  clearErr("fullName");
+                  clearErr("idNumber");
+                  clearErr("nationality");
+                }}
+                onUnlink={() => setF((prev) => ({ ...prev, personId: null }))}
+              />
+            );
+          }
           const requiredFields: (keyof Person)[] = [
             "fullName",
             "position",
