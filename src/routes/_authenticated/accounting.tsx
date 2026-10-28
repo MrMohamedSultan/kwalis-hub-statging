@@ -2001,7 +2001,9 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
       department: f.department,
       budgetCode: f.budgetCode,
       beneficiaryNationality: beneficiary?.nationality ?? null,
+      beneficiaryMotherSaudi: beneficiary?.motherSaudi ?? null,
       vendorNationality: vendor?.companyNationality ?? null,
+      vendorCrNo: vendor?.crNo ?? null,
       isNonSaudiVendor: !!f.isNonSaudiVendor,
     });
     if (!!f.rebateEligible !== auto) setF((prev) => ({ ...prev, rebateEligible: auto }));
@@ -2028,7 +2030,9 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
       department: f.department,
       budgetCode: f.budgetCode,
       beneficiaryNationality: beneficiary?.nationality ?? null,
+      beneficiaryMotherSaudi: beneficiary?.motherSaudi ?? null,
       vendorNationality: vendor?.companyNationality ?? null,
+      vendorCrNo: vendor?.crNo ?? null,
       isNonSaudiVendor: !!f.isNonSaudiVendor,
     });
   }, [
@@ -2207,7 +2211,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
           entity: `invoice:${id}`,
           organization_id: activeProject?.organizationId ?? null,
           project_id: activeProjectId ?? null,
-          summary: `Manual QFE override on invoice #${f.invoiceNo} — auto="${qfeExplain.value ? "Yes" : "No"}" (Rule ${qfeExplain.rule}), manual="${f.rebateEligible ? "Yes" : "No"}"`,
+          summary: `Manual QPE override on invoice #${f.invoiceNo} — auto="${qfeExplain.value ? "Yes" : "No"}" (Rule ${qfeExplain.rule}), manual="${f.rebateEligible ? "Yes" : "No"}"`,
           details: {
             invoice_id: id,
             invoice_no: f.invoiceNo,
@@ -2270,7 +2274,9 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
       department: i.department,
       budgetCode: i.budgetCode,
       beneficiaryNationality: beneficiary?.nationality ?? null,
+      beneficiaryMotherSaudi: beneficiary?.motherSaudi ?? null,
       vendorNationality: vendor?.companyNationality ?? null,
+      vendorCrNo: vendor?.crNo ?? null,
       isNonSaudiVendor: !!i.isNonSaudiVendor,
     });
     return { rule: ex.rule, reason: ex.reason };
@@ -2536,7 +2542,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 description={
                   invoices.length === 0
                     ? "Invoices you create for this project will appear here."
-                    : "No invoices match the selected QFE rule filter. Try switching back to All rules."
+                    : "No invoices match the selected QPE rule filter. Try switching back to All rules."
                 }
                 action={
                   invoices.length > 0 ? (
@@ -2649,7 +2655,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
             <Field
               label={
                 <span className="flex items-center gap-1.5">
-                  Rebate Eligible (QFE)
+                  Rebate Eligible (QPE)
                   {f.rebateManualOverride && (
                     <span className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning">
                       <Lock className="size-3" />
@@ -2693,7 +2699,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 <span className="leading-snug">
                   {f.rebateManualOverride
                     ? `Auto would be “${qfeExplain.value ? "Yes" : "No"}” — ${qfeExplain.reason}`
-                    : `Why this QFE? ${qfeExplain.reason}`}
+                    : `Why this QPE? ${qfeExplain.reason}`}
                 </span>
               </div>
             </Field>
