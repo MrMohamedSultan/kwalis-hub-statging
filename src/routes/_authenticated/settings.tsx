@@ -26,6 +26,8 @@ import { InvitationsPage } from "@/routes/_authenticated/invitations";
 import { Globe2 } from "lucide-react";
 import { OrganizationCurrencyPanel, ProjectCurrencyPanel } from "@/components/CurrencyFxSettings";
 import { ExportBrandingPanel } from "@/components/settings/ExportBrandingPanel";
+import { FilmCommissionSettingsPanel } from "@/components/settings/FilmCommissionSettingsPanel";
+import { ShootSchedulePanel } from "@/components/settings/ShootSchedulePanel";
 import { Button } from "@/components/ui/button";
 import { z } from "zod";
 
@@ -167,6 +169,8 @@ function SettingsPage() {
             (canProject ? (
               <>
                 <ProjectSettingsPanel />
+                <FilmCommissionSettingsPanel />
+                <ShootSchedulePanel />
                 <ProjectTeamPanel />
               </>
             ) : (

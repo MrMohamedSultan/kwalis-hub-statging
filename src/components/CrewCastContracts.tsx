@@ -2212,6 +2212,8 @@ function ContractForm({
       nextErrors.endDate = "End Date must be on or after Start Date.";
     }
     Object.assign(nextErrors, validateContact(f.phoneNumber, f.email));
+    // R19: the Film Commission needs an explicit related-party answer (yes / no).
+    if (f.relatedParty == null) nextErrors.relatedParty = t("rebate.related_party_required");
     // B25: every instalment needs a due date.
     if (schedule.some((r) => !r.dueDate))
       nextErrors.schedule = t("contracts.errors.due_date_required");
@@ -2327,7 +2329,7 @@ function ContractForm({
       position: kind === "cast" ? f.position || "" : (f.position ?? "").trim(),
       // Only a non-Saudi can have a Saudi mother; the flag is meaningless otherwise.
       motherSaudi: f.nationality === SAUDI_ARABIA ? null : (f.motherSaudi ?? false),
-      relatedParty: f.relatedParty ?? false,
+      relatedParty: f.relatedParty ?? null,
       taxResidency,
       whtTreatment,
       whtServiceType: whtApplies ? (f.whtServiceType ?? "default") : null,
@@ -3006,13 +3008,34 @@ function ContractForm({
             </label>
           )}
           <label className="inline-flex items-center gap-2">
+            <span>{t("contracts.related_party")}</span>
+            <select
+              value={f.relatedParty == null ? "" : f.relatedParty ? "yes" : "no"}
+              onChange={(e) => {
+                clearErr("relatedParty");
+                setF({
+                  ...f,
+                  relatedParty: e.target.value === "" ? null : e.target.value === "yes",
+                });
+              }}
+              className="bg-surface-2 border border-border rounded-lg px-2 py-1 outline-none focus:ring-2 ring-brand"
+            >
+              <option value="">{t("rebate.choose")}</option>
+              <option value="yes">{t("rebate.yes")}</option>
+              <option value="no">{t("rebate.no")}</option>
+            </select>
+            {errors.relatedParty && (
+              <span className="text-[11px] text-destructive">{errors.relatedParty}</span>
+            )}
+          </label>
+          <label className="inline-flex items-center gap-2">
             <input
               type="checkbox"
-              checked={!!f.relatedParty}
-              onChange={(e) => setF({ ...f, relatedParty: e.target.checked })}
+              checked={!!f.isTrainee}
+              onChange={(e) => setF({ ...f, isTrainee: e.target.checked })}
               className="size-4 accent-[var(--brand)]"
             />
-            <span>{t("contracts.related_party")}</span>
+            <span>{t("rebate.trainee")}</span>
           </label>
         </div>
 

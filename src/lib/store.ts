@@ -321,6 +321,8 @@ export type Person = {
   idType?: "national_id" | "iqama" | "passport" | null;
   motherSaudi?: boolean | null;
   relatedParty?: boolean | null;
+  /** Saudi trainee — Film Commission headcount (db/pending/197). */
+  isTrainee?: boolean | null;
 };
 
 export type DealType = "weekly" | "daily" | "package";
@@ -865,6 +867,7 @@ const fromPersonRow = (r: any): Person => ({
   idType: r.id_type,
   motherSaudi: r.mother_saudi,
   relatedParty: r.related_party,
+  isTrainee: r.is_trainee,
 });
 /** Only send optional columns the record actually carries (see fromPersonRow). */
 const definedOnly = (o: Record<string, unknown>) =>
@@ -921,6 +924,7 @@ const toPersonRow = (p: Person) => ({
     id_type: p.idType,
     mother_saudi: p.motherSaudi,
     related_party: p.relatedParty,
+    is_trainee: p.isTrainee,
   }),
   project_id: p.projectId ?? activePid(),
   organization_id: p.organizationId ?? activeOrgId(),
