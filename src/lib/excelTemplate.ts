@@ -28,6 +28,7 @@ import type { BudgetLine } from "./store";
 import type { ImportResult } from "./excelImport";
 import { HEADER_ACCOUNTS, MAIN_ACCOUNTS, MACRO_CATEGORY_BY_HEADER } from "./data";
 import { getBudgetCatalog, type BudgetCatalogEntry } from "./master-budget-catalog";
+import { parseImportNumber } from "./budget-import-clean";
 
 export const TEMPLATE_VERSION = "4.1-clean-multisheet";
 
@@ -173,6 +174,33 @@ const HEADER_TO_CANON: Record<string, CanonicalCol> = {
   SECTION: "SECTION",
   GROUP: "SECTION",
   CATEGORY: "SECTION",
+  // D01: Arabic budgets
+  الكود: "CODE",
+  كود: "CODE",
+  الرمز: "CODE",
+  "رمز الحساب": "CODE",
+  "رقم الحساب": "CODE",
+  البند: "ITEM",
+  الحساب: "ITEM",
+  الوصف: "NAME",
+  البيان: "NAME",
+  الاسم: "NAME",
+  التفاصيل: "NAME",
+  الوحدة: "UNIT",
+  الكمية: "QUANTITY",
+  العدد: "QUANTITY",
+  السعر: "RATE",
+  "سعر الوحدة": "RATE",
+  الإجمالي: "TOTAL",
+  الاجمالي: "TOTAL",
+  المجموع: "TOTAL",
+  المبلغ: "TOTAL",
+  العملة: "CURRENCY",
+  ملاحظات: "NOTES",
+  الملاحظات: "NOTES",
+  التحضير: "PREP",
+  التصوير: "SHOOTING",
+  القسم: "SECTION",
 };
 
 function normalizeSection(raw: string): BudgetLine["group"] | null {
@@ -209,6 +237,9 @@ function coerceNumber(raw: unknown): number {
 // cell contains non-empty text that cannot be interpreted as a number.
 function coerceNumberStrict(raw: unknown): { value: number; invalid: boolean; sample?: string } {
   if (raw === "" || raw == null) return { value: 0, invalid: false };
+  // D01: thousands separators, currency symbols, Arabic-Indic digits
+  const parsed = parseImportNumber(raw);
+  if (parsed != null) return { value: parsed, invalid: false };
   if (typeof raw === "number") {
     return Number.isFinite(raw)
       ? { value: raw, invalid: false }
@@ -230,6 +261,25 @@ function coerceNumberStrict(raw: unknown): { value: number; invalid: boolean; sa
   return { value: negParen ? -Math.abs(n) : n, invalid: false };
 }
 
+/**
+ * D01: a code / item merged over several rows only has a value in its first
+ * cell; copy it down the first column of the merge so every row keeps it.
+ * Horizontal merges (titles across columns) are left alone.
+ */
+function fillMergedDown(XLSX: Awaited<ReturnType<typeof loadXlsx>>, ws: XLSXTypes.WorkSheet) {
+  const merges = (ws["!merges"] ?? []) as XLSXTypes.Range[];
+  for (const m of merges) {
+    if (m.e.r <= m.s.r) continue;
+    const master = ws[XLSX.utils.encode_cell({ r: m.s.r, c: m.s.c })];
+    if (!master) continue;
+    for (let r = m.s.r + 1; r <= m.e.r; r++) {
+      const addr = XLSX.utils.encode_cell({ r, c: m.s.c });
+      const cur = ws[addr];
+      if (!cur || cur.v == null || cur.v === "") ws[addr] = { ...master };
+    }
+  }
+}
+
 function readSheetRows(
   XLSX: Awaited<ReturnType<typeof loadXlsx>>,
   wb: XLSXTypes.WorkBook,
@@ -237,6 +287,7 @@ function readSheetRows(
 ): unknown[][] | null {
   const ws = wb.Sheets[name];
   if (!ws) return null;
+  fillMergedDown(XLSX, ws);
   return XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "", blankrows: false });
 }
 
@@ -306,7 +357,8 @@ export async function parseKwalisTemplatePreview(
     let headerIdx = -1;
     let map: Partial<Record<CanonicalCol, number>> = {};
     let cells: string[] = [];
-    for (const tryIdx of [1, 0, 2]) {
+    // D01: real budgets often carry a title block — look further down too.
+    for (const tryIdx of [1, 0, 2, ...Array.from({ length: 17 }, (_, i) => i + 3)]) {
       if (tryIdx >= rows.length) continue;
       const parsed = mapHeader(rows[tryIdx] ?? []);
       if (looksLikeBudgetHeader(parsed.map)) {

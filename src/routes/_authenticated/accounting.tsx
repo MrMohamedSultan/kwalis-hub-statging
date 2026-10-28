@@ -119,6 +119,12 @@ import {
   poOpenCommitment,
 } from "@/lib/budget-position";
 import { CurrencyFxFields, useProjectFx } from "@/components/ap/CurrencyFxFields";
+import {
+  VendorTaxFields,
+  VendorInheritedSummary,
+  invoicePatchFromVendor,
+} from "@/components/ap/VendorProfileFields";
+import { useHasColumn } from "@/lib/persons";
 
 function attachmentRecordsForProject(
   people: Array<{
@@ -627,6 +633,12 @@ function NewVendorForm({ initial, onDone }: { initial?: Vendor | null; onDone: (
   );
 
   const isEdit = !!initial;
+  // E05: tax residency / related party once db/pending/190 is applied.
+  const vendorTaxColumns = useHasColumn("vendors", "tax_residency");
+  useEffect(() => {
+    if (vendorTaxColumns && f.taxResidency === undefined)
+      setF((prev) => ({ ...prev, taxResidency: null, relatedParty: !!prev.relatedParty }));
+  }, [vendorTaxColumns]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ensure category defaults to something valid when the dynamic list resolves.
   useEffect(() => {
@@ -839,6 +851,11 @@ function NewVendorForm({ initial, onDone }: { initial?: Vendor | null; onDone: (
               placeholder={t("accounting.select_country")}
             />
           </Field>
+          <VendorTaxFields
+            vendor={f}
+            onChange={(patch) => setF((prev) => ({ ...prev, ...patch }))}
+            inputCls={inputCls}
+          />
           <BankPicker
             bankCountry={f.bankCountry ?? ""}
             bankName={f.bankName ?? ""}
@@ -1953,6 +1970,38 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [f.price, vatTreatment, vatRate]);
 
+  // E05: a new invoice inherits the vendor profile (CR, VAT, country, tax
+  // residency → WHT, bank, related party).
+  const invoice190 = useHasColumn("invoices", "vendor_id");
+  useEffect(() => {
+    const patch: Partial<Invoice> = invoicePatchFromVendor(selectedVendor);
+    if (!invoice190) {
+      // db/pending/190 not applied: keep only the flags the invoice already has
+      for (const k of [
+        "vendorId",
+        "vendorCrNo",
+        "vendorVatNo",
+        "vendorCountry",
+        "vendorTaxResidency",
+        "vendorBankCountry",
+        "vendorBankName",
+      ] as const)
+        delete patch[k];
+    }
+    setF((prev) => {
+      const next = { ...prev, ...patch } as Invoice;
+      // a vatable KSA supply is never an international WHT vendor (existing rule)
+      if (prev.vatable) next.isNonSaudiVendor = false;
+      if (!selectedVendor) {
+        next.isNonSaudiVendor = prev.isNonSaudiVendor;
+        next.isRelatedParty = prev.isRelatedParty;
+        next.relatedPartyNote = prev.relatedPartyNote;
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f.vendorName, vendors, invoice190]);
+
   // B15: vendor payment terms → due date (invoice date + terms).
   useEffect(() => {
     const terms = selectedVendor?.paymentTerms || null;
@@ -2001,7 +2050,9 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
       department: f.department,
       budgetCode: f.budgetCode,
       beneficiaryNationality: beneficiary?.nationality ?? null,
+      beneficiaryMotherSaudi: beneficiary?.motherSaudi ?? null,
       vendorNationality: vendor?.companyNationality ?? null,
+      vendorCrNo: vendor?.crNo ?? null,
       isNonSaudiVendor: !!f.isNonSaudiVendor,
     });
     if (!!f.rebateEligible !== auto) setF((prev) => ({ ...prev, rebateEligible: auto }));
@@ -2028,7 +2079,9 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
       department: f.department,
       budgetCode: f.budgetCode,
       beneficiaryNationality: beneficiary?.nationality ?? null,
+      beneficiaryMotherSaudi: beneficiary?.motherSaudi ?? null,
       vendorNationality: vendor?.companyNationality ?? null,
+      vendorCrNo: vendor?.crNo ?? null,
       isNonSaudiVendor: !!f.isNonSaudiVendor,
     });
   }, [
@@ -2181,6 +2234,12 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
         vatRate: vatTreatment === "standard" ? vatRate : null,
         currency: f.currency || fx.baseCurrency,
         fxRate: fxUsed,
+        ...(invoice190
+          ? {
+              fxRateSource: isBaseCcy ? null : (f.fxRateSource ?? "manual"),
+              fxRateDate: isBaseCcy ? null : (f.fxRateDate ?? null),
+            }
+          : {}),
         amountOriginal: Number(f.price) || 0,
         purchaserId: f.purchaserId || null,
         projectId: activeProjectId,
@@ -2207,7 +2266,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
           entity: `invoice:${id}`,
           organization_id: activeProject?.organizationId ?? null,
           project_id: activeProjectId ?? null,
-          summary: `Manual QFE override on invoice #${f.invoiceNo} — auto="${qfeExplain.value ? "Yes" : "No"}" (Rule ${qfeExplain.rule}), manual="${f.rebateEligible ? "Yes" : "No"}"`,
+          summary: `Manual QPE override on invoice #${f.invoiceNo} — auto="${qfeExplain.value ? "Yes" : "No"}" (Rule ${qfeExplain.rule}), manual="${f.rebateEligible ? "Yes" : "No"}"`,
           details: {
             invoice_id: id,
             invoice_no: f.invoiceNo,
@@ -2270,7 +2329,9 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
       department: i.department,
       budgetCode: i.budgetCode,
       beneficiaryNationality: beneficiary?.nationality ?? null,
+      beneficiaryMotherSaudi: beneficiary?.motherSaudi ?? null,
       vendorNationality: vendor?.companyNationality ?? null,
+      vendorCrNo: vendor?.crNo ?? null,
       isNonSaudiVendor: !!i.isNonSaudiVendor,
     });
     return { rule: ex.rule, reason: ex.reason };
@@ -2536,7 +2597,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 description={
                   invoices.length === 0
                     ? "Invoices you create for this project will appear here."
-                    : "No invoices match the selected QFE rule filter. Try switching back to All rules."
+                    : "No invoices match the selected QPE rule filter. Try switching back to All rules."
                 }
                 action={
                   invoices.length > 0 ? (
@@ -2586,6 +2647,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 ))}
               </select>
             </Field>
+            <VendorInheritedSummary vendor={selectedVendor} />
             <Field label="Date">
               <DateInput
                 value={f.date}
@@ -2649,7 +2711,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
             <Field
               label={
                 <span className="flex items-center gap-1.5">
-                  Rebate Eligible (QFE)
+                  Rebate Eligible (QPE)
                   {f.rebateManualOverride && (
                     <span className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning">
                       <Lock className="size-3" />
@@ -2693,7 +2755,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 <span className="leading-snug">
                   {f.rebateManualOverride
                     ? `Auto would be “${qfeExplain.value ? "Yes" : "No"}” — ${qfeExplain.reason}`
-                    : `Why this QFE? ${qfeExplain.reason}`}
+                    : `Why this QPE? ${qfeExplain.reason}`}
                 </span>
               </div>
             </Field>
@@ -2861,7 +2923,21 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                 currency={f.currency || fx.baseCurrency}
                 fxRate={Number(f.fxRate) || 1}
                 inputCls={inputCls}
-                onChange={(v) => setF({ ...f, currency: v.currency, fxRate: v.fxRate })}
+                // D03: the rate in force on the invoice date, with its source
+                projectId={invoice190 ? activeProjectId : null}
+                date={f.date}
+                rateSource={f.fxRateSource ?? null}
+                rateDate={f.fxRateDate ?? null}
+                onChange={(v) =>
+                  setF((prev) => ({
+                    ...prev,
+                    currency: v.currency,
+                    fxRate: v.fxRate,
+                    ...(invoice190 && v.fxRateSource !== undefined
+                      ? { fxRateSource: v.fxRateSource, fxRateDate: v.fxRateDate ?? null }
+                      : {}),
+                  }))
+                }
               />
               {!isBaseCcy && (
                 <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">

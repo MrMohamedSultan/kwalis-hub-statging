@@ -113,3 +113,56 @@ describe("cost report groupings (R06)", () => {
     expect(s.totals.actualPaid).toBe(7000);
   });
 });
+
+import {
+  categoryOfCode,
+  coaHeaderOf,
+  costReportChecks,
+  filterCostRows,
+  inClientCoa,
+  variancePct,
+  varianceTone,
+} from "@/lib/cost-report";
+
+describe("client chart of accounts (R09) and template checks", () => {
+  it("Music 6000 and VFX 6100 are their own categories", () => {
+    expect(categoryOfCode("6001", "Post")).toBe("Music");
+    expect(categoryOfCode("6101", "Post")).toBe("VFX");
+    expect(categoryOfCode("5101", null)).toBe("Post");
+    expect(categoryOfCode("4701", null)).toBe("BTL");
+    expect(categoryOfCode("7003", null)).toBe("Other");
+    // not in the CoA: falls back to the Top Sheet section
+    expect(categoryOfCode("1002", "ATL")).toBe("ATL");
+    expect(categoryOfCode(null, "Post")).toBe("Post");
+  });
+  it("header / detail codes", () => {
+    expect(coaHeaderOf("6101")).toBe("6100");
+    expect(inClientCoa("6101")).toBe(true);
+    expect(inClientCoa("6100")).toBe(false); // a header is never a detail code
+    expect(inClientCoa("1002")).toBe(false);
+    expect(inClientCoa("ZZ")).toBe(false);
+  });
+  it("Var% blank when Budget = 0; colours by meaning (R10)", () => {
+    expect(variancePct(-7000, 40000)).toBe(-17.5);
+    expect(variancePct(5, 0)).toBeNull();
+    expect([varianceTone(1), varianceTone(-1), varianceTone(0)]).toEqual([
+      "saving",
+      "overrun",
+      "neutral",
+    ]);
+  });
+  it("filters apply before grouping (R08): category, search, hide empty", () => {
+    expect(filterCostRows(rows, { category: "BTL" }).map((r) => r.budgetCode)).toEqual(["2101"]);
+    expect(filterCostRows(rows, { search: "writ" }).map((r) => r.budgetCode)).toEqual(["1101"]);
+    // the uncoded row holds only a payment: kept (money), budgeted zero lines kept too
+    expect(filterCostRows(rows, { hideEmpty: true })).toHaveLength(4);
+  });
+  it("check rows of the template", () => {
+    const c = Object.fromEntries(costReportChecks(rows).map((x) => [x.key, x]));
+    expect(c.gl_total.value).toBe(7000);
+    expect(c.unmapped_spend).toMatchObject({ value: 0, ok: true });
+    // 1002 has budget but is not a detail code of the client CoA
+    expect(c.budget_not_in_coa).toMatchObject({ value: 1, ok: false });
+    expect(c.codes_not_in_coa).toMatchObject({ value: 0, ok: true });
+  });
+});

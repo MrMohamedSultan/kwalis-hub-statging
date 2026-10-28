@@ -1,12 +1,14 @@
 // Per-project Funding Ledger — cash inflows (investor tranches, capital, grants, etc.).
 // Plus the tax cash movements (VAT paid / VAT recovered / WHT remitted).
 //
-// A09 (db/pending/180): both live in the database — public.project_funding
-// and public.project_tax_payments — so reports, the cash position
-// (get_funding_position) and the ledger see them. They used to be kept in
-// this browser only; entries still found in localStorage are offered for
-// import (`legacy` / `importLegacy`). The bank reconciliation snapshot stays a
-// per-browser convenience.
+// A09: both live in the database — public.project_funding and
+// public.treasury_movements (the one table for VAT paid / recovered, WHT
+// remitted, bank charges and petty cash returns, db/pending/196; the 180
+// name project_tax_payments is a compatibility view over it) — so reports,
+// the cash position (get_funding_position = the ledger bank account) and the
+// ledger see them. They used to be kept in this browser only; entries still
+// found in localStorage are offered for import (`legacy` / `importLegacy`).
+// The bank reconciliation snapshot stays a per-browser convenience.
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -32,13 +34,26 @@ export type FundingEntry = {
   createdAt: string;
 };
 
-export type TaxPaymentKind = "vat_paid" | "vat_recovered" | "wht_remitted";
+/** Kinds of public.treasury_movements (db/pending/182 + 196). */
+export type TaxPaymentKind =
+  "vat_payment" | "vat_recovery" | "wht_remittance" | "bank_charge" | "petty_cash_return";
+/** Kinds recorded on the Funding screen (petty cash returns: Bank Reconciliation). */
+export const FUNDING_TREASURY_KINDS: TaxPaymentKind[] = [
+  "vat_payment",
+  "vat_recovery",
+  "wht_remittance",
+  "bank_charge",
+];
+/** Sign of a movement on the bank balance: money in (+1) or out (−1). */
+export const treasurySign = (k?: TaxPaymentKind) =>
+  k === "vat_recovery" || k === "petty_cash_return" ? 1 : -1;
 
 export type VatPaymentEntry = {
   id: string;
   kind?: TaxPaymentKind;
   date: string;
   amount: number;
+  budgetCode?: string;
   reference?: string;
   note?: string;
   createdAt: string;
@@ -120,23 +135,37 @@ function useProjectScope() {
   return { pid, orgId };
 }
 
-const fromFundingRow = (r: any): FundingEntry => ({
+export const fromFundingRow = (r: any): FundingEntry => ({
   id: r.id,
   date: r.funding_date,
   source: r.source ?? "",
   kind: (FUNDING_KINDS as string[]).includes(r.kind) ? r.kind : "Other",
   amount: Number(r.amount) || 0,
+  // B28 (db/pending/196): the currency the money came in, kept beside the SAR amount
+  currency: r.currency && r.currency !== "SAR" ? String(r.currency) : undefined,
+  originalAmount:
+    r.currency && r.currency !== "SAR" && r.original_amount != null
+      ? Number(r.original_amount)
+      : undefined,
+  fxRate: r.currency && r.currency !== "SAR" && r.fx_rate != null ? Number(r.fx_rate) : undefined,
   reference: r.reference ?? undefined,
   note: r.notes ?? undefined,
   createdAt: r.created_at,
 });
 
-const toFundingRow = (e: Partial<FundingEntry>) => {
+export const toFundingRow = (e: Partial<FundingEntry>) => {
   const out: Record<string, unknown> = {};
   if (e.date !== undefined) out.funding_date = e.date;
   if (e.source !== undefined) out.source = e.source.slice(0, 200);
   if (e.kind !== undefined) out.kind = e.kind;
   if (e.amount !== undefined) out.amount = Math.round(Number(e.amount) * 100) / 100;
+  if (e.currency !== undefined || e.amount !== undefined) {
+    const foreign = !!e.currency && e.currency !== "SAR";
+    out.currency = foreign ? e.currency : "SAR";
+    out.original_amount =
+      foreign && e.originalAmount != null ? Math.round(Number(e.originalAmount) * 100) / 100 : null;
+    out.fx_rate = foreign && e.fxRate != null ? Number(e.fxRate) : null;
+  }
   if (e.reference !== undefined) out.reference = e.reference ? e.reference.slice(0, 200) : null;
   if (e.note !== undefined) out.notes = e.note ? e.note.slice(0, 2000) : null;
   return out;
@@ -245,14 +274,15 @@ export function useFundingEntries() {
 const fromTaxRow = (r: any): VatPaymentEntry => ({
   id: r.id,
   kind: r.kind,
-  date: r.payment_date,
+  date: r.movement_date,
+  budgetCode: r.budget_code ?? undefined,
   amount: Number(r.amount) || 0,
   reference: r.reference ?? undefined,
   note: r.notes ?? undefined,
   createdAt: r.created_at,
 });
 
-/** Tax cash movements of the active project (public.project_tax_payments). */
+/** Bank movements without a document of the active project (public.treasury_movements). */
 export function useVatPayments() {
   const { pid, orgId } = useProjectScope();
   const [items, setItems] = useState<VatPaymentEntry[]>([]);
@@ -262,10 +292,10 @@ export function useVatPayments() {
     setLegacy(readList<VatPaymentEntry>(vkey(pid)));
     if (!pid) return setItems([]);
     const { data, error } = await db()
-      .from("project_tax_payments")
+      .from("treasury_movements")
       .select("*")
       .eq("project_id", pid)
-      .order("payment_date", { ascending: false });
+      .order("movement_date", { ascending: false });
     if (!error) setItems(((data ?? []) as any[]).map(fromTaxRow));
   }, [pid]);
 
@@ -281,9 +311,10 @@ export function useVatPayments() {
   const toRow = (e: Omit<VatPaymentEntry, "id" | "createdAt">) => ({
     project_id: pid,
     organization_id: orgId,
-    kind: e.kind ?? "vat_paid",
-    payment_date: e.date,
+    kind: e.kind ?? "vat_payment",
+    movement_date: e.date,
     amount: Math.round(Number(e.amount) * 100) / 100,
+    budget_code: e.kind === "bank_charge" && e.budgetCode ? e.budgetCode.slice(0, 64) : null,
     reference: e.reference ? e.reference.slice(0, 200) : null,
     notes: e.note ? e.note.slice(0, 2000) : null,
   });
@@ -291,7 +322,7 @@ export function useVatPayments() {
   const add = useCallback(
     async (e: Omit<VatPaymentEntry, "id" | "createdAt">) => {
       if (!pid || !orgId) return false;
-      const { error } = await db().from("project_tax_payments").insert(toRow(e));
+      const { error } = await db().from("treasury_movements").insert(toRow(e));
       changed();
       return fail(error);
     },
@@ -301,7 +332,7 @@ export function useVatPayments() {
   const remove = useCallback(
     async (id: string) => {
       const { error } = await db()
-        .from("project_tax_payments")
+        .from("treasury_movements")
         .delete()
         .eq("id", id)
         .eq("project_id", pid);
@@ -316,8 +347,8 @@ export function useVatPayments() {
     const rows = readList<VatPaymentEntry>(vkey(pid)).filter((e) => Number(e.amount) > 0 && e.date);
     if (rows.length) {
       const { error } = await db()
-        .from("project_tax_payments")
-        .insert(rows.map((e) => toRow({ ...e, kind: "vat_paid" })));
+        .from("treasury_movements")
+        .insert(rows.map((e) => toRow({ ...e, kind: "vat_payment" })));
       if (!fail(error)) return false;
     }
     window.localStorage.removeItem(vkey(pid));
@@ -335,6 +366,15 @@ export type FundingPosition = {
   vat_paid: number;
   vat_recovered: number;
   wht_remitted: number;
+  /** db/pending/196: the parts of the bank balance (= Trial Balance account 9100). */
+  paid_from_bank: number;
+  paid_not_from_bank: number;
+  petty_cash_issued: number;
+  petty_cash_returned: number;
+  bank_charges: number;
+  cash_on_hand: number;
+  petty_cash: number;
+  /** Balance of the bank account in the ledger. */
   cash_balance: number;
   upcoming: number;
   upcoming_invoices: number;
@@ -369,6 +409,13 @@ export function useFundingPosition() {
       vat_paid: n("vat_paid"),
       vat_recovered: n("vat_recovered"),
       wht_remitted: n("wht_remitted"),
+      paid_from_bank: n("paid_from_bank"),
+      paid_not_from_bank: n("paid_not_from_bank"),
+      petty_cash_issued: n("petty_cash_issued"),
+      petty_cash_returned: n("petty_cash_returned"),
+      bank_charges: n("bank_charges"),
+      cash_on_hand: n("cash_on_hand"),
+      petty_cash: n("petty_cash"),
       cash_balance: n("cash_balance"),
       upcoming: n("upcoming"),
       upcoming_invoices: n("upcoming_invoices"),
@@ -389,7 +436,15 @@ export function useFundingPosition() {
     window.addEventListener("funding-vat:changed", h);
     if (!pid) return;
     let ch = supabase.channel(`funding-position-${pid}`);
-    for (const table of ["payments", "invoices", "payroll", "project_funding"] as const) {
+    for (const table of [
+      "payments",
+      "invoices",
+      "payroll",
+      "project_funding",
+      "treasury_movements",
+      "cash_advances",
+      "cash_advance_receipts",
+    ] as const) {
       ch = ch.on(
         "postgres_changes" as any,
         { event: "*", schema: "public", table, filter: `project_id=eq.${pid}` },

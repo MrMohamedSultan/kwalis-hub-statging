@@ -10,6 +10,8 @@ import { useAuthRoles } from "@/lib/auth-roles";
 import { PermissionDeniedBanner } from "@/lib/permission-guard";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { CurrencyFxFields, useProjectFx } from "@/components/ap/CurrencyFxFields";
+import { useHasColumn } from "@/lib/persons";
+import type { FxRateSource } from "@/lib/fx-dated";
 import { toBaseAmount } from "@/lib/ap-calc";
 import { invoicedOnPo, poIsCommitment, poOpenCommitment } from "@/lib/budget-position";
 import { humanizeDbError } from "@/lib/db-errors";
@@ -356,6 +358,9 @@ function PurchaseOrdersPage() {
               budget_code: selected?.code ?? null,
               linked_budget_line_id: v.linked_budget_line_id || null,
               notes: v.notes,
+              ...(v.fx_rate_source !== undefined
+                ? { fx_rate_source: v.fx_rate_source, fx_rate_date: v.fx_rate_date ?? null }
+                : {}),
             };
             if (showForm !== "new" && showForm) {
               const { error } = await supabase
@@ -410,6 +415,8 @@ function POForm({
     status: string;
     linked_budget_line_id: string;
     notes: string;
+    fx_rate_source?: string | null;
+    fx_rate_date?: string | null;
   }) => void;
 }) {
   const { t } = useTranslation();
@@ -421,6 +428,17 @@ function POForm({
   const [desc, setDesc] = useState(initial?.description ?? "");
   const [currency, setCurrency] = useState(initial?.currency ?? fx.baseCurrency);
   const [fxRate, setFxRate] = useState<number>(Number(initial?.fx_rate ?? 1) || 1);
+  // D03 (db/pending/190): source and date of the rate
+  const po190 = useHasColumn("purchase_orders", "fx_rate_source");
+  const activeProjectId = useStore((s) => s.activeProjectId);
+  const poDate =
+    (initial as { date?: string | null } | null)?.date ?? new Date().toISOString().slice(0, 10);
+  const [fxSource, setFxSource] = useState<FxRateSource | null>(
+    (initial as { fx_rate_source?: FxRateSource | null } | null)?.fx_rate_source ?? null,
+  );
+  const [fxDate, setFxDate] = useState<string | null>(
+    (initial as { fx_rate_date?: string | null } | null)?.fx_rate_date ?? null,
+  );
   const [original, setOriginal] = useState<number>(
     initial ? Number(initial.amount_original ?? initial.amount) : 0,
   );
@@ -470,6 +488,12 @@ function POForm({
               status,
               linked_budget_line_id: lineId,
               notes,
+              ...(po190
+                ? {
+                    fx_rate_source: isBase ? null : (fxSource ?? "manual"),
+                    fx_rate_date: isBase ? null : fxDate,
+                  }
+                : {}),
             });
           }}
           className="space-y-3"
@@ -535,9 +559,17 @@ function POForm({
             currency={currency}
             fxRate={fxRate}
             inputCls={inputCls}
+            projectId={po190 ? activeProjectId : null}
+            date={poDate}
+            rateSource={fxSource}
+            rateDate={fxDate}
             onChange={(v) => {
               setCurrency(v.currency);
               setFxRate(v.fxRate);
+              if (v.fxRateSource !== undefined) {
+                setFxSource(v.fxRateSource ?? null);
+                setFxDate(v.fxRateDate ?? null);
+              }
             }}
           />
           <Field label={t("ap.amount_in", { ccy: currency })}>

@@ -148,9 +148,13 @@ export function useBankReconciliation(projectId: string | null, asOf: string) {
 
 // ------------------------------------------------------------- writes
 
-export type TreasuryKind = "wht_remittance" | "vat_recovery" | "petty_cash_return" | "bank_charge";
+// The one table for bank movements without a document (db/pending/196):
+// VAT paid / recovered, WHT remitted, petty cash returned, bank charges.
+export type TreasuryKind =
+  "wht_remittance" | "vat_recovery" | "vat_payment" | "petty_cash_return" | "bank_charge";
 export const TREASURY_KINDS: TreasuryKind[] = [
   "wht_remittance",
+  "vat_payment",
   "vat_recovery",
   "petty_cash_return",
   "bank_charge",
