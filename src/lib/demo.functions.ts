@@ -2,7 +2,17 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const DEMO_EMAIL = "demo@kwalishub.com";
-const DEMO_PASSWORD = "KwalisHUB2026!";
+
+/**
+ * The demo account password lives in the server environment
+ * (DEMO_ACCOUNT_PASSWORD, see .env.example) — never in the code. Read it only
+ * inside a handler; it is never logged, audited or returned to the browser.
+ */
+function demoPassword(): string {
+  const pw = (process.env.DEMO_ACCOUNT_PASSWORD ?? "").trim();
+  if (pw.length < 12) throw new Error("Demo mode is not configured on this server.");
+  return pw;
+}
 const DEMO_ORG_SLUG = "demo-kwalishub";
 
 async function findAuthUserByEmail(supabaseAdmin: any, email: string) {
@@ -17,11 +27,11 @@ async function findAuthUserByEmail(supabaseAdmin: any, email: string) {
   return null;
 }
 
-async function upsertDemoAuthUser(supabaseAdmin: any) {
+async function upsertDemoAuthUser(supabaseAdmin: any, password: string) {
   const existing = await findAuthUserByEmail(supabaseAdmin, DEMO_EMAIL);
   if (existing) {
     const { data, error } = await supabaseAdmin.auth.admin.updateUserById(existing.id, {
-      password: DEMO_PASSWORD,
+      password,
       email_confirm: true,
       ban_duration: "none",
       user_metadata: { display_name: "KwalisHUB Demo" },
@@ -32,27 +42,24 @@ async function upsertDemoAuthUser(supabaseAdmin: any) {
 
   const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
     email: DEMO_EMAIL,
-    password: DEMO_PASSWORD,
+    password,
     email_confirm: true,
     user_metadata: { display_name: "KwalisHUB Demo" },
   });
   if (createErr) {
     const refetched = await findAuthUserByEmail(supabaseAdmin, DEMO_EMAIL);
-    if (refetched) return upsertDemoAuthUser(supabaseAdmin);
+    if (refetched) return upsertDemoAuthUser(supabaseAdmin, password);
     throw createErr;
   }
   return created.user!.id;
 }
 
-async function verifyDemoPassword() {
+async function verifyDemoPassword(password: string) {
   const { createClient } = await import("@supabase/supabase-js");
   const probe = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
     auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
   });
-  const { error } = await probe.auth.signInWithPassword({
-    email: DEMO_EMAIL,
-    password: DEMO_PASSWORD,
-  });
+  const { error } = await probe.auth.signInWithPassword({ email: DEMO_EMAIL, password });
   await probe.auth.signOut();
   if (error) throw error;
 }
@@ -136,10 +143,11 @@ export const provisionDemoAccount = createServerFn({ method: "POST" })
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const password = demoPassword();
 
     try {
       // 1) Find/create/reset the auth user
-      const demoUserId = await upsertDemoAuthUser(supabaseAdmin);
+      const demoUserId = await upsertDemoAuthUser(supabaseAdmin, password);
 
       // 2) Seed org + project + demo data and isolate memberships
       const { orgId, projId } = await ensureDemoAccessRows(supabaseAdmin, demoUserId);
@@ -148,7 +156,7 @@ export const provisionDemoAccount = createServerFn({ method: "POST" })
       let signInOk = false;
       let signInError: string | null = null;
       try {
-        await verifyDemoPassword();
+        await verifyDemoPassword(password);
         signInOk = true;
       } catch (e) {
         signInError = e instanceof Error ? e.message : String(e);
@@ -180,7 +188,6 @@ export const provisionDemoAccount = createServerFn({ method: "POST" })
       return {
         ok: true,
         email: DEMO_EMAIL,
-        password: DEMO_PASSWORD,
         organizationId: orgId,
         projectId: projId,
         signInVerified: signInOk,
@@ -204,20 +211,26 @@ export const provisionDemoAccount = createServerFn({ method: "POST" })
  * It does not accept user input and can only create/reset the fixed demo account.
  */
 export const ensureDemoSignInReady = createServerFn({ method: "POST" }).handler(async () => {
+  let password: string;
+  try {
+    password = demoPassword();
+  } catch {
+    return { ok: false, email: DEMO_EMAIL, provisioned: false };
+  }
   // Cheap-fail: if the demo account already exists and its password verifies,
   // do no privileged work at all. This keeps the public endpoint from being
   // usable to trigger admin writes / audit spam by repeated calls.
   try {
-    await verifyDemoPassword();
+    await verifyDemoPassword(password);
     return { ok: true, email: DEMO_EMAIL, provisioned: false };
   } catch {
     // fall through to provisioning
   }
 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const demoUserId = await upsertDemoAuthUser(supabaseAdmin);
+  const demoUserId = await upsertDemoAuthUser(supabaseAdmin, password);
   const { orgId, projId } = await ensureDemoAccessRows(supabaseAdmin, demoUserId);
-  await verifyDemoPassword();
+  await verifyDemoPassword(password);
   await writeAudit(
     "demo.auto_auth_ready",
     `Demo account auto-provisioned from sign-in (${DEMO_EMAIL})`,
@@ -273,7 +286,7 @@ export const verifyDemoIsolation = createServerFn({ method: "POST" })
     });
     const { error: signInErr } = await asDemo.auth.signInWithPassword({
       email: DEMO_EMAIL,
-      password: DEMO_PASSWORD,
+      password: demoPassword(),
     });
     if (signInErr) throw new Error(`Demo sign-in failed: ${signInErr.message}`);
 
