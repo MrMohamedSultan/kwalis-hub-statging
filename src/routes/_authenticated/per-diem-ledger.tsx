@@ -6,7 +6,8 @@ import { DateInput } from "@/components/ui/date-input";
 import { createFileRoute } from "@tanstack/react-router";
 import { storageAudited } from "@/lib/storage-audit";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { parseOpenParam } from "@/lib/document-refs";
+import { parseOpenParam, refMatches, refNoOf } from "@/lib/document-refs";
+import { RefFilterInput, RefText } from "@/components/refs/RefListTools";
 import { useOpenRowFocus } from "@/lib/use-open-focus";
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
@@ -71,6 +72,8 @@ type Row = {
   cash_advance_id: string | null;
   receipt_path: string | null;
   notes: string | null;
+  /** G08: Kwalis reference (db/pending/184), saved rows only. */
+  ref_no?: string | null;
   dirty?: boolean;
 };
 
@@ -272,6 +275,7 @@ function PerDiemLedgerPage() {
           cash_advance_id: r.cash_advance_id ?? null,
           receipt_path: r.receipt_path ?? null,
           notes: r.notes ?? null,
+          ref_no: refNoOf(r),
         };
         (map[r.person_id] ||= []).push(row);
       });
@@ -381,10 +385,18 @@ function PerDiemLedgerPage() {
   };
 
   /** Any person without existing rows gets one draft on first render. */
+  const [refQuery, setRefQuery] = useState("");
   const displayRows = useMemo(() => {
     const out: { person: (typeof eligible)[number]; rows: Row[] }[] = [];
+    const q = refQuery.trim();
     for (const p of eligible) {
       const rs = rowsByPerson[p.id] ?? [];
+      if (q) {
+        // G08: only saved batches whose reference matches
+        const hit = rs.filter((r) => refMatches(r.ref_no, q));
+        if (hit.length) out.push({ person: p, rows: hit });
+        continue;
+      }
       out.push({ person: p, rows: rs.length ? rs : [buildDraft(p.id)] });
     }
     return out;
@@ -392,6 +404,7 @@ function PerDiemLedgerPage() {
   }, [
     eligible,
     rowsByPerson,
+    refQuery,
     defaultStart,
     defaultEnd,
     projectDefaultCcy,
@@ -971,6 +984,14 @@ function PerDiemLedgerPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
+            <div className="mb-3 flex justify-end">
+              <RefFilterInput value={refQuery} onChange={setRefQuery} />
+            </div>
+            {refQuery.trim() && displayRows.length === 0 && (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                {t("polish.refs.no_match")}
+              </div>
+            )}
             {selected.size > 0 && (
               <div className="mb-3 flex items-center justify-between gap-3 px-3 py-2 rounded-xl border border-success/30 bg-success/10">
                 <div className="text-sm">
@@ -1172,6 +1193,11 @@ function PersonBlock({
                   className="bg-surface-2 border border-border rounded px-1.5 py-1 text-xs disabled:opacity-60"
                 />
               </div>
+              {r.ref_no && (
+                <div className="mt-0.5">
+                  <RefText refNo={r.ref_no} />
+                </div>
+              )}
             </td>
             <td className="px-2 py-2 min-w-[220px]">
               <BudgetCodeSelector

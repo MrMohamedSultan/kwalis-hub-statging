@@ -72,3 +72,65 @@ describe("helpers", () => {
     expect(ilikeContains(" PO_1% ")).toBe("%PO\\_1\\%%");
   });
 });
+
+import { refMatches } from "@/lib/document-refs";
+import {
+  sourceOfDocumentType,
+  transactionForDocument,
+  transactionFromRegisterRow,
+} from "@/features/reports/ledger/ledger-drawer";
+
+describe("G08 reference filter on list pages", () => {
+  it("matches partial numbers, any case, dashes optional", () => {
+    expect(refMatches("MON26-PO-0012", "")).toBe(true);
+    expect(refMatches("MON26-PO-0012", "po-0012")).toBe(true);
+    expect(refMatches("MON26-PO-0012", "po0012")).toBe(true);
+    expect(refMatches("MON26-PO-0012", " 0012 ")).toBe(true);
+    expect(refMatches("MON26-PO-0012", "INV")).toBe(false);
+    expect(refMatches(null, "PO")).toBe(false);
+  });
+});
+
+describe("G09 drawer rows from other reports", () => {
+  const id = "51990000-0000-0000-0000-000000000001";
+  const ctx = { organizationId: "o", projectId: "p" };
+  it("a payments register row opens its payment", () => {
+    const r = transactionFromRegisterRow(
+      {
+        event_key: `payment:${id}`,
+        payment_date: "2026-10-01",
+        payment_ref: "MON26-PMT-0001",
+        payee: "Gulf Lights",
+        document_type: "invoice",
+        document_id: "51990000-0000-0000-0000-000000000002",
+        document_ref: "MON26-INV-0003",
+        budget_code: "2101",
+        gross: 1150,
+      },
+      ctx,
+    );
+    expect(r).toMatchObject({ id, source_type: "payment", entry_kind: "payment", amount: 1150 });
+    expect(r?.reference).toBe("MON26-PMT-0001");
+  });
+  it("falls back to the paid document when the event key is not a document", () => {
+    const r = transactionFromRegisterRow(
+      {
+        event_key: "bank_charge:x",
+        payment_date: null,
+        payment_ref: null,
+        payee: null,
+        document_type: "po",
+        document_id: id,
+        document_ref: "MON26-PO-0001",
+        budget_code: null,
+        gross: 10,
+      },
+      ctx,
+    );
+    expect(r?.source_type).toBe("purchase_order");
+  });
+  it("needs a real id", () => {
+    expect(transactionForDocument("invoice", "nope", {}, ctx)).toBeNull();
+    expect(sourceOfDocumentType("cash_advance_receipt")).toBe("petty_cash");
+  });
+});

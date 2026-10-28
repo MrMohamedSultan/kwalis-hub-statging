@@ -16,7 +16,8 @@ import type { FxRateSource } from "@/lib/fx-dated";
 import { toBaseAmount } from "@/lib/ap-calc";
 import { invoicedOnPo, poIsCommitment, poOpenCommitment } from "@/lib/budget-position";
 import { humanizeDbError } from "@/lib/db-errors";
-import { parseOpenParam } from "@/lib/document-refs";
+import { parseOpenParam, refMatches, refNoOf } from "@/lib/document-refs";
+import { RefFilterInput, RefText } from "@/components/refs/RefListTools";
 
 import { useTranslation } from "react-i18next";
 export const Route = createFileRoute("/_authenticated/purchase-orders")({
@@ -71,6 +72,12 @@ function PurchaseOrdersPage() {
 
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [pos, setPos] = useState<PO[]>([]);
+  // G08: filter by the Kwalis reference number
+  const [refQuery, setRefQuery] = useState("");
+  const shownPos = useMemo(
+    () => (refQuery.trim() ? pos.filter((p) => refMatches(refNoOf(p), refQuery)) : pos),
+    [pos, refQuery],
+  );
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState<PO | "new" | null>(null);
   const [me, setMe] = useState<string | null>(null);
@@ -212,18 +219,22 @@ function PurchaseOrdersPage() {
       <div className="rounded-2xl border border-border bg-surface/60 overflow-hidden">
         <div className="px-4 py-3 border-b border-border font-semibold flex items-center justify-between">
           <span>{t("ap.purchase_orders")}</span>
-          <button
-            onClick={reload}
-            className="text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
-          >
-            <RotateCcw className="size-3" />
-            {t("ap.refresh")}
-          </button>
+          <div className="flex items-center gap-3">
+            <RefFilterInput value={refQuery} onChange={setRefQuery} />
+            <button
+              onClick={reload}
+              className="text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+            >
+              <RotateCcw className="size-3" />
+              {t("ap.refresh")}
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-surface text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
+                <th className="text-start p-3">{t("polish.refs.ref_no")}</th>
                 <th className="text-start p-3">{t("ap.po_number")}</th>
                 <th className="text-start p-3">{t("ap.vendor")}</th>
                 <th className="text-start p-3">{t("ap.description")}</th>
@@ -237,18 +248,28 @@ function PurchaseOrdersPage() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={8} className="p-4 text-center text-muted-foreground">
+                  <td colSpan={9} className="p-4 text-center text-muted-foreground">
                     {t("common.loading")}
                   </td>
                 </tr>
               )}
+              {!loading && refQuery.trim() && shownPos.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="p-4 text-center text-muted-foreground">
+                    {t("polish.refs.no_match")}
+                  </td>
+                </tr>
+              )}
               {!loading &&
-                pos.map((p) => {
+                shownPos.map((p) => {
                   const line = budgetLines.find((l) => l.id === p.linked_budget_line_id);
                   const invoiced = invoicedOnPo(p.id, invoiceLinks);
                   const ownPo = !!me && p.created_by === me;
                   return (
                     <tr key={p.id} className="border-t border-border">
+                      <td className="p-3">
+                        <RefText refNo={refNoOf(p)} />
+                      </td>
                       <td className="p-3 font-mono text-xs">{p.po_number}</td>
                       <td className="p-3">{p.vendor_name}</td>
                       <td className="p-3">{p.description}</td>

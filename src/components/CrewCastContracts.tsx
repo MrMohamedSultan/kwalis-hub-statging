@@ -74,9 +74,12 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { formatDate } from "@/lib/date-format";
 import { usePermissions } from "@/lib/permissions/usePermissions";
 import { fetchCanAdminRebateSettings } from "@/lib/rebate-settings";
 import { buildCrewCastCsv } from "@/lib/crewcast-csv";
+import { RefFilterInput, useRefMap } from "@/components/refs/RefListTools";
+import { refMatches } from "@/lib/document-refs";
 import { useTranslation } from "react-i18next";
 import { checkInstalmentSchedule } from "@/lib/instalments";
 import { DateInput } from "@/components/ui/date-input";
@@ -432,7 +435,21 @@ export function PeoplePage({
   }, [activeProjectId]);
   const canExportSensitive =
     rebateAdmin || perms.canEdit(kind === "cast" ? "cast-contracts" : "crew-contracts");
-  const list = useMemo(() => people.filter((p) => p.kind === kind), [people, kind]);
+  // G08: the contract's Kwalis reference (CRW / CST, on its payroll row)
+  const refs = useRefMap(payroll.length);
+  const [refQuery, setRefQuery] = useState("");
+  const contractRefOf = (personId: string) =>
+    refs.refOf(payroll.find((r) => r.refId === personId)?.id);
+  const list = useMemo(
+    () =>
+      people.filter(
+        (p) =>
+          p.kind === kind &&
+          (!refQuery.trim() ||
+            refMatches(refs.refOf(payroll.find((r) => r.refId === p.id)?.id), refQuery)),
+      ),
+    [people, kind, refQuery, refs, payroll],
+  );
   // Only one page of contracts is mounted at a time — selection and filtering
   // still operate on the full `list`.
   const { pageRows: pagedList, paginationProps: peoplePagination } = usePagedRows(list, 20);
@@ -669,6 +686,9 @@ export function PeoplePage({
               </div>
             </div>
           )}
+          <div className="mb-3 flex justify-end">
+            <RefFilterInput value={refQuery} onChange={setRefQuery} />
+          </div>
           <div className="overflow-x-auto">
             <table className="app-table w-full">
               <thead className="text-muted-foreground">
@@ -754,7 +774,14 @@ export function PeoplePage({
                           className="flex items-center gap-2 text-start hover:underline"
                           title={t("crewcast.recordPayment")}
                         >
-                          <span>{p.fullName}</span>
+                          <span className="flex flex-col">
+                            <span>{p.fullName}</span>
+                            {contractRefOf(p.id) && (
+                              <span className="font-mono text-[10px] text-muted-foreground">
+                                {contractRefOf(p.id)}
+                              </span>
+                            )}
+                          </span>
                           {(() => {
                             const pr = payroll.find((r) => r.refId === p.id);
                             const missing =
@@ -783,8 +810,12 @@ export function PeoplePage({
                       </td>
                       <td className="px-3 py-3 font-mono text-xs">{p.iban}</td>
                       <td className="px-3 py-3">{p.bank}</td>
-                      <td className="px-3 py-3">{p.startDate}</td>
-                      <td className="px-3 py-3">{p.endDate}</td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        {formatDate(p.startDate) || "—"}
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        {formatDate(p.endDate) || "—"}
+                      </td>
                       {(() => {
                         // Base rate only — per diem/housing are separate ledger lines.
                         const fig = contractFigures(p);

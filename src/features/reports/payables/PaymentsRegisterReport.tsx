@@ -23,12 +23,18 @@ import {
   txtCls,
 } from "@/features/reports/ledger/ledger-ui";
 import { usePaymentsRegister } from "./payables-data";
+import { GlTransactionDrawer } from "@/features/reports/gl-transactions/GlTransactionDrawer";
+import type { GlTransaction } from "@/features/reports/gl-transactions/gl-transactions-data";
+import { transactionFromRegisterRow } from "@/features/reports/ledger/ledger-drawer";
 
 const inputCls = "h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground";
 
 export function PaymentsRegisterReport() {
   const { t } = useTranslation();
-  const { projectId } = useActiveProject();
+  const { projectId, organizationId } = useActiveProject();
+  // G09: a row opens the transaction drawer of its payment / document (184)
+  const [selected, setSelected] = useState<GlTransaction | null>(null);
+  const [ref, setRef] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [payee, setPayee] = useState("");
@@ -41,8 +47,8 @@ export function PaymentsRegisterReport() {
     [all],
   );
   const rows = useMemo(
-    () => filterRegister(all, { payee, code, method }),
-    [all, payee, code, method],
+    () => filterRegister(all, { payee, code, method, ref }),
+    [all, payee, code, method, ref],
   );
   const totals = useMemo(() => registerTotals(rows), [rows]);
   const docLabel = (k: string | null) =>
@@ -128,6 +134,16 @@ export function PaymentsRegisterReport() {
         }}
       >
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          {t("polish.refs.ref_no")}
+          <input
+            value={ref}
+            maxLength={64}
+            placeholder={t("polish.refs.filter_placeholder")}
+            onChange={(e) => setRef(e.target.value)}
+            className={`${inputCls} w-36 font-mono`}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           {t("reconcile.register.col.payee")}
           <input
             value={payee}
@@ -179,30 +195,38 @@ export function PaymentsRegisterReport() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.event_key} className="border-b border-border/50 hover:bg-muted/50">
-                  <td className={txtCls}>{formatDate(r.payment_date)}</td>
-                  <td className={`${txtCls} font-mono text-xs`}>{r.payment_ref ?? "—"}</td>
-                  <td className={txtCls}>{r.payee ?? "—"}</td>
-                  <td className={txtCls}>{docLabel(r.document_type)}</td>
-                  <td className={`${txtCls} font-mono text-xs`}>{r.document_ref ?? "—"}</td>
-                  <td className={txtCls}>{r.instalment ?? "—"}</td>
-                  <td className={`${txtCls} font-mono text-xs`}>{r.budget_code ?? "—"}</td>
-                  <td className={txtCls}>{methodLabel(r.method)}</td>
-                  <td className={txtCls}>
-                    {r.paid_from_code} {r.paid_from_name}
-                  </td>
-                  <td className={numCls}>
-                    <Money v={r.gross} />
-                  </td>
-                  <td className={numCls}>
-                    <Money v={r.wht} blankZero />
-                  </td>
-                  <td className={`${numCls} font-semibold`}>
-                    <Money v={r.net} />
-                  </td>
-                </tr>
-              ))}
+              {rows.map((r) => {
+                const tx = transactionFromRegisterRow(r, { organizationId, projectId });
+                return (
+                  <tr
+                    key={r.event_key}
+                    className={`border-b border-border/50 hover:bg-muted/50 ${tx ? "cursor-pointer" : ""}`}
+                    onClick={tx ? () => setSelected(tx) : undefined}
+                    title={tx ? t("polish.refs.open_details") : undefined}
+                  >
+                    <td className={txtCls}>{formatDate(r.payment_date)}</td>
+                    <td className={`${txtCls} font-mono text-xs`}>{r.payment_ref ?? "—"}</td>
+                    <td className={txtCls}>{r.payee ?? "—"}</td>
+                    <td className={txtCls}>{docLabel(r.document_type)}</td>
+                    <td className={`${txtCls} font-mono text-xs`}>{r.document_ref ?? "—"}</td>
+                    <td className={txtCls}>{r.instalment ?? "—"}</td>
+                    <td className={`${txtCls} font-mono text-xs`}>{r.budget_code ?? "—"}</td>
+                    <td className={txtCls}>{methodLabel(r.method)}</td>
+                    <td className={txtCls}>
+                      {r.paid_from_code} {r.paid_from_name}
+                    </td>
+                    <td className={numCls}>
+                      <Money v={r.gross} />
+                    </td>
+                    <td className={numCls}>
+                      <Money v={r.wht} blankZero />
+                    </td>
+                    <td className={`${numCls} font-semibold`}>
+                      <Money v={r.net} />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-border font-semibold">
@@ -234,6 +258,7 @@ export function PaymentsRegisterReport() {
           </table>
         </div>
       )}
+      {selected && <GlTransactionDrawer row={selected} onClose={() => setSelected(null)} />}
     </Panel>
   );
 }

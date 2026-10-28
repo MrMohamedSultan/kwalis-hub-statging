@@ -127,6 +127,8 @@ import {
   invoiceVendorChangePatch,
 } from "@/components/ap/VendorProfileFields";
 import { useHasColumn } from "@/lib/persons";
+import { RefFilterInput, RefText, useRefMap } from "@/components/refs/RefListTools";
+import { InvoiceE08Details } from "@/components/ap/InvoiceE08Details";
 
 function attachmentRecordsForProject(
   people: Array<{
@@ -2303,12 +2305,21 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
   };
 
   const [qfeRuleFilter, setQfeRuleFilter] = useState<"all" | "A" | "B" | "C" | "override">("all");
+  // G08: Kwalis reference number column + filter
+  const [refQuery, setRefQuery] = useState("");
+  const refs = useRefMap(invoices.length);
   const filteredInvoices = useMemo(() => {
-    if (qfeRuleFilter === "all") return invoices;
-    if (qfeRuleFilter === "override") return invoices.filter((i) => !!i.rebateManualOverride);
-    return invoices.filter((i) => !i.rebateManualOverride && invoiceRule(i).rule === qfeRuleFilter);
+    const byRule =
+      qfeRuleFilter === "all"
+        ? invoices
+        : qfeRuleFilter === "override"
+          ? invoices.filter((i) => !!i.rebateManualOverride)
+          : invoices.filter(
+              (i) => !i.rebateManualOverride && invoiceRule(i).rule === qfeRuleFilter,
+            );
+    return refQuery.trim() ? byRule.filter((i) => refs.matches(i.id, refQuery)) : byRule;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invoices, qfeRuleFilter, people, vendors]);
+  }, [invoices, qfeRuleFilter, people, vendors, refQuery, refs.refOf]);
 
   // Render only one page of rows at a time. Filtering above stays untouched —
   // pagination always operates on the already-filtered result set.
@@ -2323,7 +2334,8 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
     <Panel>
       <div className="flex justify-between items-center mb-4 gap-3 flex-wrap">
         <h3 className="text-xl font-semibold">{t("platform.ui.invoices")}</h3>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center flex-wrap">
+          <RefFilterInput value={refQuery} onChange={setRefQuery} />
           <label className="text-xs uppercase tracking-wider text-muted-foreground">
             {t("accounting.qfe_rule")}
           </label>
@@ -2364,6 +2376,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
           <Table
             headers={[
               "#",
+              t("polish.refs.ref_no"),
               "Description",
               "Dept",
               "Budget",
@@ -2398,7 +2411,13 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                     className={`border-b border-border transition-colors ${focusedId === i.id ? "bg-brand/15 ring-2 ring-brand/60" : ""}`}
                   >
                     <Cell>{idx + 1}</Cell>
-                    <Cell>{i.description}</Cell>
+                    <Cell>
+                      <RefText refNo={refs.refOf(i.id)} />
+                    </Cell>
+                    <Cell>
+                      {i.description}
+                      <InvoiceE08Details invoice={i} />
+                    </Cell>
                     <Cell>{i.department}</Cell>
                     <Cell className="font-mono text-xs">
                       {i.budgetCode}
@@ -2413,7 +2432,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                           })}
                     </Cell>
                     <Cell>{formatDate(i.date) || i.date}</Cell>
-                    <Cell className="whitespace-nowrap">{i.dueDate ?? "—"}</Cell>
+                    <Cell className="whitespace-nowrap">{formatDate(i.dueDate) || "—"}</Cell>
                     <Cell className="font-mono">
                       {i.invoiceNo}
                       {po && <div className="text-[10px] text-muted-foreground">{po.poNumber}</div>}
@@ -2548,7 +2567,7 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
                   <PaymentHistoryToggle
                     sourceType="invoice"
                     sourceId={i.id}
-                    colSpan={13}
+                    colSpan={14}
                     initialOpen={focusedId === i.id}
                   />
                 </Fragment>
@@ -2556,18 +2575,23 @@ export function InvoiceTab({ focus }: { focus?: string } = {}) {
             })}
             {filteredInvoices.length === 0 && (
               <TableEmptyRow
-                colSpan={13}
+                colSpan={14}
                 variant={invoices.length === 0 ? "empty" : "filtered"}
                 title={invoices.length === 0 ? "No invoices yet" : "No matching invoices"}
                 description={
                   invoices.length === 0
                     ? "Invoices you create for this project will appear here."
-                    : "No invoices match the selected QPE rule filter. Try switching back to All rules."
+                    : refQuery.trim()
+                      ? t("polish.refs.no_match")
+                      : "No invoices match the selected QPE rule filter. Try switching back to All rules."
                 }
                 action={
                   invoices.length > 0 ? (
                     <button
-                      onClick={() => setQfeRuleFilter("all")}
+                      onClick={() => {
+                        setQfeRuleFilter("all");
+                        setRefQuery("");
+                      }}
                       className="px-3 py-1.5 rounded-lg border border-border text-xs hover:bg-muted"
                     >
                       {t("accounting.all_rules")}

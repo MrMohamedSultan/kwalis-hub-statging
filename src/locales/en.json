@@ -5328,6 +5328,19 @@
       "vendor": "Vendor",
       "vendor_reinherited": "CR, VAT number, country, tax residency, bank and related-party flag will be taken from the new vendor's profile.",
       "vendor_wht_differs": "The new vendor has a different WHT treatment. The saved WHT and net amounts are not recalculated — re-enter the invoice if WHT must change."
+    },
+    "refs": {
+      "ref_no": "Ref No.",
+      "filter_placeholder": "Ref no. (e.g. PO-0012)",
+      "filter_label": "Filter by reference number",
+      "open_details": "Open transaction details",
+      "no_match": "No rows match this reference number."
+    },
+    "e08": {
+      "service_period": "Service",
+      "received": "Received",
+      "po": "PO",
+      "due": "Due"
     }
   }
 }

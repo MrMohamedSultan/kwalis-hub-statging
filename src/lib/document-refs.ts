@@ -182,3 +182,18 @@ export function refNoOf(row: unknown): string | null {
   const v = (row as { ref_no?: unknown } | null)?.ref_no;
   return typeof v === "string" && v ? v : null;
 }
+
+/**
+ * G08 list filter: true when the query is empty or is part of the row's
+ * reference number — case-insensitive, dashes and spaces optional
+ * ("po0012", "PO-0012" and "0012" all find "MON26-PO-0012").
+ */
+export function refMatches(refNo: string | null | undefined, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const r = String(refNo ?? "").toLowerCase();
+  if (!r) return false;
+  if (r.includes(q)) return true;
+  const strip = (v: string) => v.replace(/[\s-]+/g, "");
+  return strip(r).includes(strip(q));
+}

@@ -32,7 +32,8 @@ import { BudgetCodeSelector } from "@/components/BudgetCodeSelector";
 import { GlAccountSelector } from "@/components/GlAccountSelector";
 import { useGlAccounts } from "@/lib/gl-accounts";
 import { recordAudit } from "@/lib/audit-log";
-import { parseOpenParam } from "@/lib/document-refs";
+import { parseOpenParam, refMatches, refNoOf } from "@/lib/document-refs";
+import { RefFilterInput, RefText } from "@/components/refs/RefListTools";
 
 import { useTranslation } from "react-i18next";
 export const Route = createFileRoute("/_authenticated/petty-cash")({
@@ -266,6 +267,18 @@ function PettyCashPage() {
     for (const r of roots) walk(r, 0);
     return out;
   }, [advances]);
+  // G08: one reference filter for floats and receipts
+  const [refQuery, setRefQuery] = useState("");
+  const refOn = refQuery.trim().length > 0;
+  const shownAdvances = useMemo(
+    () =>
+      refOn ? orderedAdvances.filter(({ a }) => refMatches(refNoOf(a), refQuery)) : orderedAdvances,
+    [orderedAdvances, refOn, refQuery],
+  );
+  const shownReceipts = useMemo(
+    () => (refOn ? receipts.filter((r) => refMatches(refNoOf(r), refQuery)) : receipts),
+    [receipts, refOn, refQuery],
+  );
 
   // Fire-and-forget audit helper for petty-cash workflow events.
   function auditPettyCash(action: string, a: Advance, extra: Record<string, unknown> = {}) {
@@ -406,13 +419,16 @@ function PettyCashPage() {
       <div className="rounded-2xl border border-border bg-surface/60 overflow-hidden">
         <div className="px-4 py-3 border-b border-border font-semibold flex items-center justify-between">
           <span>{t("petty_cash.cash_advances_floats")}</span>
-          <button
-            onClick={reloadAll}
-            className="text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
-          >
-            <RotateCcw className="size-3" />
-            Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            <RefFilterInput value={refQuery} onChange={setRefQuery} />
+            <button
+              onClick={reloadAll}
+              className="text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+            >
+              <RotateCcw className="size-3" />
+              Refresh
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[1100px]">
@@ -441,7 +457,7 @@ function PettyCashPage() {
                 </tr>
               )}
               {!loading &&
-                orderedAdvances.map(({ a, depth }) => {
+                shownAdvances.map(({ a, depth }) => {
                   const bal = balances.get(a.id) ?? {
                     approved: 0,
                     pending: 0,
@@ -469,7 +485,12 @@ function PettyCashPage() {
                       key={a.id}
                       className={`border-t border-border ${isChild ? "bg-info/[0.04]" : ""}`}
                     >
-                      <td className="p-3 text-muted-foreground">{formatDate(a.created_at)}</td>
+                      <td className="p-3 text-muted-foreground">
+                        {formatDate(a.created_at)}
+                        <div>
+                          <RefText refNo={refNoOf(a)} />
+                        </div>
+                      </td>
                       <td className="p-3">
                         <div
                           className="flex items-center gap-2"
@@ -743,7 +764,7 @@ function PettyCashPage() {
               </tr>
             </thead>
             <tbody>
-              {receipts.map((r) => {
+              {shownReceipts.map((r) => {
                 const a = advances.find((x) => x.id === r.advance_id);
                 const holder = a?.crew_member_id
                   ? crew.find((c) => c.id === a.crew_member_id)?.full_name
@@ -752,7 +773,10 @@ function PettyCashPage() {
                 return (
                   <tr key={r.id} className="border-t border-border">
                     <td className="p-3 text-muted-foreground">
-                      {r.date ?? formatDate(r.created_at)}
+                      {formatDate(r.date ?? r.created_at)}
+                      <div>
+                        <RefText refNo={refNoOf(r)} />
+                      </div>
                     </td>
                     <td className="p-3">{holder ?? "—"}</td>
                     <td className="p-3">{r.vendor ?? r.received_from ?? "—"}</td>
@@ -832,7 +856,7 @@ function PettyCashPage() {
                   </tr>
                 );
               })}
-              {perDiem.map((p) => {
+              {(refOn ? [] : perDiem).map((p) => {
                 const a = advances.find((x) => x.id === p.advance_id);
                 const holder = a?.crew_member_id
                   ? crew.find((c) => c.id === a.crew_member_id)?.full_name
@@ -860,7 +884,14 @@ function PettyCashPage() {
                   </tr>
                 );
               })}
-              {receipts.length === 0 && perDiem.length === 0 && (
+              {refOn && shownReceipts.length === 0 && (
+                <tr>
+                  <td colSpan={10} className="p-6 text-center text-muted-foreground">
+                    {t("polish.refs.no_match")}
+                  </td>
+                </tr>
+              )}
+              {!refOn && receipts.length === 0 && perDiem.length === 0 && (
                 <tr>
                   <td colSpan={10} className="p-6 text-center text-muted-foreground">
                     {t("petty_cash.no_receipts_logged")}

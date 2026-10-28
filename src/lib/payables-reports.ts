@@ -257,7 +257,13 @@ export type RegisterRow = {
   net: number;
 };
 
-export type RegisterFilter = { payee?: string; code?: string; method?: string };
+export type RegisterFilter = {
+  payee?: string;
+  code?: string;
+  method?: string;
+  /** G08: payment or document reference number (partial). */
+  ref?: string;
+};
 
 export function filterRegister(rows: RegisterRow[], f: RegisterFilter): RegisterRow[] {
   const has = (v: string | null, q?: string) =>
@@ -266,6 +272,7 @@ export function filterRegister(rows: RegisterRow[], f: RegisterFilter): Register
     (r) =>
       has(r.payee, f.payee) &&
       has(r.budget_code, f.code) &&
+      (has(r.payment_ref, f.ref) || has(r.document_ref, f.ref)) &&
       (!f.method || f.method === "all" || r.method === f.method),
   );
 }
