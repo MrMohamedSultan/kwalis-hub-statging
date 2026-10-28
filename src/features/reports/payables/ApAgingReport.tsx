@@ -7,7 +7,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Panel } from "@/components/AppShell";
 import { riyadhToday } from "@/lib/date-format";
-import { AGING_BUCKETS, apAging } from "@/lib/payables-reports";
+import { AGING_BUCKETS, apAging, relatedPartyPayees } from "@/lib/payables-reports";
 import { useReportExport } from "@/features/reports/report-export";
 import { useActiveProject } from "@/features/reports/ledger/ledger-data";
 import {
@@ -26,6 +26,8 @@ export function ApAgingReport() {
   const q = useDueItems(projectId);
   const today = riyadhToday();
   const { rows, totals } = useMemo(() => apAging(q.data ?? [], today), [q.data, today]);
+  // E08: flag payees with related-party invoices
+  const related = useMemo(() => relatedPartyPayees(q.data ?? []), [q.data]);
   const bucket = (b: string) => t(`reconcile.aging.bucket.${b}`);
 
   useReportExport(() =>
@@ -96,7 +98,14 @@ export function ApAgingReport() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.payee} className="border-b border-border/50 hover:bg-muted/50">
-                  <td className={txtCls}>{r.payee}</td>
+                  <td className={txtCls}>
+                    {r.payee}
+                    {related.has(r.payee) && (
+                      <span className="ms-2 rounded-full border border-warning/40 bg-warning/15 px-1.5 text-[10px] text-warning">
+                        {t("ap.related_party")}
+                      </span>
+                    )}
+                  </td>
                   <td className={numCls}>{r.items}</td>
                   {AGING_BUCKETS.map((b) => (
                     <td

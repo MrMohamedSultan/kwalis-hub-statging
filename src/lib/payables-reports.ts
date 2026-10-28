@@ -57,7 +57,26 @@ export type DueItem = {
   /** Payable = Actual not paid yet (approved instalments, invoices); Pending / Requested are Commitment. */
   payable: boolean;
   sourceId: string;
+  /** E08 fields of an invoice item (PO ref, currency / FX + source, service dates, related party). */
+  e08?: {
+    poRef?: string | null;
+    currency?: string | null;
+    fxRate?: number | null;
+    amountOriginal?: number | null;
+    fxRateSource?: string | null;
+    fxRateDate?: string | null;
+    servicePeriodFrom?: string | null;
+    servicePeriodTo?: string | null;
+    serviceReceivedDate?: string | null;
+    isRelatedParty?: boolean | null;
+    relatedPartyNote?: string | null;
+  };
 };
+
+/** Payees with at least one related-party invoice among the items (E08). */
+export function relatedPartyPayees(items: DueItem[]): Set<string> {
+  return new Set(items.filter((i) => i.e08?.isRelatedParty).map((i) => i.payee));
+}
 
 export type DueRow = DueItem & { daysOverdue: number | null };
 

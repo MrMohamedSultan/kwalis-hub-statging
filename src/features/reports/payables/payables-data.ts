@@ -60,7 +60,7 @@ export function useDueItems(projectId: string | null) {
     enabled: !!projectId,
     staleTime: 30_000,
     queryFn: async (): Promise<DueItem[]> => {
-      const [inst, contracts, invoices, pays] = await Promise.all([
+      const [inst, contracts, invoices, pays, pos] = await Promise.all([
         rows(
           from("payroll_instalments")
             .select(
@@ -77,7 +77,10 @@ export function useDueItems(projectId: string | null) {
         rows(
           from("invoices")
             .select(
-              "id, vendor_name, invoice_no, ref_no, date, due_date, price, vat_amount, wht_amount, net_payable",
+              "id, vendor_name, invoice_no, ref_no, date, due_date, price, vat_amount, wht_amount, net_payable, " +
+                // E08 (174 / 190)
+                "purchase_order_id, currency, fx_rate, amount_original, fx_rate_source, fx_rate_date, " +
+                "service_period_from, service_period_to, service_received_date, is_related_party, related_party_note",
             )
             .eq("project_id", projectId),
         ),
@@ -86,8 +89,15 @@ export function useDueItems(projectId: string | null) {
             .select("source_type, source_id, payroll_milestone_id, amount")
             .eq("project_id", projectId),
         ),
+        rows(from("purchase_orders").select("id, ref_no, po_number").eq("project_id", projectId)),
       ]);
       const contract = new Map(contracts.map((c: any) => [c.id, c]));
+      const poRef = new Map(
+        (pos as any[]).map((p) => [
+          p.id as string,
+          (p.ref_no ?? p.po_number ?? null) as string | null,
+        ]),
+      );
       const paidInvoice = new Map<string, number>();
       for (const p of pays as any[])
         if (p.source_type === "invoice")
@@ -133,6 +143,19 @@ export function useDueItems(projectId: string | null) {
           status: "Approved",
           payable: true,
           sourceId: v.id,
+          e08: {
+            poRef: v.purchase_order_id ? (poRef.get(v.purchase_order_id) ?? null) : null,
+            currency: v.currency ?? null,
+            fxRate: v.fx_rate != null ? n(v.fx_rate) : null,
+            amountOriginal: v.amount_original != null ? n(v.amount_original) : null,
+            fxRateSource: v.fx_rate_source ?? null,
+            fxRateDate: v.fx_rate_date ?? null,
+            servicePeriodFrom: v.service_period_from ?? null,
+            servicePeriodTo: v.service_period_to ?? null,
+            serviceReceivedDate: v.service_received_date ?? null,
+            isRelatedParty: !!v.is_related_party,
+            relatedPartyNote: v.related_party_note ?? null,
+          },
         });
       }
       return out;

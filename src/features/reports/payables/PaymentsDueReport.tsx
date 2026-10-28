@@ -19,12 +19,18 @@ import {
   txtCls,
 } from "@/features/reports/ledger/ledger-ui";
 import { useDueItems } from "./payables-data";
+import { InvoiceE08Details } from "@/components/ap/InvoiceE08Details";
+import { GlTransactionDrawer } from "@/features/reports/gl-transactions/GlTransactionDrawer";
+import type { GlTransaction } from "@/features/reports/gl-transactions/gl-transactions-data";
+import { transactionForDocument } from "@/features/reports/ledger/ledger-drawer";
 
 const WINDOWS: DueWindow[] = ["all", "overdue", "this_week", "this_month", "next_30"];
 
 export function PaymentsDueReport() {
   const { t } = useTranslation();
-  const { projectId } = useActiveProject();
+  const { projectId, organizationId } = useActiveProject();
+  // G09: a row opens the transaction drawer of its contract / invoice (184)
+  const [selected, setSelected] = useState<GlTransaction | null>(null);
   const [win, setWin] = useState<DueWindow>("this_month");
   const q = useDueItems(projectId);
   const today = riyadhToday();
@@ -146,11 +152,38 @@ export function PaymentsDueReport() {
             <tbody>
               {rows.map((r) => {
                 const late = (r.daysOverdue ?? 0) > 0;
+                const tx = transactionForDocument(
+                  r.kind === "invoice" ? "invoice" : "payroll",
+                  r.sourceId,
+                  {
+                    date: r.dueDate,
+                    reference: r.ref,
+                    party: r.payee,
+                    amount: r.amount,
+                    status: r.status,
+                  },
+                  { organizationId, projectId },
+                );
                 return (
-                  <tr key={r.key} className="border-b border-border/50 hover:bg-muted/50">
-                    <td className={txtCls}>{r.payee}</td>
+                  <tr
+                    key={r.key}
+                    className={`border-b border-border/50 hover:bg-muted/50 ${tx ? "cursor-pointer" : ""}`}
+                    onClick={tx ? () => setSelected(tx) : undefined}
+                    title={tx ? t("polish.refs.open_details") : undefined}
+                  >
+                    <td className={txtCls}>
+                      {r.payee}
+                      {r.e08 && <InvoiceE08Details invoice={r.e08} />}
+                    </td>
                     <td className={txtCls}>{kindLabel(r.kind)}</td>
-                    <td className={`${txtCls} font-mono text-xs`}>{r.ref ?? "—"}</td>
+                    <td className={`${txtCls} font-mono text-xs`}>
+                      {r.ref ?? "—"}
+                      {r.e08?.poRef && (
+                        <div className="text-[10px] text-muted-foreground">
+                          {t("polish.e08.po")}: {r.e08.poRef}
+                        </div>
+                      )}
+                    </td>
                     <td className={txtCls}>{r.instalment ?? "—"}</td>
                     <td className={txtCls}>{r.dueDate ? formatDate(r.dueDate) : "—"}</td>
                     <td className={txtCls}>
@@ -186,6 +219,7 @@ export function PaymentsDueReport() {
           </table>
         </div>
       )}
+      {selected && <GlTransactionDrawer row={selected} onClose={() => setSelected(null)} />}
     </Panel>
   );
 }

@@ -223,3 +223,26 @@ describe("payments register (R12)", () => {
     ]);
   });
 });
+
+import { relatedPartyPayees } from "@/lib/payables-reports";
+
+describe("AP Aging related-party flag (E08)", () => {
+  it("lists payees with a related-party invoice", () => {
+    const base = {
+      kind: "invoice" as const,
+      ref: null,
+      instalment: null,
+      dueDate: null,
+      amount: 1,
+      status: "Approved",
+      payable: true,
+      sourceId: "x",
+    };
+    const s = relatedPartyPayees([
+      { ...base, key: "a", payee: "A", e08: { isRelatedParty: true } },
+      { ...base, key: "b", payee: "B", e08: { isRelatedParty: false } },
+      { ...base, key: "c", payee: "C" },
+    ]);
+    expect([...s]).toEqual(["A"]);
+  });
+});

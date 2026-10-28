@@ -14,11 +14,32 @@ import { SarAmount } from "@/components/ui/currency";
 import { supabase } from "@/integrations/supabase/client";
 import { Receipt, ShoppingCart, Wallet } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { formatDate } from "@/lib/date-format";
+import { GlTransactionDrawer } from "@/features/reports/gl-transactions/GlTransactionDrawer";
+import type {
+  GlTransaction,
+  GlTransactionSource,
+} from "@/features/reports/gl-transactions/gl-transactions-data";
+import { transactionForDocument } from "@/features/reports/ledger/ledger-drawer";
+import { useActiveProject } from "@/features/reports/ledger/ledger-data";
+
+/** v_ledger_transactions source types the transaction drawer can open (G09). */
+const DRAWER_SOURCES: ReadonlySet<string> = new Set([
+  "invoice",
+  "payroll",
+  "purchase_order",
+  "petty_cash",
+  "overtime",
+  "per_diem",
+  "payment",
+]);
 
 export type Focus = "actual" | "committed" | "paid";
 
 type LedgerRow = {
   key: string;
+  sourceId: string | null;
+  entryKind: string;
   at: string;
   counterparty: string | null;
   reference: string | null;
@@ -64,6 +85,39 @@ export function BudgetLineActualsModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  const { organizationId } = useActiveProject();
+  // G09: a row opens the transaction drawer of its document (184)
+  const [drawer, setDrawer] = useState<GlTransaction | null>(null);
+  const ctx = { organizationId, projectId };
+  const openLedgerRow = (r: LedgerRow) =>
+    r.sourceId && DRAWER_SOURCES.has(r.sourceType)
+      ? () =>
+          setDrawer(
+            transactionForDocument(
+              r.sourceType as GlTransactionSource,
+              r.sourceId!,
+              {
+                date: r.at,
+                reference: r.reference,
+                party: r.counterparty,
+                budgetCode: mainCode,
+                amount: r.amount,
+                status: r.status,
+                entryKind: r.entryKind === "commitment" ? "commitment" : "actual",
+              },
+              ctx,
+            ),
+          )
+      : undefined;
+  const openPayment = (r: PaymentRow) => () =>
+    setDrawer(
+      transactionForDocument(
+        "payment",
+        r.id,
+        { date: r.date, budgetCode: mainCode, amount: r.amount },
+        ctx,
+      ),
+    );
 
   const [loading, setLoading] = useState(true);
   const [mainCode, setMainCode] = useState<string | null>(null);
@@ -110,6 +164,8 @@ export function BudgetLineActualsModal({
       const ledgerRows = ((ledgerRes.data ?? []) as any[]).map((r) => ({
         // a payroll row comes twice (actual + commitment) with the same id
         key: `${r.source_type}:${r.source_id}:${r.entry_kind}:${r.entry_date}`,
+        sourceId: (r.source_id as string | null) ?? null,
+        entryKind: String(r.entry_kind ?? ""),
         at: String(r.entry_date ?? ""),
         counterparty: (r.counterparty as string | null) ?? null,
         reference: (r.reference as string | null) ?? null,
@@ -214,8 +270,10 @@ export function BudgetLineActualsModal({
               <Row
                 key={r.key}
                 left={r.counterparty ?? r.reference ?? r.sourceType}
-                sub={`${r.at.slice(0, 10)} · ${r.sourceType}${r.status ? ` · ${r.status}` : ""}`}
+                sub={`${formatDate(r.at) || "—"} · ${r.sourceType}${r.status ? ` · ${r.status}` : ""}`}
                 amount={r.amount}
+                onClick={openLedgerRow(r)}
+                title={t("polish.refs.open_details")}
               />
             ))}
           </Section>
@@ -230,8 +288,10 @@ export function BudgetLineActualsModal({
               <Row
                 key={r.key}
                 left={r.counterparty ?? r.reference ?? r.sourceType}
-                sub={`${r.at.slice(0, 10)} · ${r.reference ?? r.sourceType}${r.status ? ` · ${r.status}` : ""}`}
+                sub={`${formatDate(r.at) || "—"} · ${r.reference ?? r.sourceType}${r.status ? ` · ${r.status}` : ""}`}
                 amount={r.amount}
+                onClick={openLedgerRow(r)}
+                title={t("polish.refs.open_details")}
               />
             ))}
           </Section>
@@ -246,8 +306,10 @@ export function BudgetLineActualsModal({
               <Row
                 key={r.id}
                 left={r.method ?? r.sourceType}
-                sub={`${r.date ?? "—"} · ${r.sourceType}`}
+                sub={`${formatDate(r.date) || "—"} · ${r.sourceType}`}
                 amount={r.amount}
+                onClick={openPayment(r)}
+                title={t("polish.refs.open_details")}
               />
             ))}
           </Section>
@@ -260,12 +322,13 @@ export function BudgetLineActualsModal({
           )}
         </div>
       )}
+      {drawer && <GlTransactionDrawer row={drawer} onClose={() => setDrawer(null)} />}
     </Modal>
   );
 }
 
-function ledgerKind(r: { sourceType: string } & Record<string, unknown>): string {
-  return String((r as any).entry_kind ?? "");
+function ledgerKind(r: LedgerRow): string {
+  return r.entryKind;
 }
 
 function Section({
@@ -299,9 +362,27 @@ function Section({
   );
 }
 
-function Row({ left, sub, amount }: { left: string; sub?: string; amount: number }) {
+function Row({
+  left,
+  sub,
+  amount,
+  onClick,
+  title,
+}: {
+  left: string;
+  sub?: string;
+  amount: number;
+  onClick?: () => void;
+  title?: string;
+}) {
+  const Tag = onClick ? "button" : "div";
   return (
-    <div className="flex items-center justify-between gap-3 px-3 py-2 bg-surface/40">
+    <Tag
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      title={onClick ? title : undefined}
+      className={`flex w-full items-center justify-between gap-3 px-3 py-2 bg-surface/40 text-start ${onClick ? "hover:bg-muted/60 cursor-pointer" : ""}`}
+    >
       <div className="min-w-0">
         <div className="truncate font-medium">{left}</div>
         {sub && <div className="text-[11px] text-muted-foreground truncate">{sub}</div>}
@@ -309,6 +390,6 @@ function Row({ left, sub, amount }: { left: string; sub?: string; amount: number
       <div className="tabular-nums font-semibold shrink-0">
         <SarAmount amount={amount} />
       </div>
-    </div>
+    </Tag>
   );
 }
