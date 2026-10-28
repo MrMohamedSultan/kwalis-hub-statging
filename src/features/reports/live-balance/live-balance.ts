@@ -65,7 +65,11 @@ export function calendarDays(a: string, b: string): number {
 }
 
 /** Working days in [a, b] inclusive. */
-export function workingDays(a: string, b: string, weekend: readonly number[] = KSA_WEEKEND): number {
+export function workingDays(
+  a: string,
+  b: string,
+  weekend: readonly number[] = KSA_WEEKEND,
+): number {
   const x = parseIso(a);
   const y = parseIso(b);
   if (x == null || y == null || y < x) return 0;
@@ -251,7 +255,14 @@ export interface LiveBalanceGroup {
   remainingCommitment: number;
 }
 
-const SUM_KEYS = ["value", "incurred", "paid", "accrued", "prepaid", "remainingCommitment"] as const;
+const SUM_KEYS = [
+  "value",
+  "incurred",
+  "paid",
+  "accrued",
+  "prepaid",
+  "remainingCommitment",
+] as const;
 
 export function sumLiveBalance(rows: LiveBalanceRow[]) {
   const t = { value: 0, incurred: 0, paid: 0, accrued: 0, prepaid: 0, remainingCommitment: 0 };

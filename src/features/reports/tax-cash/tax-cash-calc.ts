@@ -92,7 +92,9 @@ export function whtEvents(doc: WhtDocument): WhtEvent[] {
   const amount = round2(num(doc.storedAmount));
   if (amount <= 0) return [];
   const basis = num(doc.payBasis);
-  const sorted = [...doc.payments].filter((p) => p.date).sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = [...doc.payments]
+    .filter((p) => p.date)
+    .sort((a, b) => a.date.localeCompare(b.date));
   const out: WhtEvent[] = [];
   let taken = 0;
   for (const p of sorted) {
@@ -106,7 +108,10 @@ export function whtEvents(doc: WhtDocument): WhtEvent[] {
 }
 
 /** Allocate remitted WHT (Σ remittances up to today) to the events, oldest due date first. */
-export function allocateRemittances(events: WhtEvent[], remittedTotal: number): Map<WhtEvent, number> {
+export function allocateRemittances(
+  events: WhtEvent[],
+  remittedTotal: number,
+): Map<WhtEvent, number> {
   const out = new Map<WhtEvent, number>();
   let left = round2(Math.max(0, num(remittedTotal)));
   const sorted = [...events].sort(
@@ -135,7 +140,8 @@ export function buildWhtRows(docs: WhtDocument[], remittedTotal: number, today: 
     const dueDate = open[0]?.dueDate ?? evs[evs.length - 1]?.dueDate ?? null;
     let status: WhtStatus;
     if (outstanding > 0.005) status = open[0] && open[0].dueDate < today ? "overdue" : "due";
-    else if (withheld > 0) status = "remitted"; // everything withheld so far is remitted
+    else if (withheld > 0)
+      status = "remitted"; // everything withheld so far is remitted
     else status = "pending";
     return {
       ...d,

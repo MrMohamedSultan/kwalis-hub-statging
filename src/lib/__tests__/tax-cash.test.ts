@@ -54,7 +54,14 @@ const omar = doc({
   ],
 });
 const lina = doc({ id: "lina", party: "Lina", base: 3000, storedAmount: 150, payBasis: 2850 });
-const adel = doc({ id: "adel", party: "Adel", residency: null, base: 6500, storedAmount: 0, payBasis: 6500 });
+const adel = doc({
+  id: "adel",
+  party: "Adel",
+  residency: null,
+  base: 6500,
+  storedAmount: 0,
+  payBasis: 6500,
+});
 
 describe("WHT is read from the stored fields only (R23)", () => {
   it("total = Σ contract WHT fields (434.21), Adel is not taxed", () => {
@@ -129,7 +136,13 @@ describe("VAT (D14): standard and exempt", () => {
   it("input VAT by payment month, pending recovery, forecast, reverse charge", () => {
     const s = summarizeVat(
       [
-        inv({ id: "a", payments: [{ date: "2026-09-10", amount: 575 }, { date: "2026-10-02", amount: 575 }] }),
+        inv({
+          id: "a",
+          payments: [
+            { date: "2026-09-10", amount: 575 },
+            { date: "2026-10-02", amount: 575 },
+          ],
+        }),
         inv({ id: "b", vat: 300, net: 2000, payBasis: 2300 }),
         inv({ id: "c", treatment: "exempt", vat: 0, payBasis: 500, net: 500 }),
         inv({ id: "d", treatment: "reverse_charge", vat: 0, net: 2000, date: "2026-10-05" }),
