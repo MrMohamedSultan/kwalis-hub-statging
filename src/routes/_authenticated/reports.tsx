@@ -25,6 +25,8 @@ import { useGlAccounts, GL_CATEGORIES, type GlAccountCategory } from "@/lib/gl-a
 import { GlTransactionsReport } from "@/features/reports/gl-transactions/GlTransactionsReport";
 import { LEDGER_TABS, LedgerTab, isLedgerTab } from "@/features/reports/ledger/LedgerTabs";
 import { BudgetChangeLogReport } from "@/features/reports/budget-change-log/BudgetChangeLogReport";
+import { PerDiemReport } from "@/features/reports/per-diem/PerDiemReport";
+import { isReportTabEnabled } from "@/lib/report-flags";
 import {
   SOURCE_LABELS,
   type GlTransactionSource,
@@ -32,7 +34,7 @@ import {
 import { SOURCE_TABLE_BY_TYPE } from "@/components/BudgetLineActualsModal";
 import { SarAmount } from "@/components/ui/currency";
 import { exportRebateWorkbook } from "@/lib/exportRebate";
-import { getSupportingDocUrl } from "@/lib/supporting-docs";
+import { getSupportingDocUrl, useSupportingDocsSync } from "@/lib/supporting-docs";
 import { buildQfeLedger, type QfeLedgerRow } from "@/lib/qfeLedger";
 import { useSearchHotkey } from "@/hooks/use-search-hotkey";
 import { AuditHistoryPanel } from "@/components/AuditHistoryPanel";
@@ -107,11 +109,13 @@ function ReportsPage() {
     | "gosi"
     | (typeof LEDGER_TABS)[number]
     | "budgetlog"
+    | "perdiem"
   >("final");
   const [exporting, setExporting] = useState<null | "excel" | "pdf">(null);
   const exportRef = useRef<ExportBuilder | null>(null);
   const [seasonFilter, setSeasonFilterState] = useState<string>("all");
   const activeProjectId = useStore((s) => s.activeProjectId);
+  useSupportingDocsSync(activeProjectId); // D08: links from the server
   const seasonFilterKey = activeProjectId ? `kwalis.seasonFilter.${activeProjectId}` : null;
   useEffect(() => {
     if (!seasonFilterKey) return;
@@ -162,19 +166,20 @@ function ReportsPage() {
   };
 
   const tabs = [
-    ["gl", "GL Report"],
-    ["glacct", "By GL Account"],
+    ["gl", t("platform.reportTab.gl")],
+    ["glacct", t("platform.reportTab.glacct")],
     ["gltx", t("reports.gl_transactions")],
-    ["paid", "Actual Paid"],
-    ["final", "Final Report"],
-    ["rebate", "Saudi Film Commission Rebate"],
-    ["qfe", "QFE Rebate Report"],
-    ["tracking", "Rebate Tracking"],
-    ["vat", "Tax & VAT Compliance"],
-    ["gosi", "GOSI & Localization"],
+    ["paid", t("platform.reportTab.paid")],
+    ["final", t("platform.reportTab.final")],
+    ["rebate", t("platform.reportTab.rebate")],
+    ["qfe", t("platform.reportTab.qfe")],
+    ["tracking", t("platform.reportTab.tracking")],
+    ["vat", t("platform.reportTab.vat")],
+    ["gosi", t("platform.reportTab.gosi")],
     ...LEDGER_TABS.map((k) => [k, t(`journal.tab.${k}`)] as const),
     ["budgetlog", t("refs.bcl_title")],
-  ] as const;
+    ["perdiem", t("platform.perDiem.title")],
+  ].filter(([k]) => isReportTabEnabled(k)) as [typeof tab, string][];
   return (
     <>
       <PageTitle
@@ -183,7 +188,7 @@ function ReportsPage() {
           // The GL Transactions tab has its own export buttons gated on the
           // gl_transactions/export permission — the page-level exporter would
           // fall through to the GOSI dataset for this tab, so hide it there.
-          tab === "gltx" || isLedgerTab(tab) || tab === "budgetlog" ? null : (
+          tab === "gltx" || isLedgerTab(tab) || tab === "budgetlog" || tab === "perdiem" ? null : (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => runExport("excel")}
@@ -246,9 +251,10 @@ function ReportsPage() {
         {tab === "qfe" && <QfeRebateAuditReport />}
         {tab === "tracking" && <RebateTrackingReport />}
         {tab === "vat" && <VatReport />}
-        {tab === "gosi" && <GosiReport />}
+        {tab === "gosi" && isReportTabEnabled("gosi") && <GosiReport />}
         {isLedgerTab(tab) && <LedgerTab tab={tab} />}
         {tab === "budgetlog" && <BudgetChangeLogReport />}
+        {tab === "perdiem" && <PerDiemReport />}
       </ReportExportContext.Provider>
     </>
   );
