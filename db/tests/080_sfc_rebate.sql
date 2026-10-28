@@ -58,7 +58,8 @@ SELECT t.eq('Rule C outside KSA not eligible',     (SELECT qfe::text||'|'||qfe_r
 SELECT t.eq('Rule A foreign beneficiary not eligible',(SELECT qfe::text||'|'||qfe_rule FROM q WHERE reference='INV-004'), 'false|Rule A');
 SELECT t.eq('Rule A Saudi beneficiary eligible',   (SELECT qfe::text||'|'||qfe_rule FROM q WHERE reference='INV-005'), 'true|Rule A');
 SELECT t.eq('manual override wins',                (SELECT qfe::text||'|'||qfe_rule FROM q WHERE reference='INV-006'), 'true|Manual Override');
-SELECT t.eq('unknown vendor eligible by default',  (SELECT qfe FROM q WHERE party='Unknown Kitchen'), true);
+-- 197 (E06): a vendor with no commercial registration on file is not eligible until reviewed
+SELECT t.eq('unknown vendor (no CR) not eligible',  (SELECT qfe FROM q WHERE party='Unknown Kitchen'), false);
 SELECT t.eq('Saudi payroll eligible',              (SELECT qfe FROM q WHERE party='Saudi Actor'), true);
 SELECT t.eq('foreign payroll not eligible',        (SELECT qfe::text||'|'||local_intl FROM q WHERE party='Tunisian DOP'), 'false|Foreign');
 SELECT t.eq('payroll with no people row: eligible but flagged unmatched', (SELECT qfe::text||'|'||person_matched::text FROM q WHERE party='Nobody In People'), 'true|false');
@@ -73,12 +74,13 @@ SELECT t.eq('payment status: unpaid', (SELECT payment_status FROM q WHERE refere
 SELECT t.eq('QPE type classified', (SELECT qpe_type FROM q WHERE reference='INV-001'), 'Camera Equipment Rental');
 SELECT t.eq('editor sees the full official id', (SELECT official_id FROM q WHERE reference='INV-001'), '1010123456 · 300012345600003');
 -- the single number
-\set QFE 75600.00
-SELECT t.eq('QFE total = 20000+2000+5000+1000 + 40000+7000 + 600', (SELECT sum(amount_excl_vat) FILTER (WHERE qfe) FROM q), :QFE);
-CREATE TEMP TABLE s AS SELECT get_sfc_rebate(:'P3') AS j;
+\set QFE 74600.00
+SELECT t.eq('QFE total = 20000+2000+5000 + 40000+7000 + 600', (SELECT sum(amount_excl_vat) FILTER (WHERE qfe) FROM q), :QFE);
+CREATE TEMP TABLE s AS SELECT get_sfc_rebate(:'P3',NULL,NULL,0.40) AS j;
 GRANT ALL ON s TO PUBLIC;
 SELECT t.eq('summary.qfe_total = ledger', (SELECT (j#>>'{summary,qfe_total}')::numeric FROM s), :QFE);
-SELECT t.eq('summary.projected_rebate = 40%', (SELECT (j#>>'{summary,projected_rebate}')::numeric FROM s), 30240.00);
+SELECT t.eq('summary.projected_rebate = 40%', (SELECT (j#>>'{summary,projected_rebate}')::numeric FROM s), 29840.00);
+SELECT t.eq('197: no project rate set -> no projected rebate', (SELECT get_sfc_rebate(:'P3')#>>'{summary,projected_rebate}'), NULL::text);
 SELECT t.eq('summary.total_budget', (SELECT (j#>>'{summary,total_budget}')::numeric FROM s), 180000.00);
 SELECT t.eq('qfe + non-qfe = all spend excl VAT', (SELECT (j#>>'{summary,qfe_total}')::numeric + (j#>>'{summary,non_qfe_total}')::numeric FROM s), (SELECT sum(amount_excl_vat) FROM q));
 SELECT t.eq('unmatched payroll rows surfaced', (SELECT (j#>>'{summary,unmatched_payroll_rows}')::int FROM s), 1);
@@ -86,7 +88,7 @@ SELECT t.eq('ledger array has every row', (SELECT jsonb_array_length(j->'ledger'
 SELECT t.eq('estimated vs actual: ATL', (SELECT (e->>'estimated_eligible_budget')||'/'||(e->>'actual_eligible_spend') FROM s, jsonb_array_elements(j->'estimated_vs_actual') e WHERE e->>'group'='ATL'), '100000.00/40000.00');
 SELECT t.eq('estimated vs actual sums to the QFE total', (SELECT sum((e->>'actual_eligible_spend')::numeric) FROM s, jsonb_array_elements(j->'estimated_vs_actual') e), :QFE);
 SELECT t.eq('period filter', (SELECT (get_sfc_rebate(:'P3','2026-07-01','2026-07-31')#>>'{summary,qfe_total}')::numeric), 60000.00);
-SELECT t.eq('custom rate', (SELECT (get_sfc_rebate(:'P3',NULL,NULL,0.25)#>>'{summary,projected_rebate}')::numeric), 18900.00);
+SELECT t.eq('custom rate', (SELECT (get_sfc_rebate(:'P3',NULL,NULL,0.25)#>>'{summary,projected_rebate}')::numeric), 18650.00);
 SELECT t.denied('rate above 1 rejected', $$SELECT get_sfc_rebate('20000000-0000-0000-0000-000000000003',NULL,NULL,40)$$);
 -- viewer: IDs masked to the last 4
 SELECT t.as_user(:'C');
