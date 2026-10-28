@@ -34,6 +34,7 @@ import {
   type AuditTrailRow,
 } from "@/lib/audit-trail";
 import { SOURCE_TABLE, type GlTransaction } from "./gl-transactions-data";
+import { invoiceE08View } from "@/lib/invoice-e08";
 
 type Rec = Record<string, unknown>;
 
@@ -103,6 +104,23 @@ export function GlTransactionDrawer({
 
   const budgetCode = (record?.budget_code as string | undefined) ?? row?.budget_code ?? null;
   const glId = (record?.gl_account_id as string | undefined) ?? row?.gl_account_id ?? null;
+
+  const poId =
+    row?.source_type === "invoice" ? ((record?.purchase_order_id as string | null) ?? null) : null;
+  const poRef = useQuery({
+    queryKey: ["gltx-po-ref", poId],
+    enabled: !!poId,
+    staleTime: 600_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("purchase_orders")
+        .select("*")
+        .eq("id", poId!)
+        .maybeSingle();
+      const r = (data ?? null) as Rec | null;
+      return (refNoOf(r) ?? (r?.po_number as string | undefined) ?? null) as string | null;
+    },
+  });
 
   const budgetName = useQuery({
     queryKey: ["gltx-budget-name", budgetCode],
@@ -178,6 +196,22 @@ export function GlTransactionDrawer({
   if (!row) return null;
 
   const amounts = record ? documentAmounts(row.source_type, record) : null;
+  // E08 invoice fields (174 / 190)
+  const inv = record && row.source_type === "invoice" ? record : null;
+  const e08 = inv
+    ? invoiceE08View({
+        currency: inv.currency as string | null,
+        fxRate: inv.fx_rate as number | null,
+        amountOriginal: inv.amount_original as number | null,
+        fxRateSource: inv.fx_rate_source as string | null,
+        fxRateDate: inv.fx_rate_date as string | null,
+        servicePeriodFrom: inv.service_period_from as string | null,
+        servicePeriodTo: inv.service_period_to as string | null,
+        serviceReceivedDate: inv.service_received_date as string | null,
+        isRelatedParty: inv.is_related_party as boolean | null,
+        relatedPartyNote: inv.related_party_note as string | null,
+      })
+    : null;
   const ccy = row.resolvedCurrency ?? "";
   const money = (n: number) => `${formatAmount(n, 2)} ${ccy}`.trim();
   const refNo = refNoOf(record) ?? row.ref_no ?? null;
@@ -287,6 +321,37 @@ export function GlTransactionDrawer({
               <Field label={t("refs.account")}>
                 {glAccount.data ? `${glAccount.data.code} — ${glAccount.data.name}` : "—"}
               </Field>
+              {inv && (
+                <>
+                  <Field label={t("ap.due_date")}>{fmtDate(inv.due_date, locale)}</Field>
+                  {poId && (
+                    <Field label={t("polish.e08.po")}>
+                      <span className="font-mono" dir="ltr">
+                        {poRef.data ?? "—"}
+                      </span>
+                    </Field>
+                  )}
+                  {e08?.fx && (
+                    <Field label={t("ap.currency")}>
+                      <span dir="ltr">{e08.fx}</span>
+                      {e08.fxSource &&
+                        ` · ${t(`people.fx.source_${e08.fxSource}`, { defaultValue: e08.fxSource })}`}
+                      {e08.fxDate ? ` · ${e08.fxDate}` : ""}
+                    </Field>
+                  )}
+                  {e08?.servicePeriod && (
+                    <Field label={t("polish.e08.service_period")}>{e08.servicePeriod}</Field>
+                  )}
+                  {e08?.serviceReceived && (
+                    <Field label={t("ap.service_received_date")}>{e08.serviceReceived}</Field>
+                  )}
+                  {e08?.relatedParty && (
+                    <Field label={t("ap.related_party")}>
+                      {e08.relatedPartyNote || t("platform.ui.yes")}
+                    </Field>
+                  )}
+                </>
+              )}
               <Field label={t("refs.gross")}>
                 <span className="tabular-nums">{money(amounts.gross)}</span>
               </Field>
