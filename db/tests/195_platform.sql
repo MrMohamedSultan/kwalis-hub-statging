@@ -95,25 +95,28 @@ RESET ROLE;
 -- D04 — overspend alerts at 80 % and 100 %
 -- =====================================================================
 SELECT set_config('request.jwt.claim.sub', '', false);
+-- a fresh code with no spend, so the test does not depend on what other batches seed on 1403
+INSERT INTO budget_lines(project_id,organization_id,version_id,header_code,main_code,topsheet_code,description,amount,rate,x,unit,currency)
+VALUES (:'P1',:'O1','40000000-0000-0000-0000-000000000001','1400','1498','1400','Alert test line',1,10000,1,'Package','SAR');
 CREATE TEMP TABLE pos AS
   SELECT budget_sar, actual_sar + committed_sar AS spent FROM v_budget_code_position
-   WHERE project_id = :'P1' AND budget_code = '1403';
+   WHERE project_id = :'P1' AND budget_code = '1498';
 GRANT SELECT ON pos TO authenticated;
--- bring 1403 to 85 % with one invoice
+-- bring 1498 to 85 % with one invoice
 INSERT INTO invoices(id, description, budget_code, price, vat_amount, date, organization_id, project_id)
-SELECT 'a1950000-0000-0000-0000-000000000001', 'Alert test 85%', '1403',
+SELECT 'a1950000-0000-0000-0000-000000000001', 'Alert test 85%', '1498',
        GREATEST(round(budget_sar * 0.85 - spent, 2), 0), 0, '2026-10-01', :'O1', :'P1' FROM pos;
 SELECT t.as_user(:'A');
 SELECT t.eq('80% crossing notifies (owner A + org admin D)', public.run_budget_alerts(:'P1') >= 2, true);
 SELECT t.eq('second run does not repeat', public.run_budget_alerts(:'P1'), 0);
 SELECT t.eq('A got the 80% alert', (SELECT (metadata ->> 'threshold')::int FROM notifications
-  WHERE user_id = :'A' AND category = 'budget_alert' AND metadata ->> 'budget_code' = '1403' ORDER BY created_at DESC LIMIT 1), 80);
+  WHERE user_id = :'A' AND category = 'budget_alert' AND metadata ->> 'budget_code' = '1498' ORDER BY created_at DESC LIMIT 1), 80);
 RESET ROLE;
 SELECT t.eq('80% alert is queued for e-mail', (SELECT count(*) >= 1 FROM notification_email_outbox WHERE category = 'budget_alert'), true);
 SELECT set_config('request.jwt.claim.sub', '', false);
 UPDATE invoices SET price = price + (SELECT budget_sar * 0.2 FROM pos) WHERE id = 'a1950000-0000-0000-0000-000000000001';
 -- a named responsible person replaces the default recipients
-INSERT INTO budget_alert_responsibles(organization_id, project_id, budget_code, user_id) VALUES (:'O1', :'P1', '1403', :'C');
+INSERT INTO budget_alert_responsibles(organization_id, project_id, budget_code, user_id) VALUES (:'O1', :'P1', '1498', :'C');
 SELECT t.as_user(:'C');
 SELECT t.eq('100% crossing: one alert to the responsible user', public.run_budget_alerts(:'P1'), 1);
 SELECT t.eq('C got the 100% alert', (SELECT (metadata ->> 'threshold')::int FROM notifications WHERE user_id = :'C' AND category = 'budget_alert'), 100);
@@ -127,7 +130,7 @@ UPDATE invoices SET price = 0 WHERE id = 'a1950000-0000-0000-0000-000000000001';
 SET ROLE service_role;
 SELECT public.run_budget_alerts(NULL);
 RESET ROLE;
-SELECT t.eq('re-armed', (SELECT count(*) FROM budget_alert_log WHERE project_id = :'P1' AND budget_code = '1403'), 0::bigint);
+SELECT t.eq('re-armed', (SELECT count(*) FROM budget_alert_log WHERE project_id = :'P1' AND budget_code = '1498'), 0::bigint);
 DELETE FROM invoices WHERE id = 'a1950000-0000-0000-0000-000000000001';
 DELETE FROM budget_alert_responsibles;
 
