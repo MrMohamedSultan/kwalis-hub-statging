@@ -1,6 +1,7 @@
 import type { BudgetLine as StoreBudgetLine } from "@/lib/store";
 import { generateId } from "@/lib/store";
 import type { BudgetLine as AdapterBudgetLine } from "@/lib/excelAdapter";
+import { categoryOfCode } from "@/lib/cost-report";
 
 /** Adapter group (ATL/BTL/POST/OTHER) → store group. */
 export function toStoreGroup(g: AdapterBudgetLine["group"]): StoreBudgetLine["group"] {
@@ -16,6 +17,18 @@ export function toAdapterGroup(g: StoreBudgetLine["group"]): AdapterBudgetLine["
   if (g === "BTL") return "BTL";
   if (g === "Post" || g === "Music" || g === "VFX") return "POST";
   return "OTHER";
+}
+
+/**
+ * Store group of an imported line: from its budget code when the code is in
+ * the client chart of accounts (6000 → Music, 6100 → VFX, R09), else from the
+ * sheet group the adapter read (POST → Post).
+ */
+export function storeGroupOfLine(
+  l: Pick<AdapterBudgetLine, "group" | "main_code" | "header_code">,
+): StoreBudgetLine["group"] {
+  const code = String(l.main_code ?? "").trim() || String(l.header_code ?? "").trim();
+  return categoryOfCode(code, l.group);
 }
 
 /** Multi-sheet Excel line → store BudgetLine ready for the DB. */
@@ -41,7 +54,7 @@ export function adapterLineToStoreLine(l: AdapterBudgetLine): StoreBudgetLine {
     shooting,
     wrap,
     notes: String(l.notes ?? "").trim() || undefined,
-    group: toStoreGroup(l.group),
+    group: storeGroupOfLine(l),
     excluded: false,
   };
 }
