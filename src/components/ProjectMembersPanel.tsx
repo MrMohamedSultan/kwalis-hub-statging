@@ -7,6 +7,12 @@ import { useTranslation } from "react-i18next";
 import { PROJECT_ROLES, type ProjectRole } from "@/lib/project-role";
 type ExecutiveTitle = "CEO" | "CFO" | "Executive Producer" | "Board Member";
 const EXEC_TITLES: ExecutiveTitle[] = ["CEO", "CFO", "Executive Producer", "Board Member"];
+const EXEC_TITLE_KEY: Record<ExecutiveTitle, string> = {
+  CEO: "ceo",
+  CFO: "cfo",
+  "Executive Producer": "executive_producer",
+  "Board Member": "board_member",
+};
 // Roles an admin may hand out — "owner" is set only by project creation.
 const ASSIGNABLE_ROLES = PROJECT_ROLES.filter((r) => r !== "owner");
 
@@ -103,21 +109,28 @@ export function ProjectMembersPanel({
       setRole("member");
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to add member.");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.mem.add_failed"));
     } finally {
       setSaving(false);
     }
   };
 
   const removeMember = async (m: Member) => {
-    if (!confirm(`Remove ${m.display_name ?? "this user"} from the project?`)) return;
+    if (
+      !confirm(
+        t("closeout.ui.mem.remove_confirm", {
+          name: m.display_name ?? t("closeout.ui.mem.this_user"),
+        }),
+      )
+    )
+      return;
     try {
       const { error } = await supabase.from("project_members").delete().eq("id", m.id);
       if (error) throw error;
       toast.success(t("projectmemberspanel.member_removed"));
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to remove member.");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.mem.remove_failed"));
     }
   };
 
@@ -131,7 +144,7 @@ export function ProjectMembersPanel({
       toast.success(t("projectmemberspanel.role_updated"));
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to update role.");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.mem.role_failed"));
     }
   };
 
@@ -144,11 +157,15 @@ export function ProjectMembersPanel({
         .eq("id", m.id);
       if (error) throw error;
       toast.success(
-        newTitle ? `Assigned as ${newTitle} (Executive View).` : "Executive title cleared.",
+        newTitle
+          ? t("closeout.ui.mem.title_set", {
+              title: t(`closeout.ui.exec_title.${EXEC_TITLE_KEY[newTitle]}`),
+            })
+          : t("closeout.ui.mem.title_cleared"),
       );
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to update executive title.");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.mem.title_failed"));
     }
   };
 
@@ -160,10 +177,7 @@ export function ProjectMembersPanel({
           {t("projectmemberspanel.project_members")}
         </h3>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Only users listed here (plus organization admins) can access this project's budget, payroll,
-        invoices, and financial data.
-      </p>
+      <p className="text-xs text-muted-foreground">{t("closeout.ui.mem.intro")}</p>
 
       <div className="rounded-lg border border-border bg-card p-3 space-y-2">
         <div className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1">
@@ -176,7 +190,7 @@ export function ProjectMembersPanel({
             onChange={(e) => setSelectedUser(e.target.value)}
             className="flex-1 bg-card text-foreground border border-border rounded-md px-2 py-1.5 text-sm"
           >
-            <option value="">Select an organization member…</option>
+            <option value="">{t("closeout.ui.mem.select")}</option>
             {candidates.map((u) => (
               <option key={u.user_id} value={u.user_id}>
                 {u.display_name ?? u.user_id.slice(0, 8)} · {u.role}
@@ -199,19 +213,16 @@ export function ProjectMembersPanel({
             disabled={saving || !selectedUser}
             className="px-3 py-1.5 rounded-md bg-brand text-brand-foreground text-sm font-semibold hover:brightness-110 disabled:opacity-50"
           >
-            {saving ? "Adding…" : "Add"}
+            {saving ? t("closeout.ui.mem.adding") : t("closeout.ui.mem.add")}
           </button>
         </div>
         {!loading && candidates.length === 0 && (
-          <div className="text-[11px] text-muted-foreground">
-            All organization members are already on this project. Invite more users at the
-            organization level to add them here.
-          </div>
+          <div className="text-[11px] text-muted-foreground">{t("closeout.ui.mem.all_added")}</div>
         )}
       </div>
 
       {loading ? (
-        <div className="text-xs text-muted-foreground py-4">Loading members…</div>
+        <div className="text-xs text-muted-foreground py-4">{t("closeout.ui.mem.loading")}</div>
       ) : members.length === 0 ? (
         <div className="text-xs text-muted-foreground py-4 text-center border border-dashed border-border rounded-lg">
           {t("projectmemberspanel.no_project_members_yet_add_one_above")}
@@ -221,10 +232,10 @@ export function ProjectMembersPanel({
           <table className="w-full text-sm">
             <thead>
               <tr className="text-start text-[10px] uppercase tracking-wide text-muted-foreground border-b border-border">
-                <th className="py-2 pr-3">Name</th>
-                <th className="py-2 pr-3">Role</th>
-                <th className="py-2 pr-3">Executive Title</th>
-                <th className="py-2 pr-3 text-end">Action</th>
+                <th className="py-2 pr-3">{t("closeout.ui.name")}</th>
+                <th className="py-2 pr-3">{t("closeout.ui.role")}</th>
+                <th className="py-2 pr-3">{t("closeout.ui.mem.exec_title")}</th>
+                <th className="py-2 pr-3 text-end">{t("closeout.ui.action")}</th>
               </tr>
             </thead>
             <tbody>
@@ -259,10 +270,10 @@ export function ProjectMembersPanel({
                         "projectmemberspanel.executive_titles_get_a_strict_readonly_view_dashboard",
                       )}
                     >
-                      <option value="">— None —</option>
-                      {EXEC_TITLES.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
+                      <option value="">{t("closeout.ui.mem.none")}</option>
+                      {EXEC_TITLES.map((x) => (
+                        <option key={x} value={x}>
+                          {t(`closeout.ui.exec_title.${EXEC_TITLE_KEY[x]}`)}
                         </option>
                       ))}
                     </select>
@@ -272,7 +283,11 @@ export function ProjectMembersPanel({
                       onClick={() => void removeMember(m)}
                       disabled={m.role === "owner"}
                       className="p-1.5 rounded-md hover:bg-destructive/20 text-destructive disabled:opacity-40"
-                      title={m.role === "owner" ? "Cannot remove project owner" : "Remove member"}
+                      title={
+                        m.role === "owner"
+                          ? t("closeout.ui.mem.cannot_remove_owner")
+                          : t("closeout.ui.mem.remove")
+                      }
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

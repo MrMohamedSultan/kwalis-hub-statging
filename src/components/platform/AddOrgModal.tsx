@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { z } from "zod";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,13 +32,14 @@ import {
 } from "@/components/ui/select";
 
 const OrgSchema = z.object({
-  name: z.string().trim().min(2, "Company name is required").max(120),
+  name: z.string().trim().min(2, "closeout.ui.org.err_name").max(120),
   industry: z.string().trim().max(80),
-  contact_email: z.string().trim().email("Enter a valid email address").or(z.literal("")),
+  contact_email: z.string().trim().email("closeout.ui.org.err_email").or(z.literal("")),
   subscription_status: z.enum(SUBSCRIPTION_STATUSES),
 });
 
 export function AddOrgModal({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [industry, setIndustry] = useState("");
   const [email, setEmail] = useState("");
@@ -52,7 +54,8 @@ export function AddOrgModal({ onClose }: { onClose: () => void }) {
       subscription_status: status,
     });
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "Invalid input");
+      // zod messages are i18n keys (D19)
+      toast.error(t(parsed.error.issues[0]?.message ?? "closeout.ui.invalid_input"));
       return;
     }
     setSaving(true);
@@ -71,10 +74,10 @@ export function AddOrgModal({ onClose }: { onClose: () => void }) {
         subscription_status: parsed.data.subscription_status,
       });
       if (error) throw error;
-      toast.success("Company created");
+      toast.success(t("closeout.ui.org.created"));
       onClose();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not create company");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.org.create_failed"));
     } finally {
       setSaving(false);
     }
@@ -84,35 +87,35 @@ export function AddOrgModal({ onClose }: { onClose: () => void }) {
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Client Company</DialogTitle>
+          <DialogTitle>{t("closeout.ui.org.add_title")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <Label htmlFor="org-name">Company name</Label>
+            <Label htmlFor="org-name">{t("closeout.ui.org.name")}</Label>
             <Input
               id="org-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Neom Pictures"
+              placeholder={t("closeout.ui.org.name_ph")}
               maxLength={120}
               autoFocus
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="org-industry">Industry</Label>
+            <Label htmlFor="org-industry">{t("closeout.ui.org.industry")}</Label>
             <Input
               id="org-industry"
               value={industry}
               onChange={(e) => setIndustry(e.target.value)}
-              placeholder="e.g. Film & TV Production"
+              placeholder={t("closeout.ui.org.industry_ph")}
               maxLength={80}
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="org-email">Contact email</Label>
+            <Label htmlFor="org-email">{t("closeout.ui.org.email")}</Label>
             <Input
               id="org-email"
               type="email"
@@ -124,7 +127,7 @@ export function AddOrgModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="space-y-1.5">
-            <Label>Subscription status</Label>
+            <Label>{t("closeout.ui.org.subscription")}</Label>
             <Select value={status} onValueChange={(v) => setStatus(v as SubscriptionStatus)}>
               <SelectTrigger>
                 <SelectValue />
@@ -142,10 +145,10 @@ export function AddOrgModal({ onClose }: { onClose: () => void }) {
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button onClick={() => void submit()} disabled={saving}>
-            {saving ? "Creating…" : "Create Company"}
+            {saving ? t("closeout.ui.org.creating") : t("closeout.ui.org.create")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -49,8 +49,8 @@ export const Route = createFileRoute("/_platform-hub/platform-hub/users_/$userId
 const ORG_ROLES = ["owner", "admin", "member"] as const;
 
 const profileSchema = z.object({
-  display_name: z.string().trim().min(1, "Full name is required").max(120),
-  job_title: z.string().trim().max(60, "Job title must be 60 characters or fewer"),
+  display_name: z.string().trim().min(1, "closeout.ui.usr.err_name").max(120),
+  job_title: z.string().trim().max(60, "closeout.ui.usr.err_title"),
   org_role: z.enum(ORG_ROLES).optional(),
 });
 
@@ -131,7 +131,7 @@ function PlatformUserDetailPage() {
         setOrgRole(row.role);
         setBaseline((b) => ({ ...b, orgRole: row.role }));
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Could not load this user");
+        toast.error(e instanceof Error ? e.message : t("closeout.ui.usr.load_failed"));
       } finally {
         if (active) setLoading(false);
       }
@@ -170,7 +170,7 @@ function PlatformUserDetailPage() {
       setRemoveOpen(false);
       leave();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not remove this user");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.usr.remove_failed"));
     } finally {
       setRemoving(false);
     }
@@ -183,7 +183,8 @@ function PlatformUserDetailPage() {
       org_role: membership ? (orgRole as (typeof ORG_ROLES)[number]) : undefined,
     });
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "Please check the form");
+      // zod messages are i18n keys (D19)
+      toast.error(t(parsed.error.issues[0]?.message ?? "closeout.ui.usr.check_form"));
       return;
     }
     setSaving(true);
@@ -214,14 +215,14 @@ function PlatformUserDetailPage() {
       setJobTitle(parsed.data.job_title);
       toast.success(t("hub_users_userid.user_updated"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Save failed");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.co.save_failed"));
     } finally {
       setSaving(false);
     }
   }
 
   if (loading) {
-    return <div className="p-8 text-sm text-muted-foreground">Loading user…</div>;
+    return <div className="p-8 text-sm text-muted-foreground">{t("closeout.ui.usr.loading")}</div>;
   }
 
   if (missing) {
@@ -249,7 +250,11 @@ function PlatformUserDetailPage() {
         className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition"
       >
         <ArrowLeft className="size-4 rtl:rotate-180" />
-        {from ? `Back to ${membership?.org_name ?? "company"}` : "All users"}
+        {from
+          ? t("closeout.ui.usr.back_to", {
+              name: membership?.org_name ?? t("closeout.ui.usr.the_company"),
+            })
+          : t("closeout.ui.usr.all_users")}
       </button>
 
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -258,10 +263,12 @@ function PlatformUserDetailPage() {
             <UserRound className="size-5" />
           </span>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">{displayName || "Unnamed user"}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">
+              {displayName || t("closeout.ui.usr.unnamed")}
+            </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               {membership?.org_name ? `${membership.org_name} · ` : ""}
-              {jobTitle || "No job title"}
+              {jobTitle || t("closeout.ui.usr.no_title")}
             </p>
           </div>
         </div>
@@ -271,7 +278,8 @@ function PlatformUserDetailPage() {
           disabled={saving}
           className="inline-flex items-center gap-2 rounded-lg bg-brand text-brand-foreground px-4 py-2 text-sm font-semibold hover:brightness-110 transition disabled:opacity-60"
         >
-          <Save className="size-4" /> {saving ? "Saving…" : "Save changes"}
+          <Save className="size-4" />{" "}
+          {saving ? t("closeout.ui.saving") : t("closeout.ui.save_changes")}
         </button>
       </header>
 
@@ -280,7 +288,7 @@ function PlatformUserDetailPage() {
           {t("hub_users_userid.profile_details")}
         </h2>
         <label className="block space-y-1.5">
-          <span className={labelClass}>Full name</span>
+          <span className={labelClass}>{t("closeout.ui.usr.full_name")}</span>
           <input
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
@@ -289,7 +297,8 @@ function PlatformUserDetailPage() {
         </label>
         <label className="block space-y-1.5">
           <span className={labelClass}>
-            Job title <span className="font-normal normal-case">(optional)</span>
+            {t("closeout.ui.hub_job_title")}{" "}
+            <span className="font-normal normal-case">({t("common.optional")})</span>
           </span>
           <input
             value={jobTitle}
@@ -302,7 +311,8 @@ function PlatformUserDetailPage() {
         {membership ? (
           <label className="block space-y-1.5">
             <span className={labelClass}>
-              Company role {membership.org_name ? `· ${membership.org_name}` : ""}
+              {t("closeout.ui.usr.company_role")}{" "}
+              {membership.org_name ? `· ${membership.org_name}` : ""}
             </span>
             <select
               value={orgRole}
@@ -311,7 +321,7 @@ function PlatformUserDetailPage() {
             >
               {ORG_ROLES.map((r) => (
                 <option key={r} value={r}>
-                  {r}
+                  {t(`closeout.ui.usr.role.${r}`)}
                 </option>
               ))}
             </select>
@@ -330,9 +340,9 @@ function PlatformUserDetailPage() {
             {t("hub_users_userid.danger_zone")}
           </h2>
           <p className="text-xs text-muted-foreground">
-            Removing this user revokes their access to
-            {membership.org_name ? ` ${membership.org_name}` : " this company"}. Their profile is
-            kept, but they lose all company data access immediately.
+            {t("closeout.ui.usr.remove_explain", {
+              name: membership.org_name ?? t("closeout.ui.usr.this_company"),
+            })}
           </p>
           <button
             type="button"
@@ -347,15 +357,16 @@ function PlatformUserDetailPage() {
       <AlertDialog open={removeOpen} onOpenChange={setRemoveOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove this user?</AlertDialogTitle>
+            <AlertDialogTitle>{t("closeout.ui.usr.remove_title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {displayName || "This user"} will immediately lose access to
-              {membership?.org_name ? ` ${membership.org_name}` : " this company"}. This action
-              cannot be undone from here.
+              {t("closeout.ui.usr.remove_confirm", {
+                user: displayName || t("closeout.ui.usr.this_user"),
+                name: membership?.org_name ?? t("closeout.ui.usr.this_company"),
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={removing}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={removing}>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               disabled={removing}
               onClick={(e) => {
@@ -364,7 +375,7 @@ function PlatformUserDetailPage() {
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {removing ? "Removing…" : "Remove user"}
+              {removing ? t("closeout.ui.usr.removing") : t("closeout.ui.usr.remove")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -373,7 +384,7 @@ function PlatformUserDetailPage() {
       <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+            <AlertDialogTitle>{t("closeout.ui.usr.discard_title")}</AlertDialogTitle>
             <AlertDialogDescription>
               {t("hub_users_userid.you_have_unsaved_edits_on_this_profile_leaving")}
             </AlertDialogDescription>

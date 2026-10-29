@@ -43,7 +43,7 @@ function CompaniesPage() {
     try {
       setRows(await listCompanies());
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not load companies");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.gov.load_failed"));
     } finally {
       setLoading(false);
     }
@@ -73,7 +73,7 @@ function CompaniesPage() {
   return (
     <>
       <PageTitle
-        title="Client Companies"
+        title={t("closeout.ui.gov.client_companies")}
         back={false}
         action={
           <button

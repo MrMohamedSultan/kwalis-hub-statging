@@ -97,7 +97,7 @@ function RegistrationRequestsPage() {
     try {
       setRows(await listAccessRequests());
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not load requests");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.reg.load_failed"));
     } finally {
       setLoading(false);
     }
@@ -137,11 +137,15 @@ function RegistrationRequestsPage() {
     setBusy(true);
     try {
       await updateAccessRequest(req.id, { status: next });
-      toast.success(`Marked as ${next}`);
+      toast.success(
+        t("closeout.ui.reg.marked", {
+          status: t(`closeout.ui.reg.status.${next}`, { defaultValue: next }),
+        }),
+      );
       await refresh();
       setSelected((s) => (s && s.id === req.id ? { ...s, status: next } : s));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Update failed");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.reg.update_failed"));
     } finally {
       setBusy(false);
     }
@@ -154,7 +158,7 @@ function RegistrationRequestsPage() {
       toast.success(t("hub_registration_requests.notes_saved"));
       await refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not save notes");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.reg.notes_failed"));
     } finally {
       setBusy(false);
     }
@@ -165,11 +169,11 @@ function RegistrationRequestsPage() {
     setBusy(true);
     try {
       const orgId = await approveAccessRequest(req);
-      toast.success(`${req.company || req.name} approved and created as a client company`);
+      toast.success(t("closeout.ui.reg.approved_toast", { name: req.company || req.name }));
       await refresh();
       navigate({ to: "/platform-hub/companies/$companyId", params: { companyId: orgId } });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Approval failed");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.reg.approve_failed"));
     } finally {
       setBusy(false);
     }
@@ -183,7 +187,7 @@ function RegistrationRequestsPage() {
       await refresh();
       setSelected((s) => (s && s.id === req.id ? { ...s, status: "rejected" } : s));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Rejection failed");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.reg.reject_failed"));
     } finally {
       setBusy(false);
     }
@@ -231,7 +235,7 @@ function RegistrationRequestsPage() {
                   : "border-border text-muted-foreground hover:bg-accent"
               }`}
             >
-              {s.label}
+              {t(`closeout.ui.reg.status.${s.value}`, { defaultValue: s.label })}
             </button>
           ))}
         </div>
@@ -243,17 +247,21 @@ function RegistrationRequestsPage() {
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="text-start font-semibold px-4 py-3">Company</th>
-                  <th className="text-start font-semibold px-4 py-3">Contact</th>
-                  <th className="text-start font-semibold px-4 py-3">Industry</th>
-                  <th className="text-start font-semibold px-4 py-3">Status</th>
+                  <th className="text-start font-semibold px-4 py-3">{t("closeout.ui.company")}</th>
+                  <th className="text-start font-semibold px-4 py-3">
+                    {t("closeout.ui.reg.contact")}
+                  </th>
+                  <th className="text-start font-semibold px-4 py-3">
+                    {t("closeout.ui.org.industry")}
+                  </th>
+                  <th className="text-start font-semibold px-4 py-3">{t("common.status")}</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
                     <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
-                      Loading requests…
+                      {t("closeout.ui.reg.loading")}
                     </td>
                   </tr>
                 )}
@@ -288,7 +296,7 @@ function RegistrationRequestsPage() {
                       <span
                         className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize ${statusClass(r.status)}`}
                       >
-                        {r.status}
+                        {t(`closeout.ui.reg.status.${r.status}`, { defaultValue: r.status })}
                       </span>
                     </td>
                   </tr>
@@ -336,7 +344,7 @@ function RegistrationRequestsPage() {
 
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Internal notes
+                  {t("closeout.ui.reg.notes")}
                 </label>
                 <textarea
                   value={notes}
@@ -358,7 +366,7 @@ function RegistrationRequestsPage() {
 
               <div className="space-y-2">
                 <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Pipeline
+                  {t("closeout.ui.reg.pipeline")}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {(["contacted", "qualified"] as AccessRequestStatus[]).map((s) => (
@@ -369,7 +377,7 @@ function RegistrationRequestsPage() {
                       onClick={() => void setStatusFor(selected, s)}
                       className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold capitalize hover:bg-accent transition disabled:opacity-60"
                     >
-                      {s}
+                      {t(`closeout.ui.reg.status.${s}`, { defaultValue: s })}
                     </button>
                   ))}
                 </div>
@@ -399,7 +407,9 @@ function RegistrationRequestsPage() {
                   className="inline-flex items-center gap-2 rounded-lg bg-brand text-brand-foreground px-3 py-2 text-sm font-semibold hover:brightness-110 transition disabled:opacity-60"
                 >
                   <Check className="size-4" />
-                  {selected.status === "converted" ? "Approved" : "Approve & create company"}
+                  {selected.status === "converted"
+                    ? t("closeout.ui.reg.approved")
+                    : t("closeout.ui.reg.approve_create")}
                   <ArrowRight className="size-4" />
                 </button>
                 <button
@@ -408,7 +418,7 @@ function RegistrationRequestsPage() {
                   onClick={() => void reject(selected)}
                   className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-accent transition disabled:opacity-60"
                 >
-                  <X className="size-4" /> Reject
+                  <X className="size-4" /> {t("closeout.ui.reg.reject")}
                 </button>
                 <button
                   type="button"
@@ -416,7 +426,7 @@ function RegistrationRequestsPage() {
                   onClick={() => setConfirmDelete(selected)}
                   className="inline-flex items-center gap-2 rounded-lg border border-destructive/40 text-destructive px-3 py-2 text-sm font-semibold hover:bg-destructive/10 transition disabled:opacity-60"
                 >
-                  <Trash2 className="size-4" /> Delete
+                  <Trash2 className="size-4" /> {t("common.delete")}
                 </button>
               </div>
             </div>
@@ -427,8 +437,10 @@ function RegistrationRequestsPage() {
       {confirmDelete && (
         <ConfirmDialog
           title={t("hub_registration_requests.delete_this_request")}
-          message={`“${confirmDelete.company || confirmDelete.name}” will be removed permanently.`}
-          confirmLabel="Delete"
+          message={t("closeout.ui.co.doc_remove", {
+            name: confirmDelete.company || confirmDelete.name,
+          })}
+          confirmLabel={t("common.delete")}
           open
           tone="danger"
           onCancel={() => setConfirmDelete(null)}
@@ -439,7 +451,7 @@ function RegistrationRequestsPage() {
               setSelected(null);
               await refresh();
             } catch (e) {
-              toast.error(e instanceof Error ? e.message : "Delete failed");
+              toast.error(e instanceof Error ? e.message : t("closeout.ui.co.delete_failed"));
             } finally {
               setConfirmDelete(null);
             }

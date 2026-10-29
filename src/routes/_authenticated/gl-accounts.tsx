@@ -109,7 +109,7 @@ function GlAccountsPage() {
       })),
       ["Code", "Name", "Category", "Description", "Active"],
     );
-    toast.success(`Exported ${filtered.length} GL accounts to Excel.`);
+    toast.success(t("closeout.ui.gl.exported_excel", { count: filtered.length }));
   };
 
   const exportPdf = () => {
@@ -132,7 +132,7 @@ function GlAccountsPage() {
       ],
       { documentTitle: "GL Chart of Accounts" },
     );
-    toast.success(`Exported ${filtered.length} GL accounts to PDF.`);
+    toast.success(t("closeout.ui.gl.exported_pdf", { count: filtered.length }));
   };
 
   const startNew = () => setEditor({ ...EMPTY_DRAFT });
@@ -172,7 +172,7 @@ function GlAccountsPage() {
       }
       setEditor(null);
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to save GL account.");
+      toast.error(e?.message ?? t("closeout.ui.gl.save_failed"));
     } finally {
       setSaving(false);
     }
@@ -181,7 +181,10 @@ function GlAccountsPage() {
   const remove = async (r: GlAccount) => {
     if (
       !confirm(
-        `Delete GL account "${r.code} · ${r.name}"?\nTransactions referencing it will be un-categorized.`,
+        t("closeout.ui.gl.delete_confirm", {
+          name: `${r.code} · ${r.name}`,
+          interpolation: { escapeValue: false },
+        }),
       )
     )
       return;
@@ -189,7 +192,7 @@ function GlAccountsPage() {
       await deleteGlAccount(r.id);
       toast.success(t("gl_accounts.gl_account_deleted"));
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to delete GL account.");
+      toast.error(e?.message ?? t("closeout.ui.gl.delete_failed"));
     }
   };
 
@@ -203,10 +206,7 @@ function GlAccountsPage() {
           </div>
           <div>
             <h1 className="text-2xl font-semibold">{t("gl_accounts.gl_accounts")}</h1>
-            <p className="text-sm text-muted-foreground">
-              Film Production Chart of Accounts. Used to categorize transactions for GL and
-              Compliance reports.
-            </p>
+            <p className="text-sm text-muted-foreground">{t("closeout.ui.gl.intro")}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -271,7 +271,7 @@ function GlAccountsPage() {
           }}
           className="bg-surface-2 border border-border rounded-xl px-3 py-2 text-sm"
         >
-          <option value="all">All categories</option>
+          <option value="all">{t("closeout.ui.all_categories")}</option>
           {GL_CATEGORIES.map((c) => (
             <option key={c.key} value={c.key}>
               {c.label}
@@ -284,18 +284,18 @@ function GlAccountsPage() {
         <table className="w-full text-sm">
           <thead className="bg-surface text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
-              <th className="text-start px-3 py-2 font-medium">Code</th>
-              <th className="text-start px-3 py-2 font-medium">Name</th>
-              <th className="text-start px-3 py-2 font-medium">Category</th>
-              <th className="text-start px-3 py-2 font-medium">Description</th>
-              <th className="text-end px-3 py-2 font-medium w-[1%]">Actions</th>
+              <th className="text-start px-3 py-2 font-medium">{t("closeout.ui.code")}</th>
+              <th className="text-start px-3 py-2 font-medium">{t("closeout.ui.name")}</th>
+              <th className="text-start px-3 py-2 font-medium">{t("closeout.ui.category")}</th>
+              <th className="text-start px-3 py-2 font-medium">{t("closeout.ui.description")}</th>
+              <th className="text-end px-3 py-2 font-medium w-[1%]">{t("common.actions")}</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
                 <td colSpan={5} className="text-center py-8 text-muted-foreground">
-                  Loading…
+                  {t("common.loading")}
                 </td>
               </tr>
             )}
@@ -325,7 +325,7 @@ function GlAccountsPage() {
                       onClick={() => startEdit(r)}
                       className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-surface hover:bg-muted text-xs me-1"
                     >
-                      <Pencil className="size-3" /> Edit
+                      <Pencil className="size-3" /> {t("common.edit")}
                     </GuardedButton>
                     <GuardedButton
                       perm="gl.manage"
@@ -333,7 +333,7 @@ function GlAccountsPage() {
                       onClick={() => remove(r)}
                       className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-destructive/15 text-destructive hover:bg-destructive/25 text-xs"
                     >
-                      <Trash2 className="size-3" /> Delete
+                      <Trash2 className="size-3" /> {t("common.delete")}
                     </GuardedButton>
                   </td>
                 </tr>
@@ -352,8 +352,11 @@ function GlAccountsPage() {
       {filtered.length > pageSize && (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <div>
-            Showing {(currentPage - 1) * pageSize + 1}–
-            {Math.min(currentPage * pageSize, filtered.length)} of {filtered.length}
+            {t("closeout.ui.showing", {
+              from: (currentPage - 1) * pageSize + 1,
+              to: Math.min(currentPage * pageSize, filtered.length),
+              total: filtered.length,
+            })}
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -361,17 +364,17 @@ function GlAccountsPage() {
               disabled={currentPage <= 1}
               className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-surface hover:bg-muted disabled:opacity-40"
             >
-              <ChevronLeft className="size-3" /> Prev
+              <ChevronLeft className="size-3" /> {t("closeout.ui.prev")}
             </button>
             <span className="px-2">
-              Page {currentPage} / {totalPages}
+              {t("closeout.ui.page", { page: currentPage, total: totalPages })}
             </span>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage >= totalPages}
               className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-surface hover:bg-muted disabled:opacity-40"
             >
-              Next <ChevronRight className="size-3" />
+              {t("closeout.ui.next")} <ChevronRight className="size-3" />
             </button>
           </div>
         </div>
@@ -388,7 +391,7 @@ function GlAccountsPage() {
           >
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">
-                {editor.id ? "Edit GL Account" : "New GL Account"}
+                {editor.id ? t("closeout.ui.gl.edit") : t("closeout.ui.gl.new")}
               </h2>
               <button onClick={() => setEditor(null)} className="p-1 rounded-lg hover:bg-muted">
                 <X className="size-4" />
@@ -396,7 +399,7 @@ function GlAccountsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <label className="text-xs text-muted-foreground col-span-1">
-                Code
+                {t("closeout.ui.code")}
                 <input
                   value={editor.code}
                   onChange={(e) => setEditor({ ...editor, code: e.target.value })}
@@ -405,7 +408,7 @@ function GlAccountsPage() {
                 />
               </label>
               <label className="text-xs text-muted-foreground col-span-1">
-                Category
+                {t("closeout.ui.category")}
                 <select
                   value={editor.category}
                   onChange={(e) =>
@@ -421,7 +424,7 @@ function GlAccountsPage() {
                 </select>
               </label>
               <label className="text-xs text-muted-foreground col-span-2">
-                Name
+                {t("closeout.ui.name")}
                 <input
                   value={editor.name}
                   onChange={(e) => setEditor({ ...editor, name: e.target.value })}
@@ -429,7 +432,7 @@ function GlAccountsPage() {
                 />
               </label>
               <label className="text-xs text-muted-foreground col-span-2">
-                Description
+                {t("closeout.ui.description")}
                 <textarea
                   value={editor.description}
                   onChange={(e) => setEditor({ ...editor, description: e.target.value })}
@@ -444,14 +447,15 @@ function GlAccountsPage() {
                 disabled={saving}
                 className="px-3 py-1.5 rounded-lg bg-surface hover:bg-muted text-sm"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 onClick={save}
                 disabled={saving}
                 className="px-3 py-1.5 rounded-lg bg-brand text-brand-foreground text-sm font-semibold inline-flex items-center gap-1 disabled:opacity-50"
               >
-                <Save className="size-3.5" /> {saving ? "Saving…" : "Save"}
+                <Save className="size-3.5" />{" "}
+                {saving ? t("closeout.ui.saving") : t("closeout.ui.save")}
               </button>
             </div>
           </div>

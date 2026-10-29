@@ -6,10 +6,15 @@
 
 import { formatDate } from "@/lib/date-format";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { listCompanies, type CompanyRow } from "@/lib/platform-companies";
-import { subscriptionStatusBadgeClass, subscriptionStatusLabel } from "@/lib/subscription-status";
+import {
+  normalizeSubscriptionStatus,
+  subscriptionStatusBadgeClass,
+  subscriptionStatusLabel,
+} from "@/lib/subscription-status";
 
 function statusBadgeClass(status?: string | null) {
   switch (status) {
@@ -17,9 +22,11 @@ function statusBadgeClass(status?: string | null) {
     case "active":
       return "bg-success/15 text-success border-success/30";
     case "Trial":
+    case "trial":
     case "planning":
       return "bg-brand/15 text-brand border-brand/30";
     case "Suspended":
+    case "suspended":
     case "on_hold":
       return "bg-warning/15 text-warning border-warning/30";
     case "Cancelled":
@@ -44,6 +51,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 // ─── GlobalAnalytics ────────────────────────────────────────────────
 
 export function GlobalAnalytics() {
+  const { t } = useTranslation();
   const [companyStatus, setCompanyStatus] = useState<Record<string, number>>({});
   const [projectStatus, setProjectStatus] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -60,16 +68,18 @@ export function GlobalAnalytics() {
         const byStatus = (rows: { [k: string]: string | null }[], key: string) => {
           const out: Record<string, number> = {};
           for (const r of rows) {
-            const v = (r[key] as string | null) ?? "Unknown";
+            const v = (r[key] as string | null) ?? "unknown";
             out[v] = (out[v] ?? 0) + 1;
           }
           return out;
         };
-        // D01: group by the canonical status so "Active" and "active" are one bucket.
+        // D01: group by the canonical status so "Active" and "active" are one bucket
+        // (D19: the label is translated when shown, the bucket key stays canonical).
         setCompanyStatus(
           byStatus(
             (orgs.data ?? []).map((o) => ({
-              subscription_status: subscriptionStatusLabel(o.subscription_status),
+              subscription_status:
+                normalizeSubscriptionStatus(o.subscription_status) ?? o.subscription_status,
             })),
             "subscription_status",
           ),
@@ -86,15 +96,19 @@ export function GlobalAnalytics() {
     };
   }, []);
 
-  const renderBreakdown = (title: string, data: Record<string, number>) => (
+  const renderBreakdown = (
+    title: string,
+    data: Record<string, number>,
+    label: (k: string) => string,
+  ) => (
     <div>
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {title}
       </p>
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
       ) : Object.keys(data).length === 0 ? (
-        <p className="text-sm text-muted-foreground">No data yet.</p>
+        <p className="text-sm text-muted-foreground">{t("closeout.ui.gov.no_data")}</p>
       ) : (
         <div className="flex flex-wrap gap-2">
           {Object.entries(data).map(([k, v]) => (
@@ -102,7 +116,7 @@ export function GlobalAnalytics() {
               key={k}
               className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${statusBadgeClass(k)}`}
             >
-              {k}
+              {label(k)}
               <span className="tabular-nums font-semibold">{v}</span>
             </span>
           ))}
@@ -112,10 +126,14 @@ export function GlobalAnalytics() {
   );
 
   return (
-    <Panel title="Global Analytics">
+    <Panel title={t("closeout.ui.gov.analytics")}>
       <div className="grid gap-5 sm:grid-cols-2">
-        {renderBreakdown("Companies by subscription", companyStatus)}
-        {renderBreakdown("Productions by status", projectStatus)}
+        {renderBreakdown(t("closeout.ui.gov.by_subscription"), companyStatus, (k) =>
+          k === "unknown" ? t("closeout.ui.gov.unknown") : subscriptionStatusLabel(k),
+        )}
+        {renderBreakdown(t("closeout.ui.gov.by_status"), projectStatus, (k) =>
+          k === "unknown" ? t("closeout.ui.gov.unknown") : k,
+        )}
       </div>
     </Panel>
   );
@@ -133,6 +151,7 @@ type ProjectRow = {
 };
 
 export function PlatformProjectsOverview() {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -181,21 +200,23 @@ export function PlatformProjectsOverview() {
   }, []);
 
   return (
-    <Panel title="Productions Overview">
+    <Panel title={t("closeout.ui.gov.productions_overview")}>
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No productions across the platform yet.</p>
+        <p className="text-sm text-muted-foreground">{t("closeout.ui.gov.no_productions")}</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-start text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-2 py-2 text-start font-medium">Production</th>
-                <th className="px-2 py-2 text-start font-medium">Code</th>
-                <th className="px-2 py-2 text-start font-medium">Company</th>
-                <th className="px-2 py-2 text-start font-medium">Status</th>
-                <th className="px-2 py-2 text-start font-medium">Created</th>
+                <th className="px-2 py-2 text-start font-medium">
+                  {t("closeout.ui.gov.production")}
+                </th>
+                <th className="px-2 py-2 text-start font-medium">{t("closeout.ui.code")}</th>
+                <th className="px-2 py-2 text-start font-medium">{t("closeout.ui.company")}</th>
+                <th className="px-2 py-2 text-start font-medium">{t("common.status")}</th>
+                <th className="px-2 py-2 text-start font-medium">{t("closeout.ui.created")}</th>
               </tr>
             </thead>
             <tbody>
@@ -235,6 +256,7 @@ export function PlatformProjectsOverview() {
 // ─── OrgTable ───────────────────────────────────────────────────────
 
 export function OrgTable() {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<CompanyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -255,22 +277,28 @@ export function OrgTable() {
   }, []);
 
   return (
-    <Panel title="Client Companies">
+    <Panel title={t("closeout.ui.gov.client_companies")}>
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No client companies yet.</p>
+        <p className="text-sm text-muted-foreground">{t("closeout.ui.gov.no_companies")}</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-2 py-2 text-start font-medium">Company</th>
-                <th className="px-2 py-2 text-start font-medium">Industry</th>
-                <th className="px-2 py-2 text-start font-medium">Status</th>
-                <th className="px-2 py-2 text-end font-medium">Users</th>
-                <th className="px-2 py-2 text-end font-medium">Productions</th>
-                <th className="px-2 py-2 text-start font-medium">Onboarded</th>
+                <th className="px-2 py-2 text-start font-medium">{t("closeout.ui.company")}</th>
+                <th className="px-2 py-2 text-start font-medium">
+                  {t("closeout.ui.org.industry")}
+                </th>
+                <th className="px-2 py-2 text-start font-medium">{t("common.status")}</th>
+                <th className="px-2 py-2 text-end font-medium">{t("closeout.ui.gov.users")}</th>
+                <th className="px-2 py-2 text-end font-medium">
+                  {t("closeout.ui.gov.productions")}
+                </th>
+                <th className="px-2 py-2 text-start font-medium">
+                  {t("closeout.ui.gov.onboarded")}
+                </th>
               </tr>
             </thead>
             <tbody>

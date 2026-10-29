@@ -11,6 +11,8 @@
 // through this file: normalise on read, write the canonical value.
 // =====================================================================
 
+import i18n from "@/lib/i18n";
+
 export const SUBSCRIPTION_STATUSES = ["trial", "active", "suspended", "cancelled"] as const;
 
 export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
@@ -41,7 +43,7 @@ export function normalizeSubscriptionStatus(
 /** Display label; the raw value is shown as-is when it is not a known status. */
 export function subscriptionStatusLabel(value: string | null | undefined): string {
   const s = normalizeSubscriptionStatus(value);
-  if (s) return LABELS[s];
+  if (s) return i18n.t(`closeout.ui.sub.${s}`, { defaultValue: LABELS[s] }); // D19
   const raw = (value ?? "").trim();
   return raw || "—";
 }

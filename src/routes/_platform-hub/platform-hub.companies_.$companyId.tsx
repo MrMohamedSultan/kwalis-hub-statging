@@ -134,7 +134,7 @@ function CompanyDetailPage() {
       setMembers(m);
       setProjects(p);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not load the company");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.co.load_failed"));
     } finally {
       setLoading(false);
     }
@@ -162,7 +162,7 @@ function CompanyDetailPage() {
       );
       setProjects(await listCompanyProjects(companyId));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Restore failed");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.co.restore_failed"));
     } finally {
       setDeletingProject(false);
     }
@@ -186,7 +186,7 @@ function CompanyDetailPage() {
       });
       toast.success(t("hub_companies_companyid.company_profile_saved"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Save failed");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.co.save_failed"));
     } finally {
       setSaving(false);
     }
@@ -203,11 +203,11 @@ function CompanyDetailPage() {
     setLastUploaded(null);
     try {
       await uploadCompanyDocument(companyId, file, docType);
-      toast.success(`${file.name} uploaded`);
+      toast.success(t("closeout.ui.co.uploaded", { name: file.name }));
       setLastUploaded(file.name);
       setDocs(await listCompanyDocuments(companyId));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Upload failed");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.co.upload_failed"));
     } finally {
       setUploading(false);
       setUploadingName(null);
@@ -216,7 +216,7 @@ function CompanyDetailPage() {
   }
 
   if (loading) {
-    return <div className="p-8 text-sm text-muted-foreground">Loading company…</div>;
+    return <div className="p-8 text-sm text-muted-foreground">{t("closeout.ui.co.loading")}</div>;
   }
   if (!company) {
     return (
@@ -260,7 +260,8 @@ function CompanyDetailPage() {
           disabled={saving}
           className="inline-flex items-center gap-2 rounded-lg bg-brand text-brand-foreground px-4 py-2 text-sm font-semibold hover:brightness-110 transition disabled:opacity-60"
         >
-          <Save className="size-4" /> {saving ? "Saving…" : "Save changes"}
+          <Save className="size-4" />{" "}
+          {saving ? t("closeout.ui.saving") : t("closeout.ui.save_changes")}
         </button>
       </header>
 
@@ -270,10 +271,14 @@ function CompanyDetailPage() {
           <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
             {t("hub_companies_companyid.company_profile")}
           </h2>
-          <Input label="Company name" value={company.name} onChange={(v) => patch("name", v)} />
+          <Input
+            label={t("closeout.ui.org.name")}
+            value={company.name}
+            onChange={(v) => patch("name", v)}
+          />
           <label className="block space-y-1.5">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Industry
+              {t("closeout.ui.org.industry")}
             </span>
             <select
               value={company.industry ?? ""}
@@ -290,32 +295,32 @@ function CompanyDetailPage() {
           </label>
           <div className="grid sm:grid-cols-2 gap-4">
             <Input
-              label="Contact email"
+              label={t("closeout.ui.org.email")}
               type="email"
               value={company.contact_email ?? ""}
               onChange={(v) => patch("contact_email", v)}
             />
             <Input
-              label="Contact phone"
+              label={t("closeout.ui.co.phone")}
               value={company.contact_phone ?? ""}
               onChange={(v) => patch("contact_phone", v)}
             />
           </div>
           <Input
-            label="Website"
+            label={t("closeout.ui.co.website")}
             value={company.website ?? ""}
             placeholder="https://"
             onChange={(v) => patch("website", v)}
           />
           <div className="grid sm:grid-cols-2 gap-4">
             <Input
-              label="Commercial registration"
+              label={t("closeout.ui.co.cr")}
               value={company.commercial_registration ?? ""}
               onChange={(v) => patch("commercial_registration", v)}
             />
             <label className="block space-y-1.5">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Subscription
+                {t("closeout.ui.co.subscription")}
               </span>
               {/* D01: the dropdown shows the STORED status. An empty or unknown
                   value gets its own disabled entry instead of silently
@@ -340,7 +345,7 @@ function CompanyDetailPage() {
           </div>
           <label className="block space-y-1.5">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Max allowed projects
+              {t("closeout.ui.co.max_projects")}
             </span>
             <input
               type="number"
@@ -353,11 +358,11 @@ function CompanyDetailPage() {
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-brand"
             />
             <span className="text-[11px] text-muted-foreground">
-              {projects.length} of {company.max_projects ?? 0} used
+              {t("closeout.ui.co.used", { used: projects.length, max: company.max_projects ?? 0 })}
             </span>
           </label>
           <Input
-            label="National address"
+            label={t("closeout.ui.co.address")}
             value={company.national_address ?? ""}
             onChange={(v) => patch("national_address", v)}
           />
@@ -465,7 +470,9 @@ function CompanyDetailPage() {
                     aria-label={t("hub_companies_companyid.open_document")}
                     onClick={() =>
                       void openCompanyDocument(d).catch((e) =>
-                        toast.error(e instanceof Error ? e.message : "Could not open"),
+                        toast.error(
+                          e instanceof Error ? e.message : t("closeout.ui.co.open_failed"),
+                        ),
                       )
                     }
                     className="text-muted-foreground hover:text-brand transition"
@@ -488,14 +495,16 @@ function CompanyDetailPage() {
           {/* Projects */}
           <section className="rounded-xl border border-border bg-card p-5 space-y-3">
             <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <FolderKanban className="size-4" /> Company projects
+              <FolderKanban className="size-4" /> {t("closeout.ui.co.projects")}
               <span className="ms-auto font-normal normal-case tracking-normal">
                 {projects.length} / {company.max_projects ?? 0}
               </span>
             </h2>
             <ul className="divide-y divide-border">
               {projects.length === 0 && (
-                <li className="py-4 text-sm text-muted-foreground">No projects yet.</li>
+                <li className="py-4 text-sm text-muted-foreground">
+                  {t("closeout.ui.co.no_projects")}
+                </li>
               )}
               {projects.map((p) => (
                 <li key={p.id} className="flex items-center gap-3 py-2.5">
@@ -516,7 +525,7 @@ function CompanyDetailPage() {
                   {isArchivedProject(p.status) ? (
                     <button
                       type="button"
-                      aria-label={`Restore project ${p.name}`}
+                      aria-label={t("closeout.ui.co.restore_aria", { name: p.name })}
                       disabled={deletingProject}
                       onClick={() => void restoreArchivedProject(p)}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold transition hover:bg-muted disabled:opacity-60"
@@ -527,7 +536,7 @@ function CompanyDetailPage() {
                   ) : (
                     <button
                       type="button"
-                      aria-label={`Archive project ${p.name}`}
+                      aria-label={t("closeout.ui.co.archive_aria", { name: p.name })}
                       onClick={() => setConfirmProject(p)}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-warning/40 px-2.5 py-1.5 text-xs font-semibold text-warning transition hover:bg-warning/10"
                     >
@@ -599,7 +608,7 @@ function CompanyDetailPage() {
             setProjects(await listCompanyProjects(companyId));
             setConfirmProject(null);
           } catch (e) {
-            toast.error(e instanceof Error ? e.message : "Archive failed");
+            toast.error(e instanceof Error ? e.message : t("closeout.ui.co.archive_failed"));
           } finally {
             setDeletingProject(false);
           }
@@ -611,8 +620,8 @@ function CompanyDetailPage() {
           open
           tone="danger"
           title={t("hub_companies_companyid.delete_this_document")}
-          message={`“${confirmDoc.file_name}” will be permanently removed.`}
-          confirmLabel="Delete"
+          message={t("closeout.ui.co.doc_remove", { name: confirmDoc.file_name })}
+          confirmLabel={t("common.delete")}
           onCancel={() => setConfirmDoc(null)}
           onConfirm={async () => {
             try {
@@ -620,7 +629,7 @@ function CompanyDetailPage() {
               toast.success(t("hub_companies_companyid.document_deleted"));
               setDocs(await listCompanyDocuments(companyId));
             } catch (e) {
-              toast.error(e instanceof Error ? e.message : "Delete failed");
+              toast.error(e instanceof Error ? e.message : t("closeout.ui.co.delete_failed"));
             } finally {
               setConfirmDoc(null);
             }

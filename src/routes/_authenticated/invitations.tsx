@@ -107,7 +107,7 @@ const AccessSelectionSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["orgId"],
-        message: "Organization is required.",
+        message: "closeout.ui.inv.err_org",
       });
     }
     if (input.hasGlobalAccess) {
@@ -115,14 +115,14 @@ const AccessSelectionSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["projectId"],
-          message: "Global access users cannot be scoped to a single project.",
+          message: "closeout.ui.inv.err_global_project",
         });
       }
       if (input.roleId) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["roleId"],
-          message: "Global access users already have full access — no RBAC role needed.",
+          message: "closeout.ui.inv.err_global_role",
         });
       }
       return;
@@ -131,7 +131,7 @@ const AccessSelectionSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["projectId"],
-        message: "Select at least one project for this user.",
+        message: "closeout.ui.inv.err_project",
       });
     }
   });
@@ -162,8 +162,12 @@ function validateAccessSelection(input: {
 }
 
 function FieldError({ msg }: { msg?: string }) {
+  const { t } = useTranslation();
   if (!msg) return null;
-  return <div className="mt-1 text-[10px] font-medium text-destructive leading-snug">⚠ {msg}</div>;
+  // messages are i18n keys (D19)
+  return (
+    <div className="mt-1 text-[10px] font-medium text-destructive leading-snug">⚠ {t(msg)}</div>
+  );
 }
 
 export function InvitationsPage({
@@ -299,10 +303,12 @@ export function InvitationsPage({
         <Panel className="p-0 overflow-hidden">
           <div className="flex items-center justify-between border-b border-border px-5 py-3">
             <h3 className="text-sm font-semibold">{t("invitations.all_invitations_detail")}</h3>
-            <span className="text-xs text-muted-foreground">{invites.length} total</span>
+            <span className="text-xs text-muted-foreground">
+              {t("closeout.ui.inv.total", { count: invites.length })}
+            </span>
           </div>
           {loading ? (
-            <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+            <div className="p-6 text-sm text-muted-foreground">{t("common.loading")}</div>
           ) : invites.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground">
               {t("invitations.no_invitations_yet_create_one_above")}
@@ -312,12 +318,12 @@ export function InvitationsPage({
               <table className="app-table w-full">
                 <thead className="bg-surface text-start text-xs uppercase tracking-wider text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-3">Email</th>
-                    <th className="px-4 py-3">Organization</th>
-                    <th className="px-4 py-3">Project</th>
-                    <th className="px-4 py-3">Role</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-end">Actions</th>
+                    <th className="px-4 py-3">{t("closeout.ui.email")}</th>
+                    <th className="px-4 py-3">{t("closeout.ui.organization")}</th>
+                    <th className="px-4 py-3">{t("closeout.ui.project")}</th>
+                    <th className="px-4 py-3">{t("closeout.ui.role")}</th>
+                    <th className="px-4 py-3">{t("common.status")}</th>
+                    <th className="px-4 py-3 text-end">{t("common.actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -421,13 +427,13 @@ function OrgAccessTree({
             onClick={collapseAll}
             className="rounded-md border border-border px-2 py-1 text-[11px] hover:bg-muted"
           >
-            Collapse
+            {t("closeout.ui.collapse")}
           </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+        <div className="p-6 text-sm text-muted-foreground">{t("common.loading")}</div>
       ) : visibleOrgs.length === 0 ? (
         <div className="p-6 text-sm text-muted-foreground">
           {t("invitations.no_organizations_match_your_search")}
@@ -532,7 +538,7 @@ function OrgAccessTree({
                                           toast.error(
                                             err instanceof Error
                                               ? err.message
-                                              : "Could not remove role",
+                                              : t("closeout.ui.inv.remove_role_failed"),
                                           );
                                         }
                                       }}
@@ -562,14 +568,16 @@ function OrgAccessTree({
                                         toast.error(
                                           err instanceof Error
                                             ? err.message
-                                            : "Could not assign role",
+                                            : t("closeout.ui.inv.assign_role_failed"),
                                         );
                                       }
                                     }}
                                     className="text-[10px] rounded border border-border bg-surface px-1.5 py-0.5 text-muted-foreground"
                                   >
                                     <option value="">
-                                      {assignedRole ? "Change role…" : "+ role…"}
+                                      {assignedRole
+                                        ? t("closeout.ui.inv.change_role")
+                                        : t("closeout.ui.inv.add_role")}
                                     </option>
                                     {assignableRoles
                                       .filter((r) => r.id !== assignedRole?.id)
@@ -748,7 +756,7 @@ function InviteRow({
       });
       toast.success(t("invitations.invitation_email_resent"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not resend");
+      toast.error(err instanceof Error ? err.message : t("closeout.ui.inv.resend_failed"));
     } finally {
       setResending(false);
     }
@@ -816,7 +824,7 @@ function InviteRow({
               className="inline-flex items-center gap-1 rounded-lg border border-info/40 bg-info/10 px-2.5 py-1 text-[11px] text-info hover:bg-info/20 disabled:opacity-50"
             >
               <RefreshCw className={`size-3 ${resending ? "animate-spin" : ""}`} />{" "}
-              {resending ? "Sending…" : "Resend email"}
+              {resending ? t("closeout.ui.inv.sending") : t("closeout.ui.inv.resend")}
             </button>
           )}
           {status === "pending" && (
@@ -824,13 +832,13 @@ function InviteRow({
               onClick={revoke}
               className="inline-flex items-center gap-1 rounded-lg border border-warning/40 bg-warning/10 px-2.5 py-1 text-[11px] text-warning hover:bg-warning/20"
             >
-              <Ban className="size-3" /> Revoke
+              <Ban className="size-3" /> {t("closeout.ui.inv.revoke")}
             </button>
           )}
 
           <button
             onClick={remove}
-            title="Delete"
+            title={t("common.delete")}
             className="inline-flex items-center justify-center rounded-lg border border-destructive/40 bg-destructive/10 p-1 text-destructive hover:bg-destructive/20"
           >
             <X className="size-3.5" />
@@ -900,7 +908,7 @@ export function CreateUserDirectCard({
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const passwordValid = password.length >= 8;
   const passwordError =
-    password.length > 0 && !passwordValid ? "Password must be at least 8 characters." : undefined;
+    password.length > 0 && !passwordValid ? "closeout.ui.hub_password_min" : undefined;
   const hasErrors = Object.keys(errors).length > 0 || !emailValid || !passwordValid;
 
   function suggestPassword() {
@@ -946,7 +954,7 @@ export function CreateUserDirectCard({
 
       onCreated();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not create user");
+      toast.error(err instanceof Error ? err.message : t("closeout.ui.inv.create_failed"));
     } finally {
       setBusy(false);
     }
@@ -958,10 +966,7 @@ export function CreateUserDirectCard({
         <UserPlus className="size-4 text-brand" />
         <h3 className="text-sm font-semibold">{t("invitations.create_user_directly")}</h3>
       </div>
-      <p className="text-xs text-muted-foreground mb-3">
-        Provisions an account immediately with a password you set — no email required. Share the
-        credentials with the user securely.
-      </p>
+      <p className="text-xs text-muted-foreground mb-3">{t("closeout.ui.inv.create_intro")}</p>
       <form onSubmit={submit} className="space-y-3" noValidate>
         {isSuperAdmin && (
           <div className="rounded-xl border border-border bg-card/[0.02] p-3">
@@ -974,7 +979,7 @@ export function CreateUserDirectCard({
                 onClick={() => setScope("company")}
                 className={`rounded-lg border px-3 py-2 text-start text-xs transition ${scope === "company" ? "border-brand bg-brand/10 text-foreground" : "border-border bg-surface text-muted-foreground hover:bg-muted"}`}
               >
-                <div className="font-semibold">🏢 Company Member</div>
+                <div className="font-semibold">🏢 {t("closeout.ui.inv.company_member")}</div>
                 <div className="text-[10px] opacity-80 mt-0.5">
                   {t("invitations.access_limited_to_the_selected_organization")}
                 </div>
@@ -990,7 +995,7 @@ export function CreateUserDirectCard({
                 }}
                 className={`rounded-lg border px-3 py-2 text-start text-xs transition ${scope === "platform" ? "border-warning/40 bg-warning/10 text-foreground" : "border-border bg-surface text-muted-foreground hover:bg-muted"}`}
               >
-                <div className="font-semibold">👑 Platform Admin</div>
+                <div className="font-semibold">👑 {t("closeout.ui.inv.platform_admin")}</div>
                 <div className="text-[10px] opacity-80 mt-0.5">
                   {t("invitations.global_access_across_every_organization")}
                 </div>
@@ -1001,7 +1006,7 @@ export function CreateUserDirectCard({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="block">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
-              Email
+              {t("closeout.ui.email")}
             </div>
             <input
               type="email"
@@ -1012,7 +1017,7 @@ export function CreateUserDirectCard({
               aria-invalid={email.length > 0 && !emailValid}
               className={`w-full rounded-lg border bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand ${email.length > 0 && !emailValid ? "border-destructive/60" : "border-border"}`}
             />
-            {email.length > 0 && !emailValid && <FieldError msg="Enter a valid email address." />}
+            {email.length > 0 && !emailValid && <FieldError msg="closeout.ui.org.err_email" />}
           </label>
           <label className="block">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
@@ -1043,17 +1048,17 @@ export function CreateUserDirectCard({
                 onClick={suggestPassword}
                 className="rounded-lg border border-border bg-surface px-3 py-2 text-xs hover:bg-muted"
               >
-                Generate
+                {t("closeout.ui.inv.generate")}
               </button>
             </div>
             <FieldError msg={passwordError} />
           </label>
           <label className="block">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
-              Organization{" "}
+              {t("closeout.ui.organization")}{" "}
               {scope === "platform" ? (
                 <span className="normal-case tracking-normal text-warning">
-                  (optional — system-level user)
+                  {t("closeout.ui.inv.org_optional")}
                 </span>
               ) : (
                 ""
@@ -1071,7 +1076,9 @@ export function CreateUserDirectCard({
               className={`w-full rounded-lg border bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand ${errors.orgId ? "border-destructive/60" : "border-border"}`}
             >
               <option value="">
-                {scope === "platform" ? "No tenant (global)" : "Select org…"}
+                {scope === "platform"
+                  ? t("closeout.ui.inv.no_tenant")
+                  : t("closeout.ui.inv.select_org")}
               </option>
               {creatableOrgs.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -1094,9 +1101,9 @@ export function CreateUserDirectCard({
               onChange={(e) => setOrgRole(e.target.value as "owner" | "admin" | "member")}
               className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
             >
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
-              {isSuperAdmin && <option value="owner">Owner</option>}
+              <option value="member">{t("closeout.ui.inv.role_member")}</option>
+              <option value="admin">{t("closeout.ui.inv.role_admin")}</option>
+              {isSuperAdmin && <option value="owner">{t("closeout.ui.inv.role_owner")}</option>}
             </select>
             <div className="mt-1 text-[10px] text-muted-foreground leading-snug">
               {t("invitations.companylevel_access_tier")}
@@ -1105,14 +1112,14 @@ export function CreateUserDirectCard({
           {canAssignProjects && (
             <div className="block sm:col-span-2">
               <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
-                Projects{" "}
+                {t("closeout.ui.inv.projects")}{" "}
                 {hasGlobalAccess ? (
                   <span className="normal-case tracking-normal">
-                    (not applicable — global access)
+                    {t("closeout.ui.inv.not_applicable")}
                   </span>
                 ) : (
                   <span className="text-destructive normal-case tracking-normal">
-                    (select at least one)
+                    {t("closeout.ui.inv.select_one")}
                   </span>
                 )}
               </div>
@@ -1123,16 +1130,14 @@ export function CreateUserDirectCard({
                 disabled={!orgId || hasGlobalAccess}
                 invalid={!!errors.projectId}
                 emptyHint={
-                  orgId
-                    ? "This company has no projects yet."
-                    : "Select a company to list its projects."
+                  orgId ? t("closeout.ui.inv.no_projects") : t("closeout.ui.inv.pick_company")
                 }
               />
               <div className="mt-1 flex items-center justify-between gap-2">
                 <span className="text-[10px] text-muted-foreground">
                   {projectIds.length === 0
-                    ? "No project selected yet."
-                    : `${projectIds.length} project${projectIds.length > 1 ? "s" : ""} selected`}
+                    ? t("closeout.ui.inv.none_selected")
+                    : t("closeout.ui.inv.n_selected", { count: projectIds.length })}
                 </span>
                 {orgProjects.length > 0 && !hasGlobalAccess && orgId && (
                   <div className="flex gap-2">
@@ -1141,14 +1146,14 @@ export function CreateUserDirectCard({
                       onClick={() => setProjectIds(orgProjects.map((p) => p.id))}
                       className="text-[10px] underline text-muted-foreground hover:text-foreground"
                     >
-                      Select all
+                      {t("closeout.ui.inv.select_all")}
                     </button>
                     <button
                       type="button"
                       onClick={() => setProjectIds([])}
                       className="text-[10px] underline text-muted-foreground hover:text-foreground"
                     >
-                      Clear
+                      {t("closeout.ui.clear")}
                     </button>
                   </div>
                 )}
@@ -1160,7 +1165,7 @@ export function CreateUserDirectCard({
           <label className="block sm:col-span-2">
             <div
               className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1"
-              title="Roles are defined in Role Management. They grant granular per-module permissions (Budgets, Invoices, POs, Payroll…)."
+              title={t("closeout.ui.inv.roles_title")}
             >
               {t("invitations.role_optional")}
             </div>
@@ -1172,7 +1177,7 @@ export function CreateUserDirectCard({
               aria-invalid={!!errors.roleId}
               className={`w-full rounded-lg border bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand disabled:opacity-50 ${errors.roleId ? "border-destructive/60" : "border-border"}`}
             >
-              <option value="">— None —</option>
+              <option value="">{t("closeout.ui.mem.none")}</option>
               {orgRoles.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
@@ -1182,8 +1187,9 @@ export function CreateUserDirectCard({
             <FieldError msg={errors.roleId} />
             {hasGlobalAccess ? (
               <div className="mt-1 text-[10px] leading-snug rounded border border-warning/40 bg-warning/10 px-2 py-1 text-warning">
-                {scope === "platform" ? "Platform Admins" : "Owners"} already have full access —
-                roles do not apply.
+                {scope === "platform"
+                  ? t("closeout.ui.inv.full_access_admins")
+                  : t("closeout.ui.inv.full_access_owners")}
               </div>
             ) : selectedRole ? (
               <div className="mt-1 rounded border border-highlight/30 bg-highlight/5 px-2 py-1.5 text-[10px] leading-snug text-highlight">
@@ -1194,12 +1200,9 @@ export function CreateUserDirectCard({
               </div>
             ) : (
               <div className="mt-1 text-[10px] text-muted-foreground leading-snug">
-                Granular operational permissions (e.g. Producer, Accountant, Coordinator).{" "}
+                {t("closeout.ui.inv.roles_hint")}{" "}
                 {orgId && orgRoles.length === 0 && (
-                  <span className="text-warning">
-                    No roles defined yet — create them in{" "}
-                    <span className="font-semibold">Role Management</span>.
-                  </span>
+                  <span className="text-warning">{t("closeout.ui.inv.no_roles")}</span>
                 )}
               </div>
             )}
@@ -1208,10 +1211,11 @@ export function CreateUserDirectCard({
         <button
           type="submit"
           disabled={busy || hasErrors}
-          title={hasErrors ? "Resolve the highlighted fields to enable submit." : undefined}
+          title={hasErrors ? t("closeout.ui.inv.resolve_fields") : undefined}
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-brand-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <UserPlus className="size-3.5" /> {busy ? "Creating…" : "Create user"}
+          <UserPlus className="size-3.5" />{" "}
+          {busy ? t("closeout.ui.org.creating") : t("closeout.ui.inv.create_user")}
         </button>
       </form>
     </Panel>
@@ -1262,16 +1266,22 @@ function MembersCard({
       <div className="flex items-center gap-2 mb-3">
         <Users className="size-4 text-brand" />
         <h3 className="text-sm font-semibold">{t("invitations.team_members")}</h3>
-        <span className="ms-auto text-xs text-muted-foreground">{members.length} total</span>
+        <span className="ms-auto text-xs text-muted-foreground">
+          {t("closeout.ui.inv.total", { count: members.length })}
+        </span>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
         {isSuperAdmin ? (
           <div className="inline-flex rounded-lg border border-border bg-surface p-0.5">
             {[
-              { key: "all", label: "All", count: members.length },
-              { key: "platform", label: "👑 Platform", count: platformCount },
-              { key: "company", label: "🏢 Company", count: companyCount },
+              { key: "all", label: t("closeout.ui.reg.status.all"), count: members.length },
+              {
+                key: "platform",
+                label: `👑 ${t("closeout.ui.inv.scope_platform")}`,
+                count: platformCount,
+              },
+              { key: "company", label: `🏢 ${t("closeout.ui.company")}`, count: companyCount },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -1308,7 +1318,7 @@ function MembersCard({
               onClick={() => setSearch("")}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground hover:text-foreground"
             >
-              Clear
+              {t("closeout.ui.clear")}
             </button>
           )}
         </div>
@@ -1327,11 +1337,11 @@ function MembersCard({
           <table className="app-table w-full">
             <thead className="bg-surface text-start text-[10px] uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="px-3 py-2">Name</th>
-                <th className="px-3 py-2">Scope</th>
-                <th className="px-3 py-2">Organization</th>
-                <th className="px-3 py-2">Role</th>
-                <th className="px-3 py-2 text-end">Actions</th>
+                <th className="px-3 py-2">{t("closeout.ui.name")}</th>
+                <th className="px-3 py-2">{t("closeout.ui.inv.scope")}</th>
+                <th className="px-3 py-2">{t("closeout.ui.organization")}</th>
+                <th className="px-3 py-2">{t("closeout.ui.role")}</th>
+                <th className="px-3 py-2 text-end">{t("common.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1401,25 +1411,25 @@ function MemberRow({
       setOpen(false);
       setPw("");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not reset password");
+      toast.error(err instanceof Error ? err.message : t("closeout.ui.inv.reset_failed"));
     } finally {
       setBusy(false);
     }
   }
 
   async function handleRemove() {
-    const label = m.display_name ?? `user ${m.user_id.slice(0, 8)}`;
+    const label = m.display_name ?? t("closeout.ui.inv.user_n", { id: m.user_id.slice(0, 8) });
     const confirmed = window.confirm(
-      `Remove ${label} from ${orgName}?\n\nThey will lose access to this organization and all of its projects. This cannot be undone.`,
+      t("closeout.ui.inv.remove_confirm", {
+        name: label,
+        org: orgName,
+        interpolation: { escapeValue: false },
+      }),
     );
     if (!confirmed) return;
     // Permanent account deletion is super-admin-only (enforced server-side).
     // Don't even offer it to org admins — it would be a guaranteed failure.
-    const purgeAccount =
-      isSuperAdmin &&
-      window.confirm(
-        `Also permanently delete the user's account?\n\nClick OK to delete the account entirely (super admin only).\nClick Cancel to keep the account and only revoke organization access.`,
-      );
+    const purgeAccount = isSuperAdmin && window.confirm(t("closeout.ui.inv.purge_confirm"));
     setRemoving(true);
     try {
       await remove({
@@ -1429,10 +1439,12 @@ function MemberRow({
           deleteAuthUser: purgeAccount,
         },
       });
-      toast.success(purgeAccount ? "User deleted." : "Member removed from organization.");
+      toast.success(
+        purgeAccount ? t("closeout.ui.inv.user_deleted") : t("closeout.ui.inv.member_removed"),
+      );
       onChange();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not remove member");
+      toast.error(err instanceof Error ? err.message : t("closeout.ui.inv.remove_failed"));
     } finally {
       setRemoving(false);
     }
@@ -1448,16 +1460,18 @@ function MemberRow({
       <td className="px-3 py-2">
         {m.isPlatformAdmin ? (
           <span className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">
-            👑 Platform
+            👑 {t("closeout.ui.inv.scope_platform")}
           </span>
         ) : (
           <span className="inline-flex items-center gap-1 rounded-full border border-info/30 bg-info/10 px-2 py-0.5 text-[10px] font-semibold text-info">
-            🏢 Company
+            🏢 {t("closeout.ui.company")}
           </span>
         )}
       </td>
       <td className="px-3 py-2 text-xs">{orgName}</td>
-      <td className="px-3 py-2 text-xs capitalize">{m.role}</td>
+      <td className="px-3 py-2 text-xs capitalize">
+        {t(`closeout.ui.usr.role.${m.role}`, { defaultValue: m.role })}
+      </td>
 
       <td className="px-3 py-2 text-end">
         {open ? (
@@ -1474,14 +1488,14 @@ function MemberRow({
               type="button"
               className="rounded-md border border-border px-2 py-1 text-[10px] hover:bg-muted"
             >
-              Gen
+              {t("closeout.ui.inv.gen")}
             </button>
             <button
               onClick={submit}
               disabled={busy}
               className="rounded-md bg-brand px-2 py-1 text-[10px] font-semibold text-brand-foreground hover:opacity-90 disabled:opacity-50"
             >
-              {busy ? "Saving…" : "Save"}
+              {busy ? t("closeout.ui.saving") : t("closeout.ui.save")}
             </button>
             <button
               onClick={() => {
@@ -1490,7 +1504,7 @@ function MemberRow({
               }}
               className="rounded-md border border-border px-2 py-1 text-[10px] hover:bg-muted"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         ) : (
@@ -1500,7 +1514,7 @@ function MemberRow({
               title={t("invitations.edit_user")}
               className="inline-flex items-center gap-1 rounded-md border border-info/40 bg-info/10 px-2 py-1 text-[11px] text-info hover:bg-info/20"
             >
-              <Pencil className="size-3" /> Edit
+              <Pencil className="size-3" /> {t("common.edit")}
             </button>
             <button
               onClick={() => setOpen(true)}
@@ -1515,7 +1529,8 @@ function MemberRow({
               title={t("invitations.remove_from_organization")}
               className="inline-flex items-center gap-1 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-[11px] text-destructive hover:bg-destructive/20 disabled:opacity-50"
             >
-              <Trash2 className="size-3" /> {removing ? "Removing…" : "Remove"}
+              <Trash2 className="size-3" />{" "}
+              {removing ? t("closeout.ui.usr.removing") : t("closeout.ui.inv.remove")}
             </button>
           </div>
         )}
@@ -1658,14 +1673,14 @@ function EditMemberModal({
       });
       toast.success(
         isGlobalTarget
-          ? "User moved to Global / Platform Level."
+          ? t("closeout.ui.inv.moved_global")
           : isTransferring
-            ? "User transferred and updated."
-            : "User updated.",
+            ? t("closeout.ui.inv.transferred")
+            : t("closeout.ui.inv.updated"),
       );
       onSaved();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not update user.");
+      toast.error(err instanceof Error ? err.message : t("closeout.ui.inv.update_failed"));
     } finally {
       setBusy(false);
       setConfirmTransfer(false);
@@ -1697,15 +1712,17 @@ function EditMemberModal({
 
         <label className="block">
           <span className="text-xs text-muted-foreground">
-            Assigned organization{" "}
-            {isTransferring && <span className="text-warning">(transfer)</span>}
+            {t("closeout.ui.inv.assigned_org")}{" "}
+            {isTransferring && (
+              <span className="text-warning">{t("closeout.ui.inv.transfer_tag")}</span>
+            )}
           </span>
           <select
             value={orgId}
             onChange={(e) => setOrgId(e.target.value)}
             className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
           >
-            {canGoGlobal && <option value="">🌐 Global / Platform Level (No Organization)</option>}
+            {canGoGlobal && <option value="">🌐 {t("closeout.ui.inv.global_option")}</option>}
             {transferableOrgs.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.name}
@@ -1713,15 +1730,16 @@ function EditMemberModal({
             ))}
           </select>
           {isGlobalTarget && (
-            <p className="mt-1 text-[11px] text-warning">
-              This Platform Admin will be detached from any tenant organization and belong directly
-              to Kwalis HUB at the global level. Their super-admin access is unchanged.
-            </p>
+            <p className="mt-1 text-[11px] text-warning">{t("closeout.ui.inv.global_note")}</p>
           )}
           {isTransferring && !isGlobalTarget && (
             <p className="mt-1 text-[11px] text-warning">
-              Transferring will remove this user from projects and role assignments under{" "}
-              <b>{orgs.find((o) => o.id === m.organization_id)?.name ?? "the current org"}</b>.
+              {t("closeout.ui.inv.transfer_note")}{" "}
+              <b>
+                {orgs.find((o) => o.id === m.organization_id)?.name ??
+                  t("closeout.ui.inv.current_org")}
+              </b>
+              .
             </p>
           )}
         </label>
@@ -1735,7 +1753,7 @@ function EditMemberModal({
           >
             {roleOptions.map((r) => (
               <option key={r} value={r}>
-                {r}
+                {t(`closeout.ui.usr.role.${r}`, { defaultValue: r })}
               </option>
             ))}
           </select>
@@ -1743,9 +1761,11 @@ function EditMemberModal({
 
         {canManageProjects && !isGlobalTarget && (
           <div className="block">
-            <span className="text-xs text-muted-foreground">Projects</span>
+            <span className="text-xs text-muted-foreground">{t("closeout.ui.inv.projects")}</span>
             {projectsLoading ? (
-              <p className="mt-1 text-[11px] text-muted-foreground">Loading projects…</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {t("closeout.ui.pm.loading")}
+              </p>
             ) : (
               <>
                 <div className="mt-1">
@@ -1753,16 +1773,16 @@ function EditMemberModal({
                     projects={orgProjects}
                     value={projectIds}
                     onChange={setProjectIds}
-                    emptyHint="This company has no projects yet."
+                    emptyHint={t("closeout.ui.inv.no_projects")}
                   />
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-2">
                   <span className="text-[10px] text-muted-foreground">
                     {orgRole === "owner" || orgRole === "admin"
-                      ? "Admins and owners can reach every project in the company."
+                      ? t("closeout.ui.inv.admins_all_projects")
                       : projectIds.length === 0
-                        ? "No projects assigned — this user will see no projects."
-                        : `${projectIds.length} project${projectIds.length > 1 ? "s" : ""} assigned`}
+                        ? t("closeout.ui.inv.none_assigned")
+                        : t("closeout.ui.inv.n_assigned", { count: projectIds.length })}
                   </span>
                   {orgProjects.length > 0 && (
                     <div className="flex gap-2">
@@ -1771,21 +1791,21 @@ function EditMemberModal({
                         onClick={() => setProjectIds(orgProjects.map((p) => p.id))}
                         className="text-[10px] underline text-muted-foreground hover:text-foreground"
                       >
-                        Select all
+                        {t("closeout.ui.inv.select_all")}
                       </button>
                       <button
                         type="button"
                         onClick={() => setProjectIds([])}
                         className="text-[10px] underline text-muted-foreground hover:text-foreground"
                       >
-                        Clear
+                        {t("closeout.ui.clear")}
                       </button>
                     </div>
                   )}
                 </div>
                 {isTransferring && (
                   <p className="mt-1 text-[11px] text-warning">
-                    Assignments here apply to the destination company after the transfer.
+                    {t("closeout.ui.inv.after_transfer")}
                   </p>
                 )}
               </>
@@ -1800,7 +1820,7 @@ function EditMemberModal({
             onChange={(e) => setRoleId(e.target.value)}
             className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
           >
-            <option value="">— None —</option>
+            <option value="">{t("closeout.ui.mem.none")}</option>
             {orgRoles.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.name}
@@ -1819,7 +1839,7 @@ function EditMemberModal({
             onClick={onClose}
             className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             onClick={save}
@@ -1828,7 +1848,7 @@ function EditMemberModal({
             className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-brand-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {busy ? "Saving…" : "Save changes"}
+            {busy ? t("closeout.ui.saving") : t("closeout.ui.save_changes")}
           </button>
         </div>
       </div>
@@ -1837,34 +1857,37 @@ function EditMemberModal({
         tone="danger"
         title={
           isGlobalTarget
-            ? "Move user to Global / Platform Level?"
-            : "Transfer user to a different organization?"
+            ? t("closeout.ui.inv.move_global_title")
+            : t("closeout.ui.inv.transfer_title")
         }
         message={
           <>
             {t("invitations.you_are_about_to_move")}
-            <b>{m.display_name || m.user_id}</b> from{" "}
-            <b>{orgs.find((o) => o.id === m.organization_id)?.name ?? "the current org"}</b> to{" "}
+            <b>{m.display_name || m.user_id}</b> {t("closeout.ui.from")}{" "}
+            <b>
+              {orgs.find((o) => o.id === m.organization_id)?.name ??
+                t("closeout.ui.inv.current_org")}
+            </b>{" "}
+            {t("closeout.ui.to")}{" "}
             <b>
               {isGlobalTarget
-                ? "Global / Platform Level (Kwalis HUB)"
-                : (orgs.find((o) => o.id === orgId)?.name ?? "the selected org")}
+                ? t("closeout.ui.inv.global_kwalis")
+                : (orgs.find((o) => o.id === orgId)?.name ?? t("closeout.ui.inv.selected_org"))}
             </b>
             .
             <br />
             <br />
-            This removes their project memberships and role assignment in the source organization.
-            This action is logged in the audit trail.
+            {t("closeout.ui.inv.transfer_effect")}
           </>
         }
         confirmLabel={
           busy
             ? isGlobalTarget
-              ? "Moving…"
-              : "Transferring…"
+              ? t("closeout.ui.inv.moving")
+              : t("closeout.ui.inv.transferring")
             : isGlobalTarget
-              ? "Yes, move to global"
-              : "Yes, transfer"
+              ? t("closeout.ui.inv.yes_global")
+              : t("closeout.ui.inv.yes_transfer")
         }
         onConfirm={() => void performSave()}
         onCancel={() => setConfirmTransfer(false)}

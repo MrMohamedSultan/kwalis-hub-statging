@@ -57,27 +57,24 @@ type FormState = {
 };
 
 const projectSchema = z.object({
-  name: z.string().trim().min(1, "Project name is required.").max(120, "Project name is too long."),
+  name: z
+    .string()
+    .trim()
+    .min(1, "closeout.ui.pm.err_name")
+    .max(120, "closeout.ui.pm.err_name_long"),
   code: z
     .string()
     .trim()
     .transform((v) => v.toUpperCase())
-    .pipe(
-      z
-        .string()
-        .regex(
-          /^[A-Z0-9]{2,12}$/,
-          "Project code must be 2–12 uppercase letters or digits (e.g., PROJ26).",
-        ),
-    ),
+    .pipe(z.string().regex(/^[A-Z0-9]{2,12}$/, "closeout.ui.pm.err_code")),
   status: z.enum(PROJECT_STATUSES, {
-    errorMap: () => ({ message: "Please choose a valid project status." }),
+    errorMap: () => ({ message: "closeout.ui.pm.err_status" }),
   }),
   project_type: z.enum(PROJECT_TYPES, {
-    errorMap: () => ({ message: "Please choose a valid project type." }),
+    errorMap: () => ({ message: "closeout.ui.pm.err_type" }),
   }),
   start_date: z.string().nullable(),
-  organization_id: z.string().uuid("Please select an organization."),
+  organization_id: z.string().uuid("closeout.ui.pm.err_org"),
 });
 
 const emptyForm = (orgId = ""): FormState => ({
@@ -224,7 +221,8 @@ export function ProjectsManagementPanel() {
   const submit = async () => {
     const parsed = projectSchema.safeParse(form);
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "Invalid input.");
+      // zod messages are i18n keys (D19)
+      toast.error(t(parsed.error.issues[0]?.message ?? "closeout.ui.invalid_input"));
       return;
     }
     const data = parsed.data;
@@ -236,9 +234,7 @@ export function ProjectsManagementPanel() {
     try {
       if (creating) {
         if (countFor(org.id) >= org.max_projects) {
-          throw new Error(
-            `Project limit reached for ${org.name}. Upgrade your plan to add more projects.`,
-          );
+          throw new Error(t("closeout.ui.pm.limit_reached", { org: org.name }));
         }
         const { error } = await supabase.from("projects").insert({
           name: data.name,
@@ -250,7 +246,7 @@ export function ProjectsManagementPanel() {
           owner_id: userId,
         } as never);
         if (error) throw error;
-        toast.success(`Project "${data.code} — ${data.name}" created.`);
+        toast.success(t("closeout.ui.pm.created", { name: `${data.code} — ${data.name}` }));
       } else if (editing) {
         const { error } = await supabase
           .from("projects")
@@ -269,7 +265,7 @@ export function ProjectsManagementPanel() {
       closeModal();
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to save project.");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.pm.save_failed"));
     } finally {
       setSaving(false);
     }
@@ -290,10 +286,10 @@ export function ProjectsManagementPanel() {
       // D02: the database function checks the typed code, remembers the
       // previous status and writes the audit log.
       await archiveProject(p.id, typedCode);
-      toast.success(`Project "${p.name}" archived.`);
+      toast.success(t("closeout.ui.pm.archived", { name: p.name }));
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to archive project.");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.pm.archive_failed"));
     } finally {
       setConfirmArchive(null);
     }
@@ -306,10 +302,10 @@ export function ProjectsManagementPanel() {
     }
     try {
       const restoredTo = await restoreProject(p.id);
-      toast.success(`Project "${p.name}" restored to "${restoredTo}".`);
+      toast.success(t("closeout.ui.pm.restored", { name: p.name, status: restoredTo }));
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to restore project.");
+      toast.error(e instanceof Error ? e.message : t("closeout.ui.pm.restore_failed"));
     } finally {
       setConfirmRestore(null);
     }
@@ -330,18 +326,20 @@ export function ProjectsManagementPanel() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">
-            {filtered.length} / {projects.length} shown · {totalLimit || "—"} max
+            {t("closeout.ui.pm.shown", {
+              shown: filtered.length,
+              total: projects.length,
+              max: totalLimit || "—",
+            })}
           </span>
           <button
             onClick={openCreate}
             disabled={loading || orgs.length === 0 || atLimitEverywhere}
-            title={
-              atLimitEverywhere ? "Upgrade your plan to add more projects." : "Create new project"
-            }
+            title={atLimitEverywhere ? t("closeout.ui.pm.upgrade") : t("closeout.ui.pm.create_new")}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-brand-foreground text-sm font-semibold hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {atLimitEverywhere ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-            New Project
+            {t("closeout.ui.pm.new_project")}
           </button>
         </div>
       </div>
@@ -353,19 +351,19 @@ export function ProjectsManagementPanel() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search projects…"
+            placeholder={t("closeout.ui.pm.search")}
             className="w-full pl-9 pr-3 py-2 rounded-lg bg-sidebar-active text-white border border-border outline-none text-sm"
           />
         </div>
         <MultiSelectFilter
-          label="Status"
+          label={t("common.status")}
           values={PROJECT_STATUSES as readonly ProjectStatusOption[]}
           selected={statusFilter}
           onToggle={(v) => setStatusFilter((s) => toggleSet(s, v))}
           onClear={() => setStatusFilter(new Set())}
         />
         <MultiSelectFilter
-          label="Type"
+          label={t("projectsmanagementpanel.type")}
           values={PROJECT_TYPES as readonly ProjectTypeOption[]}
           selected={typeFilter}
           onToggle={(v) => setTypeFilter((s) => toggleSet(s, v))}
@@ -389,36 +387,31 @@ export function ProjectsManagementPanel() {
             }}
             className="text-xs text-muted-foreground hover:text-foreground underline"
           >
-            Clear filters
+            {t("closeout.ui.clear_filters")}
           </button>
         )}
       </div>
 
-      <p className="text-sm text-muted-foreground mb-4">
-        Manage projects across your organizations. Each new project automatically initializes its
-        Budget, Crew, Payables, and Reports data structures.
-      </p>
+      <p className="text-sm text-muted-foreground mb-4">{t("closeout.ui.pm.intro")}</p>
 
       {loading ? (
-        <div className="text-sm text-muted-foreground py-6">Loading projects…</div>
+        <div className="text-sm text-muted-foreground py-6">{t("closeout.ui.pm.loading")}</div>
       ) : filtered.length === 0 ? (
         <div className="text-sm text-muted-foreground py-6 text-center border border-dashed border-border rounded-lg">
-          {projects.length === 0
-            ? 'No projects yet. Click "New Project" to create one.'
-            : "No projects match the current filters."}
+          {projects.length === 0 ? t("closeout.ui.pm.none_yet") : t("closeout.ui.pm.none_match")}
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-start text-xs uppercase tracking-wide text-muted-foreground border-b border-border">
-                <th className="py-2 pr-3">Code</th>
-                <th className="py-2 pr-3">Name</th>
-                <th className="py-2 pr-3">Organization</th>
+                <th className="py-2 pr-3">{t("closeout.ui.code")}</th>
+                <th className="py-2 pr-3">{t("closeout.ui.name")}</th>
+                <th className="py-2 pr-3">{t("closeout.ui.organization")}</th>
                 <th className="py-2 pr-3">{t("projectsmanagementpanel.type")}</th>
-                <th className="py-2 pr-3">Status</th>
-                <th className="py-2 pr-3">Start Date</th>
-                <th className="py-2 pr-3 text-end">Actions</th>
+                <th className="py-2 pr-3">{t("common.status")}</th>
+                <th className="py-2 pr-3">{t("closeout.ui.start_date")}</th>
+                <th className="py-2 pr-3 text-end">{t("common.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -451,7 +444,7 @@ export function ProjectsManagementPanel() {
                         <button
                           onClick={() => openEdit(p)}
                           className="p-1.5 rounded-md hover:bg-muted"
-                          title="Edit"
+                          title={t("common.edit")}
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
@@ -462,8 +455,10 @@ export function ProjectsManagementPanel() {
                             className="p-1.5 rounded-md hover:bg-success/20 text-success disabled:opacity-40 disabled:cursor-not-allowed"
                             title={
                               isSuperAdmin
-                                ? "Restore project"
-                                : "Only the Super Admin may restore projects"
+                                ? t("projectsmanagementpanel.restore_project")
+                                : t(
+                                    "projectsmanagementpanel.only_the_super_admin_may_restore_projects",
+                                  )
                             }
                           >
                             {isSuperAdmin ? (
@@ -479,8 +474,10 @@ export function ProjectsManagementPanel() {
                             className="p-1.5 rounded-md hover:bg-destructive/20 text-destructive disabled:opacity-40 disabled:cursor-not-allowed"
                             title={
                               isSuperAdmin
-                                ? "Archive (soft delete — data is preserved)"
-                                : "Only the Super Admin may archive projects"
+                                ? t("closeout.ui.pm.archive_hint")
+                                : t(
+                                    "projectsmanagementpanel.only_the_super_admin_may_archive_projects",
+                                  )
                             }
                           >
                             {isSuperAdmin ? (
@@ -513,7 +510,7 @@ export function ProjectsManagementPanel() {
                 <span className="text-muted-foreground">{o.name}</span>
                 <span className={full ? "text-destructive font-semibold" : ""}>
                   {used} / {o.max_projects}
-                  {full ? " · limit reached" : ""}
+                  {full ? ` · ${t("closeout.ui.pm.limit_short")}` : ""}
                 </span>
               </div>
             );
@@ -522,20 +519,23 @@ export function ProjectsManagementPanel() {
       )}
 
       {(creating || editing) && (
-        <Modal onClose={closeModal} title={creating ? "New Project" : "Edit Project"}>
+        <Modal
+          onClose={closeModal}
+          title={creating ? t("closeout.ui.pm.new_project") : t("closeout.ui.pm.edit_project")}
+        >
           {editing && (
             <div className="mb-4 flex gap-1 border-b border-border">
               <button
                 onClick={() => setModalTab("details")}
                 className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${modalTab === "details" ? "border-brand text-white" : "border-transparent text-muted-foreground hover:text-white"}`}
               >
-                Details
+                {t("closeout.ui.pm.details")}
               </button>
               <button
                 onClick={() => setModalTab("members")}
                 className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${modalTab === "members" ? "border-brand text-white" : "border-transparent text-muted-foreground hover:text-white"}`}
               >
-                Members
+                {t("closeout.ui.pm.members")}
               </button>
             </div>
           )}
@@ -545,7 +545,9 @@ export function ProjectsManagementPanel() {
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-4">
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">Project Code *</label>
+                  <label className="block text-xs text-muted-foreground mb-1">
+                    {t("closeout.ui.pm.code_req")}
+                  </label>
                   <input
                     ref={codeInputRef}
                     value={form.code}
@@ -561,41 +563,46 @@ export function ProjectsManagementPanel() {
                       setForm((f) => ({ ...f, code: next }));
                     }}
                     className="w-full bg-sidebar-active text-white border border-border rounded-lg px-3 py-2 outline-none font-mono tracking-wider uppercase"
-                    placeholder="e.g., PROJ26"
+                    placeholder={t("closeout.ui.pm.code_ph")}
                     maxLength={12}
                     dir="ltr"
                   />
 
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    2–12 letters / digits, uppercase.
+                    {t("closeout.ui.pm.code_help")}
                   </p>
                 </div>
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">Project Name *</label>
+                  <label className="block text-xs text-muted-foreground mb-1">
+                    {t("closeout.ui.pm.name_req")}
+                  </label>
                   <input
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
                     className="w-full bg-sidebar-active text-white border border-border rounded-lg px-3 py-2 outline-none"
-                    placeholder="e.g., My New Production"
+                    placeholder={t("closeout.ui.pm.name_ph")}
                     maxLength={120}
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">Organization *</label>
+                <label className="block text-xs text-muted-foreground mb-1">
+                  {t("closeout.ui.pm.org_req")}
+                </label>
                 <select
                   value={form.organization_id}
                   onChange={(e) => setForm({ ...form, organization_id: e.target.value })}
                   disabled={!creating}
                   className="w-full bg-sidebar-active text-white border border-border rounded-lg px-3 py-2 outline-none disabled:opacity-60"
                 >
-                  <option value="">Select…</option>
+                  <option value="">{t("closeout.ui.select")}</option>
                   {orgs.map((o) => {
                     const used = countFor(o.id);
                     const full = used >= o.max_projects;
                     return (
                       <option key={o.id} value={o.id} disabled={creating && full}>
-                        {o.name} ({used}/{o.max_projects}){creating && full ? " · full" : ""}
+                        {o.name} ({used}/{o.max_projects})
+                        {creating && full ? ` · ${t("closeout.ui.pm.full")}` : ""}
                       </option>
                     );
                   })}
@@ -603,7 +610,9 @@ export function ProjectsManagementPanel() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">Type *</label>
+                  <label className="block text-xs text-muted-foreground mb-1">
+                    {t("closeout.ui.pm.type_req")}
+                  </label>
                   <select
                     value={form.project_type}
                     onChange={(e) =>
@@ -619,7 +628,9 @@ export function ProjectsManagementPanel() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">Status *</label>
+                  <label className="block text-xs text-muted-foreground mb-1">
+                    {t("closeout.ui.pm.status_req")}
+                  </label>
                   <select
                     value={form.status}
                     onChange={(e) =>
@@ -636,14 +647,16 @@ export function ProjectsManagementPanel() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">Start Date</label>
+                <label className="block text-xs text-muted-foreground mb-1">
+                  {t("closeout.ui.start_date")}
+                </label>
                 <DateInput
                   value={form.start_date ?? ""}
                   onChange={(v) => setForm({ ...form, start_date: v || null })}
                 />
               </div>
               <div className="pt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span>Preview:</span>
+                <span>{t("closeout.ui.pm.preview")}</span>
                 <ProjectTypeBadge value={form.project_type} />
                 <ProjectStatusBadge value={form.status} />
               </div>
@@ -652,14 +665,18 @@ export function ProjectsManagementPanel() {
                   onClick={closeModal}
                   className="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
                 <button
                   onClick={submit}
                   disabled={saving}
                   className="px-4 py-2 rounded-lg bg-brand text-brand-foreground text-sm font-semibold hover:brightness-110 disabled:opacity-60"
                 >
-                  {saving ? "Saving…" : creating ? "Create Project" : "Save Changes"}
+                  {saving
+                    ? t("closeout.ui.saving")
+                    : creating
+                      ? t("closeout.ui.pm.create")
+                      : t("common.save")}
                 </button>
               </div>
             </div>
@@ -675,11 +692,9 @@ export function ProjectsManagementPanel() {
         open={!!confirmRestore}
         title={t("projectsmanagementpanel.restore_project")}
         tone="success"
-        confirmLabel="Restore project"
+        confirmLabel={t("projectsmanagementpanel.restore_project")}
         message={
-          confirmRestore
-            ? `Restore project "${confirmRestore.name}" to the status it had before it was archived? It will re-appear in tenant views immediately.`
-            : ""
+          confirmRestore ? t("closeout.ui.pm.restore_confirm", { name: confirmRestore.name }) : ""
         }
         onCancel={() => setConfirmRestore(null)}
         onConfirm={() => confirmRestore && doRestore(confirmRestore)}
@@ -752,7 +767,7 @@ function MultiSelectFilter<T extends string>({
                 }}
                 className="text-xs text-muted-foreground hover:text-foreground px-2 py-1"
               >
-                Clear
+                {t("closeout.ui.clear")}
               </button>
             </div>
           </div>

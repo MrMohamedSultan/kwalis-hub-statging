@@ -105,7 +105,7 @@ export function AuditLogPage() {
       });
       setRows((data ?? []) as AuditRow[]);
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to load audit log");
+      setErr(e?.message ?? t("closeout.ui.audit.load_failed"));
     } finally {
       setLoading(false);
     }
@@ -132,10 +132,10 @@ export function AuditLogPage() {
             <ScrollText className="size-5" />
           </div>
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Audit Log</h1>
-            <p className="text-sm text-muted-foreground">
-              Template imports, validation results, and schema changes — append-only history.
-            </p>
+            <h1 className="text-2xl font-semibold text-foreground">
+              {t("closeout.ui.audit.title")}
+            </h1>
+            <p className="text-sm text-muted-foreground">{t("closeout.ui.audit.intro")}</p>
           </div>
         </div>
         <button
@@ -144,14 +144,16 @@ export function AuditLogPage() {
           className="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-border bg-surface-2 hover:bg-surface text-foreground disabled:opacity-50"
         >
           <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
-          Refresh
+          {t("closeout.ui.refresh")}
         </button>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {(["import", "validation", "schema", "auth", "other"] as const).map((k) => (
           <div key={k} className="rounded-xl border border-border bg-card text-card-foreground p-3">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{k}</div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              {t(`closeout.ui.audit.cat.${k}`)}
+            </div>
             <div className="text-xl font-semibold mt-0.5">{counts[k] ?? 0}</div>
           </div>
         ))}
@@ -178,7 +180,9 @@ export function AuditLogPage() {
           >
             {CATEGORIES.map((c) => (
               <option key={c} value={c}>
-                {c === "all" ? "All categories" : c}
+                {c === "all"
+                  ? t("closeout.ui.all_categories")
+                  : t(`closeout.ui.audit.cat.${c}`, { defaultValue: c })}
               </option>
             ))}
           </select>
@@ -189,7 +193,9 @@ export function AuditLogPage() {
           >
             {SEVERITIES.map((s) => (
               <option key={s} value={s}>
-                {s === "all" ? "All severities" : s}
+                {s === "all"
+                  ? t("closeout.ui.audit.all_severities")
+                  : t(`closeout.ui.audit.sev.${s}`, { defaultValue: s })}
               </option>
             ))}
           </select>
@@ -212,7 +218,7 @@ export function AuditLogPage() {
             className="px-3 py-2 rounded-lg bg-surface-2 text-foreground placeholder:text-muted-foreground border border-border text-sm min-w-[180px]"
           />
           <label className="text-xs text-muted-foreground flex items-center gap-1">
-            From
+            {t("closeout.ui.from")}
             <DateInput
               value={startDate}
               onChange={(v) => setStartDate(v)}
@@ -220,7 +226,7 @@ export function AuditLogPage() {
             />
           </label>
           <label className="text-xs text-muted-foreground flex items-center gap-1">
-            To
+            {t("closeout.ui.to")}
             <DateInput
               value={endDate}
               onChange={(v) => setEndDate(v)}
@@ -231,7 +237,7 @@ export function AuditLogPage() {
             onClick={() => void fetchRows()}
             className="px-3 py-2 rounded-lg bg-brand text-brand-foreground text-sm font-semibold"
           >
-            Apply
+            {t("closeout.ui.apply")}
           </button>
           <button
             onClick={() => {
@@ -246,7 +252,7 @@ export function AuditLogPage() {
             }}
             className="px-3 py-2 rounded-lg border border-border text-foreground text-sm hover:bg-surface-2"
           >
-            Reset
+            {t("closeout.ui.reset")}
           </button>
         </div>
 
@@ -260,20 +266,26 @@ export function AuditLogPage() {
           <table className="w-full text-sm">
             <thead className="text-xs uppercase tracking-widest text-muted-foreground">
               <tr className="border-b border-border">
-                <th className="text-start font-medium py-2 pr-3">When</th>
-                <th className="text-start font-medium py-2 pr-3">Category</th>
-                <th className="text-start font-medium py-2 pr-3">Action</th>
-                <th className="text-start font-medium py-2 pr-3">Summary</th>
-                <th className="text-start font-medium py-2 pr-3">Entity</th>
-                <th className="text-start font-medium py-2 pr-3">User</th>
-                <th className="text-start font-medium py-2 pr-3">Severity</th>
+                <th className="text-start font-medium py-2 pr-3">{t("closeout.ui.audit.when")}</th>
+                <th className="text-start font-medium py-2 pr-3">{t("closeout.ui.category")}</th>
+                <th className="text-start font-medium py-2 pr-3">{t("closeout.ui.action")}</th>
+                <th className="text-start font-medium py-2 pr-3">
+                  {t("closeout.ui.audit.summary")}
+                </th>
+                <th className="text-start font-medium py-2 pr-3">
+                  {t("closeout.ui.audit.entity")}
+                </th>
+                <th className="text-start font-medium py-2 pr-3">{t("closeout.ui.user")}</th>
+                <th className="text-start font-medium py-2 pr-3">
+                  {t("closeout.ui.audit.severity")}
+                </th>
               </tr>
             </thead>
             <tbody>
               {loading && rows.length === 0 && (
                 <tr>
                   <td colSpan={7} className="py-10 text-center text-muted-foreground">
-                    Loading audit history…
+                    {t("closeout.ui.audit.loading")}
                   </td>
                 </tr>
               )}
@@ -299,7 +311,7 @@ export function AuditLogPage() {
                         <span
                           className={`inline-flex items-center text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border ${categoryBadgeClass(r.category)}`}
                         >
-                          {r.category}
+                          {t(`closeout.ui.audit.cat.${r.category}`, { defaultValue: r.category })}
                         </span>
                       </td>
                       <td className="py-2.5 pr-3 font-medium">{r.action}</td>
@@ -318,7 +330,7 @@ export function AuditLogPage() {
                           className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border ${severityBadgeClass(r.severity)}`}
                         >
                           {severityIcon(r.severity)}
-                          {r.severity}
+                          {t(`closeout.ui.audit.sev.${r.severity}`, { defaultValue: r.severity })}
                         </span>
                       </td>
                     </tr>
@@ -350,7 +362,9 @@ export function AuditLogPage() {
                               </div>
                             ) : (
                               <>
-                                <div className="text-xs text-muted-foreground mb-1">Details</div>
+                                <div className="text-xs text-muted-foreground mb-1">
+                                  {t("closeout.ui.pm.details")}
+                                </div>
                                 <pre className="text-[11px] leading-relaxed font-mono bg-background text-foreground border border-border rounded-md p-3 overflow-x-auto max-h-72">
                                   {JSON.stringify(d, null, 2)}
                                 </pre>
@@ -358,18 +372,19 @@ export function AuditLogPage() {
                             );
                           })()}
                           <div className="mt-2 text-[11px] text-muted-foreground">
-                            event id: <span className="font-mono">{r.id}</span>
+                            {t("closeout.ui.audit.event_id")}{" "}
+                            <span className="font-mono">{r.id}</span>
                             {r.organization_id && (
                               <>
                                 {" "}
-                                · org:{" "}
+                                · {t("closeout.ui.audit.org")}{" "}
                                 <span className="font-mono">{r.organization_id.slice(0, 8)}</span>
                               </>
                             )}
                             {r.project_id && (
                               <>
                                 {" "}
-                                · project:{" "}
+                                · {t("closeout.ui.audit.project")}{" "}
                                 <span className="font-mono">{r.project_id.slice(0, 8)}</span>
                               </>
                             )}

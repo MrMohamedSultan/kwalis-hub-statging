@@ -107,25 +107,25 @@ function GovernanceDashboard() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Client Companies"
+          label={t("closeout.ui.gov.client_companies")}
           value={stats.totalCompanies}
           loading={loading}
           icon={<Building2 className="size-5 text-brand" />}
         />
         <StatCard
-          label="Platform Users"
+          label={t("closeout.ui.gov.platform_users")}
           value={stats.totalUsers}
           loading={loading}
           icon={<Users className="size-5 text-brand" />}
         />
         <StatCard
-          label="Productions"
+          label={t("closeout.ui.gov.productions")}
           value={stats.totalProjects}
           loading={loading}
           icon={<Clapperboard className="size-5 text-brand" />}
         />
         <StatCard
-          label="Active Productions"
+          label={t("closeout.ui.gov.active_productions")}
           value={stats.activeProjects}
           loading={loading}
           icon={<Activity className="size-5 text-brand" />}
