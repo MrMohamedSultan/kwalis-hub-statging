@@ -5571,6 +5571,14 @@
   "closeout": {
     "csv": {
       "no_rows": "(لا توجد صفوف)"
+    },
+    "exec": {
+      "pdf_title": "لوحة الإدارة التنفيذية",
+      "pdf_failed": "تعذّر إنشاء ملف PDF"
+    },
+    "budget": {
+      "validation_report_title": "تقرير التحقق من الميزانية — {{file}}",
+      "no_validation_issues": "لا توجد مشكلات تحقق لتصديرها."
     }
   }
 }

@@ -5543,6 +5543,14 @@
   "closeout": {
     "csv": {
       "no_rows": "(no rows)"
+    },
+    "exec": {
+      "pdf_title": "Executive Dashboard",
+      "pdf_failed": "Could not create the PDF"
+    },
+    "budget": {
+      "validation_report_title": "Budget validation report — {{file}}",
+      "no_validation_issues": "No validation issues to export."
     }
   }
 }

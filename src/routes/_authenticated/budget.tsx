@@ -1911,7 +1911,7 @@ export function UploadBudget() {
       rowsBySheet.get(m.sheet)!.push(m);
     }
     if (rowsBySheet.size === 0) {
-      toast.message("No validation issues to export.");
+      toast.message(t("closeout.budget.no_validation_issues"));
       return;
     }
     for (const [sheet, items] of rowsBySheet) {
@@ -1929,8 +1929,15 @@ export function UploadBudget() {
         sheet.slice(0, 28).replace(/[\\/?*[\]:]/g, "_") || "Issues",
       );
     }
-    const base = (preview.fileName || "budget").replace(/\.xlsx?$/i, "");
-    XLSX.writeFile(wb, `${base}__validation_report.xlsx`);
+    // G02: shared identity (company / project / title header, export footer,
+    // KwalisHub_{Code}_{Report}_{Date}.xlsx) like every other export.
+    const { writeBrandedSheetJs } = await import("@/lib/export/sheetjs-branding");
+    await writeBrandedSheetJs(
+      XLSX,
+      wb,
+      "Budget Validation Report",
+      t("closeout.budget.validation_report_title", { file: preview.fileName || "" }),
+    );
   };
 
   // Filter budget lines by enabled sheets — enforced on commit AND stat display.
@@ -3934,42 +3941,49 @@ export function ViewEditBudget() {
 
                 const onExportCSV = () => {
                   const rows = rowsForExport();
-                  import("@/lib/export-csv").then(({ downloadCSV }) => {
-                    downloadCSV(
-                      `budget-${filterSuffix}-${dateStr}`,
-                      rows.map(({ line: l, section, totalNative, totalSAR, totalUSD }) => ({
-                        section,
-                        header_code: l.headerCode,
-                        main_code: l.mainCode,
-                        description: l.description,
-                        group: l.group,
-                        unit: l.unit,
-                        currency: l.currency,
-                        qty: l.amount,
-                        rate: l.rate,
-                        periods: l.x,
-                        prep: l.prep ?? 0,
-                        shooting: l.shooting ?? 0,
-                        wrap: l.wrap ?? 0,
-                        total_native: totalNative,
-                        total_sar: totalSAR,
-                        total_usd: totalUSD,
-                        rebate_eligible_qfe: l.rebateEligible ? "Yes" : "No",
-                        notes: l.notes ?? "",
-                      })),
-                    );
+                  // E12: eligibility from the approved QPE mapping (budget_code_qpe_map).
+                  Promise.all([import("@/lib/export-csv"), import("@/lib/qpe-eligibility")]).then(
+                    async ([{ downloadCSV }, qpe]) => {
+                      const qpeMap = await qpe.fetchQpeMap(useStore.getState().activeProjectId);
+                      downloadCSV(
+                        `budget-${filterSuffix}-${dateStr}`,
+                        rows.map(({ line: l, section, totalNative, totalSAR, totalUSD }) => ({
+                          section,
+                          header_code: l.headerCode,
+                          main_code: l.mainCode,
+                          description: l.description,
+                          group: l.group,
+                          unit: l.unit,
+                          currency: l.currency,
+                          qty: l.amount,
+                          rate: l.rate,
+                          periods: l.x,
+                          prep: l.prep ?? 0,
+                          shooting: l.shooting ?? 0,
+                          wrap: l.wrap ?? 0,
+                          total_native: totalNative,
+                          total_sar: totalSAR,
+                          total_usd: totalUSD,
+                          qpe_eligible: qpe.qpeLabelForCode(qpeMap, l.mainCode),
+                          notes: l.notes ?? "",
+                        })),
+                      );
 
-                    toast.success(
-                      sectionFilter === "all"
-                        ? `Exported all ${rows.length} budget lines`
-                        : `Exported ${rows.length} ${sectionFilter} line${rows.length === 1 ? "" : "s"}`,
-                    );
-                  });
+                      toast.success(
+                        sectionFilter === "all"
+                          ? `Exported all ${rows.length} budget lines`
+                          : `Exported ${rows.length} ${sectionFilter} line${rows.length === 1 ? "" : "s"}`,
+                      );
+                    },
+                  );
                 };
 
                 const onExportExcel = async () => {
                   const rows = rowsForExport();
                   const ExcelJS = (await import("exceljs")).default;
+                  // E12: eligibility from the approved QPE mapping (budget_code_qpe_map).
+                  const qpe = await import("@/lib/qpe-eligibility");
+                  const qpeMap = await qpe.fetchQpeMap(useStore.getState().activeProjectId);
                   const wb = new ExcelJS.Workbook();
                   const ws = wb.addWorksheet(`Budget · ${filterLabel}`);
                   ws.mergeCells(1, 1, 1, 11);
@@ -4018,14 +4032,17 @@ export function ViewEditBudget() {
                       Number(l.rate) || 0,
                       Number(l.x) || 1,
                       totalSAR,
-                      l.rebateEligible ? "Yes" : "No",
+                      qpe.qpeLabelForCode(qpeMap, l.mainCode),
                     ]);
                     [7, 8, 9, 10].forEach((i) => {
                       row.getCell(i).numFmt = '#,##0.00;(#,##0.00);"—"';
                     });
                     const qfeCell = row.getCell(11);
                     qfeCell.alignment = { horizontal: "center" };
-                    if (l.rebateEligible) {
+                    if (
+                      qpe.qpeEligibilityOf(l.mainCode ? qpeMap.get(l.mainCode) : null) ===
+                      "eligible"
+                    ) {
                       qfeCell.font = { bold: true, color: { argb: "FF0F7A3D" } };
                       qfeCell.fill = {
                         type: "pattern",
@@ -4052,7 +4069,7 @@ export function ViewEditBudget() {
                   totalRow.getCell(10).border = {
                     top: { style: "thin", color: { argb: "FF1F3A5F" } },
                   };
-                  ws.columns = [10, 10, 12, 44, 10, 6, 10, 12, 10, 16, 12].map((w) => ({
+                  ws.columns = [10, 10, 12, 44, 10, 6, 10, 12, 10, 16, 24].map((w) => ({
                     width: w,
                   }));
 
@@ -4212,6 +4229,9 @@ export function ViewEditBudget() {
                 type="button"
                 onClick={async () => {
                   const dateStr = new Date().toISOString().slice(0, 10);
+                  // E12: eligibility from the approved QPE mapping (budget_code_qpe_map).
+                  const qpe = await import("@/lib/qpe-eligibility");
+                  const qpeMap = await qpe.fetchQpeMap(activeProjId);
                   const rows = budget.map((l) => ({
                     header_code: l.headerCode,
                     header_name: HEADER_ACCOUNTS.find((h) => h.code === l.headerCode)?.name ?? "",
@@ -4233,7 +4253,7 @@ export function ViewEditBudget() {
                       Math.max(Number(l.x) || 1, 1),
                     total_sar: lineTotalSAR(l),
                     total_usd: lineTotalUSD(l),
-                    rebate_eligible_qfe: l.rebateEligible ? "Yes" : "No",
+                    qpe_eligible: qpe.qpeLabelForCode(qpeMap, l.mainCode),
                     notes: l.notes ?? "",
                   }));
                   const { downloadCSV } = await import("@/lib/export-csv");

@@ -1,16 +1,14 @@
 // Production Timeline exports — Excel (xlsx) + PDF.
 //
 // Two flavours are supported:
-//  • The *live* view is exported to PDF through the browser print pipeline
-//    (`printTimelineReport`), which keeps the real Gantt lanes, colored bars
-//    and macro phases exactly as rendered. Print-only CSS lives in styles.css
-//    under `body.timeline-print-mode`.
+//  • The *live* view is exported to PDF by the branded Gantt writer
+//    (src/features/timeline/export/ganttPdfExport.ts — shared header/footer,
+//    standard file name, G02), never through the browser print dialog.
 //  • Any *saved draft* can be exported directly from the drafts panel without
 //    loading it first: its rows are fetched by version, flattened, then written
 //    to a structured workbook or a tabular PDF report.
 
 import { loadXlsx } from "@/lib/lazy-export-libs";
-import { downloadBlob } from "@/lib/download";
 import { exportPdfReport } from "@/lib/export-pdf";
 import { supabase } from "@/integrations/supabase/client";
 import { MACRO_PHASES, normalizeMacroPhase, type MacroPhase } from "@/lib/timeline-phases";
@@ -127,12 +125,14 @@ export async function exportTimelineXlsx(
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Timeline");
 
-  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
-  downloadBlob(
-    `${slug(meta.projectName)}-timeline-${slug(meta.versionLabel)}.xlsx`,
-    new Blob([out], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    }),
+  // G02: shared identity (company / project / title header, export footer,
+  // KwalisHub_{Code}_{Report}_{Date}.xlsx).
+  const { writeBrandedSheetJs } = await import("@/lib/export/sheetjs-branding");
+  await writeBrandedSheetJs(
+    XLSX,
+    wb,
+    `Production Timeline ${meta.versionLabel}`,
+    `${meta.projectName} — Production Timeline`,
   );
 }
 
@@ -158,32 +158,6 @@ export async function exportTimelinePdf(
     ],
     { documentTitle: `${meta.projectName} — Production Timeline`, direction: "ltr" },
   );
-}
-
-/**
- * Print the *live* Gantt view as a landscape PDF.
- *
- * Adds a body class that print-only CSS keys off so the sidebar, app header,
- * drawers and every `.no-print` control disappear while the lanes, colored
- * bars and macro phase band are preserved at full width.
- */
-export function printTimelineReport(): void {
-  if (typeof document === "undefined") return;
-  const body = document.body;
-  body.classList.add("timeline-print-mode");
-  const cleanup = () => {
-    body.classList.remove("timeline-print-mode");
-    window.removeEventListener("afterprint", cleanup);
-  };
-  window.addEventListener("afterprint", cleanup);
-  // Let the class-driven layout settle before the print dialog snapshots it.
-  window.setTimeout(() => {
-    try {
-      window.print();
-    } finally {
-      window.setTimeout(cleanup, 1000);
-    }
-  }, 60);
 }
 
 /**

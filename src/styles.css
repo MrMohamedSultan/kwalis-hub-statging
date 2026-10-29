@@ -1180,10 +1180,9 @@ input[type="number"] {
 
 /* ─────────────────────────────────────────────────────────────────────────
    Production Timeline — print / PDF export
-   Toggled by `printTimelineReport()` (src/lib/timeline-export.ts), which adds
-   `.timeline-print-mode` to <body> just before window.print(). The app chrome
-   is removed while the Gantt lanes, colored bars and macro phase band are
-   preserved at full width on landscape paper.
+   Only applies when `.timeline-print-mode` is on <body>. The PDF button uses
+   the branded Gantt writer (src/features/timeline/export/ganttPdfExport.ts,
+   G02); these rules are kept for a browser print of the page.
    ───────────────────────────────────────────────────────────────────────── */
 @media print {
   body.timeline-print-mode {

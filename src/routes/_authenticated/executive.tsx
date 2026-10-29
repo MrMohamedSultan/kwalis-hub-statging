@@ -8,9 +8,10 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Download, Info } from "lucide-react";
+import { Download, Info, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { APP_NAME } from "@/lib/i18n";
 import { useI18n } from "@/lib/i18n/useI18n";
@@ -100,11 +101,33 @@ function ExecutiveDashboard() {
 
   const trajectory = d?.trajectory ?? [];
 
-  // G16: financial figures are shown in full (no 1.8K abbreviations).
-  const money = (v: number) => formatCurrency(convert(v), { currency: code });
+  // G16 / X07: financial figures in full, 2 decimals (no 1.8K abbreviations).
+  const money = (v: number) => formatCurrency(convert(v), { currency: code, decimals: 2 });
+
+  // G02: the PDF goes through the shared branded writer (logo, header,
+  // footer, standard file name) instead of the browser print dialog.
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
+  const exportPdf = async () => {
+    if (!pageRef.current || exporting) return;
+    setExporting(true);
+    try {
+      const { exportElementPdf } = await import("@/lib/export/element-pdf");
+      await exportElementPdf({
+        target: pageRef.current,
+        report: "Executive Dashboard",
+        title: t("closeout.exec.pdf_title"),
+        subtitle: [d?.production.name ?? meta.name, code].filter(Boolean).join(" · "),
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("closeout.exec.pdf_failed"));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
-    <div className="dashboard-scope space-y-6">
+    <div ref={pageRef} className="dashboard-scope space-y-6">
       {/* ── Header band ─────────────────────────────────────────── */}
       <div {...enter(0)} className="flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -119,7 +142,7 @@ function ExecutiveDashboard() {
             })}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" data-export-hide>
           {list.length > 0 && (
             <select
               value={effectiveId ?? ""}
@@ -137,10 +160,15 @@ function ExecutiveDashboard() {
           <DashboardControls />
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={() => void exportPdf()}
+            disabled={exporting}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-ink-secondary transition-colors duration-150 hover:bg-surface-2 hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <Download className="size-3.5" aria-hidden="true" />
+            {exporting ? (
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <Download className="size-3.5" aria-hidden="true" />
+            )}
             {t("dash.exportPdf")}
           </button>
         </div>
