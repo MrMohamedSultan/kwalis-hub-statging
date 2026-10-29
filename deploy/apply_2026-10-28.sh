@@ -51,7 +51,24 @@ docker exec "$DB_CONTAINER" pg_dump -U supabase_admin -d postgres -Fc > "$BACKUP
 ls -lh "$BACKUP"
 
 echo "== 2. apply pending SQL"
+# Each file is recorded once applied, in a schema the API does not expose.
+# A file already recorded is skipped: re-running an older file after a newer one
+# can fail (e.g. a view that later files widened cannot be narrowed again).
+$PSQL -q -c "CREATE SCHEMA IF NOT EXISTS kwalis_deploy;
+             REVOKE ALL ON SCHEMA kwalis_deploy FROM PUBLIC;
+             CREATE TABLE IF NOT EXISTS kwalis_deploy.applied_files (
+               file text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());"
+# Servers where 171 → 200 were applied by the first run of this script (before the
+# record existed): 200's function is there, so 171 → 200 are recorded as applied.
+$PSQL -q -c "INSERT INTO kwalis_deploy.applied_files(file)
+             SELECT f FROM unnest(ARRAY['171','172','174','176','180','182','184','190','195','196','197','198','199','200']) f
+              WHERE to_regprocedure('public.project_org_mismatches()') IS NOT NULL
+             ON CONFLICT DO NOTHING;"
 for n in $FILES; do
+  if [ "$($PSQL -At -c "SELECT count(*) FROM kwalis_deploy.applied_files WHERE file = '$n';")" != "0" ]; then
+    echo "-- $n already applied, skipping"
+    continue
+  fi
   if [ "$n" = "201" ]; then
     # 201's backfill and repoint updates fire 200's project/organization trigger:
     # a row whose project belongs to another organization would abort 201.
@@ -64,7 +81,7 @@ for n in $FILES; do
     if [ "$MISMATCHES" != "0" ]; then
       echo "STOP: $MISMATCHES row(s) name a different organization than their project's — fix them before 201 (171 → 200 are applied):"
       $PSQL -c "SELECT * FROM public.project_org_mismatches() WHERE organization_id IS NOT NULL;"
-      echo "Then run the script again (171 → 200 are idempotent) or apply 201, 202, 203 by hand."
+      echo "Then run the script again: files already applied are skipped."
       exit 1
     fi
     echo "-- no real project/organization conflicts, continuing with 201"
@@ -73,6 +90,7 @@ for n in $FILES; do
   echo "-- $f"
   $PSQL --single-transaction < "$f" > "/tmp/kwalis-apply-$n.log" 2>&1 || {
     echo "FAILED on $f — nothing from this file was applied. Log:"; cat "/tmp/kwalis-apply-$n.log"; exit 1; }
+  $PSQL -q -c "INSERT INTO kwalis_deploy.applied_files(file) VALUES ('$n') ON CONFLICT DO NOTHING;"
   grep -E "^(NOTICE|WARNING)" "/tmp/kwalis-apply-$n.log" | head -20 || true
 done
 
