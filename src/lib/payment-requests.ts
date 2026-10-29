@@ -66,6 +66,11 @@ export type PaymentRequest = {
   cancelled_by?: string | null;
   cancelled_at?: string | null;
   cancellation_reason?: string | null;
+  /** Paid request reversed by an org admin with a refund entry (db/pending/204). */
+  reversed_by?: string | null;
+  reversed_at?: string | null;
+  reversal_reason?: string | null;
+  reversal_payment_id?: string | null;
 };
 
 /** i18n key of a request status (namespace "approvals"). */
@@ -344,6 +349,38 @@ export async function cancelPaymentRequest(id: string, reason: string): Promise<
   const { error } = await (supabase.rpc as any)("cancel_payment_request", {
     _request: id,
     _reason: reason,
+  });
+  if (error) throw error;
+}
+
+/** Requests whose payment can be reversed (refund) — not instalments (pure). */
+export function canReversePaidRequest(
+  r: Pick<PaymentRequest, "status" | "reversed_at" | "payroll_milestone_id" | "source_type">,
+  isOrgAdmin: boolean,
+): boolean {
+  return (
+    isOrgAdmin &&
+    r.status === "paid" &&
+    !r.reversed_at &&
+    !r.payroll_milestone_id &&
+    ["invoice", "purchase_order", "petty_cash"].includes(r.source_type)
+  );
+}
+
+/**
+ * X08: reverse a PAID request (org admin, reason required). The payment stays
+ * in the books and a refund entry offsets it (db/pending/204
+ * reverse_paid_payment_request); the document is payable again.
+ */
+export async function reversePaidPaymentRequest(
+  id: string,
+  reason: string,
+  refundDate?: string | null,
+): Promise<void> {
+  const { error } = await (supabase.rpc as any)("reverse_paid_payment_request", {
+    _request: id,
+    _reason: reason,
+    _refund_date: refundDate || null,
   });
   if (error) throw error;
 }

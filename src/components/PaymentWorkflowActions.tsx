@@ -11,6 +11,8 @@ import {
   approvePaymentRequest,
   rejectPaymentRequest,
   cancelPaymentRequest,
+  canReversePaidRequest,
+  reversePaidPaymentRequest,
   submitForApproval,
   executePaymentRequest,
   deletePaymentRequest,
@@ -30,6 +32,7 @@ import {
   RefreshCw,
   Ban,
   Hourglass,
+  Undo2,
 } from "lucide-react";
 
 export function PaymentStatusBadge({ status }: { status: PaymentRequest["status"] }) {
@@ -71,7 +74,7 @@ export function PaymentWorkflowActions({
   const isCreator = useIsCreator(request);
   const isOrgAdmin = isSuperAdmin || adminOrgIds.includes(request.organization_id);
   const [busy, setBusy] = useState(false);
-  const [reasonFor, setReasonFor] = useState<"reject" | "cancel" | null>(null);
+  const [reasonFor, setReasonFor] = useState<"reject" | "cancel" | "reverse" | null>(null);
   const [executeOpen, setExecuteOpen] = useState(false);
 
   const btnBase =
@@ -207,6 +210,24 @@ export function PaymentWorkflowActions({
           <Eye className="size-3" /> {t("approvals.action.viewReceipt")}
         </button>
       )}
+      {request.status === "paid" && request.reversed_at && (
+        <span
+          className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning"
+          title={request.reversal_reason ?? undefined}
+        >
+          <Undo2 className="size-3" /> {t("closeout.reverse.badge")}
+        </span>
+      )}
+      {canReversePaidRequest(request, isOrgAdmin) && (
+        <button
+          onClick={() => setReasonFor("reverse")}
+          disabled={busy}
+          title={t("closeout.reverse.hint")}
+          className={`${btnBase} ${sz} bg-surface text-warning border-warning/30 hover:bg-warning/10`}
+        >
+          <Undo2 className="size-3" /> {t("closeout.reverse.action")}
+        </button>
+      )}
       {canCancel && (
         <button
           onClick={() => setReasonFor("cancel")}
@@ -225,6 +246,9 @@ export function PaymentWorkflowActions({
             if (reasonFor === "reject") {
               await rejectPaymentRequest(request.id, reason);
               toast.success(t("approvals.toast.rejected"));
+            } else if (reasonFor === "reverse") {
+              await reversePaidPaymentRequest(request.id, reason);
+              toast.success(t("closeout.reverse.done"));
             } else {
               await cancelPaymentRequest(request.id, reason);
               toast.success(t("approvals.toast.cancelled"));
@@ -250,7 +274,7 @@ function ReasonModal({
   onClose,
   onConfirm,
 }: {
-  mode: "reject" | "cancel";
+  mode: "reject" | "cancel" | "reverse";
   onClose: () => void;
   onConfirm: (reason: string) => Promise<void>;
 }) {
@@ -276,16 +300,29 @@ function ReasonModal({
   };
   return (
     <Modal
-      title={mode === "reject" ? t("approvals.rejectTitle") : t("approvals.cancelTitle")}
+      title={
+        mode === "reject"
+          ? t("approvals.rejectTitle")
+          : mode === "reverse"
+            ? t("closeout.reverse.title")
+            : t("approvals.cancelTitle")
+      }
       onClose={onClose}
     >
       <form onSubmit={submit} className="space-y-3">
         {mode === "cancel" && (
           <p className="text-xs text-muted-foreground">{t("approvals.cancelExplain")}</p>
         )}
+        {mode === "reverse" && (
+          <p className="text-xs text-muted-foreground">{t("closeout.reverse.explain")}</p>
+        )}
         <label className="text-sm block">
           <div className="text-muted-foreground mb-1 uppercase tracking-wider text-xs">
-            {mode === "reject" ? t("approvals.rejectReason") : t("approvals.cancelReason")}
+            {mode === "reject"
+              ? t("approvals.rejectReason")
+              : mode === "reverse"
+                ? t("closeout.reverse.reason")
+                : t("approvals.cancelReason")}
           </div>
           <textarea
             rows={3}
@@ -314,7 +351,9 @@ function ReasonModal({
               ? t("approvals.working")
               : mode === "reject"
                 ? t("approvals.confirmReject")
-                : t("approvals.confirmCancel")}
+                : mode === "reverse"
+                  ? t("closeout.reverse.confirm")
+                  : t("approvals.confirmCancel")}
           </button>
         </div>
       </form>

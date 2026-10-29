@@ -6,6 +6,7 @@ import {
   resolveSelectedVersionId,
   selectedVersionIdSync,
 } from "@/lib/budget-version-selection";
+import { humanizeDbError } from "./db-errors";
 import { recordAudit } from "./audit-log";
 import { invalidateBudgetCaches } from "./budget-cache-bus";
 import { invalidateActiveProjectQueryCaches } from "./project-query-cache";
@@ -1973,8 +1974,11 @@ export const useStore = create<State>()(
       },
       removePurchaseOrder: async (id) => {
         const prev = get().purchaseOrders.find((p) => p.id === id) ?? null;
+        // X08: the database refuses to delete an approved PO (db/pending/204) —
+        // keep it on screen and surface the refusal instead of a false "deleted".
+        const { error } = await (supabase.from as any)("purchase_orders").delete().eq("id", id);
+        if (error) throw new Error(humanizeDbError(error));
         set((s) => ({ purchaseOrders: s.purchaseOrders.filter((p) => p.id !== id) }));
-        await (supabase.from as any)("purchase_orders").delete().eq("id", id);
         recordAudit({
           category: "other",
           action: "purchase_order.delete",

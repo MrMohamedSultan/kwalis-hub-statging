@@ -5551,6 +5551,28 @@
     "budget": {
       "validation_report_title": "Budget validation report — {{file}}",
       "no_validation_issues": "No validation issues to export."
+    },
+    "reverse": {
+      "action": "Reverse payment",
+      "hint": "The money came back: record a refund entry with a reason (the payment stays in the books)",
+      "title": "Reverse a paid request",
+      "explain": "A refund entry equal to the payment is recorded today (Bank debited, Accounts Payable credited). The original payment stays on record, the document becomes payable again and the request can no longer be changed.",
+      "reason": "Reason for the reversal",
+      "confirm": "Record refund",
+      "done": "Refund recorded — the payment is reversed",
+      "badge": "Reversed"
+    },
+    "po": {
+      "cancel": "Cancel PO",
+      "cancel_hint": "An approved purchase order is cancelled with a reason — it is never deleted",
+      "cancel_title": "Cancel purchase order {{number}}",
+      "cancel_explain": "The PO stops counting as a commitment. The cancellation, its reason, who did it and when are recorded; the PO stays in the list and cannot be changed afterwards. Payments, open payment requests and invoices on it must be reversed or cancelled first.",
+      "reason": "Reason for the cancellation",
+      "reason_required": "Write the reason (at least 3 characters)",
+      "confirm_cancel": "Cancel the PO",
+      "cancelled": "PO {{number}} cancelled",
+      "reason_label": "Reason: {{reason}}",
+      "no_delete_hint": "Approved purchase orders cannot be deleted — cancel them with a reason on the Purchase Orders page"
     }
   }
 }

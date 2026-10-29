@@ -4884,12 +4884,16 @@ function PurchaseOrderTab() {
                           toast.error(err?.message ?? "Failed to delete PO.");
                         }
                       }}
-                      disabled={!can("transactions.modify")}
+                      disabled={
+                        !can("transactions.modify") || ["Approved", "Issued"].includes(p.status)
+                      }
                       className="p-1.5 rounded-lg hover:bg-destructive/20 text-destructive disabled:opacity-40 disabled:cursor-not-allowed"
                       title={
                         !can("transactions.modify")
                           ? "Permission required: transactions.modify"
-                          : "Void/Delete"
+                          : ["Approved", "Issued"].includes(p.status)
+                            ? t("closeout.po.no_delete_hint")
+                            : "Void/Delete"
                       }
                     >
                       <Trash2 className="size-4" />

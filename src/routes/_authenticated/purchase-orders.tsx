@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { formatAmount } from "@/lib/format-number";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ClipboardList, Plus, X as XIcon, RotateCcw, Check } from "lucide-react";
+import { ClipboardList, Plus, X as XIcon, RotateCcw, Check, Ban } from "lucide-react";
+import { Modal } from "@/components/Modal";
 import { AppShell, PageTitle } from "@/components/AppShell";
 import { supabase } from "@/integrations/supabase/client";
 import { useStore, formatUSD } from "@/lib/store";
@@ -52,12 +53,19 @@ type PO = {
   created_at: string;
   created_by?: string | null;
   approved_by?: string | null;
+  /** db/pending/204: once approved a PO is cancelled with a reason, never deleted. */
+  first_approved_at?: string | null;
+  cancelled_at?: string | null;
+  cancellation_reason?: string | null;
 };
 
 /** States the maker may set; Approved / Issued are reached through "Approve" by someone else (B10). */
 const EDITABLE_STATUSES = ["Draft", "Open", "Closed", "Cancelled"] as const;
 const APPROVED_STATES = ["Approved", "Issued"];
 const isApproved = (s: string) => APPROVED_STATES.includes(s);
+/** X08: approved now or before (moved back to Draft to edit) — cancelled with a reason. */
+const wasApproved = (p: Pick<PO, "status" | "first_approved_at">) =>
+  isApproved(p.status) || !!p.first_approved_at;
 
 function PurchaseOrdersPage() {
   const { t } = useTranslation();
@@ -81,6 +89,7 @@ function PurchaseOrdersPage() {
   );
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState<PO | "new" | null>(null);
+  const [cancelFor, setCancelFor] = useState<PO | null>(null);
   const [me, setMe] = useState<string | null>(null);
   // G11: ?open=<id> opens that purchase order once the list is loaded.
   const { open: openId } = Route.useSearch();
@@ -305,6 +314,14 @@ function PurchaseOrdersPage() {
                         >
                           {t(`ap.po_status.${p.status}`, { defaultValue: p.status })}
                         </span>
+                        {p.cancellation_reason && (
+                          <div
+                            className="mt-1 max-w-[16rem] truncate text-[11px] text-muted-foreground"
+                            title={p.cancellation_reason}
+                          >
+                            {t("closeout.po.reason_label", { reason: p.cancellation_reason })}
+                          </div>
+                        )}
                       </td>
                       <td className="p-3 text-end space-x-1 rtl:space-x-reverse whitespace-nowrap">
                         {canEdit && (
@@ -315,7 +332,17 @@ function PurchaseOrdersPage() {
                             {t("common.edit")}
                           </button>
                         )}
-                        {canApprove && !isApproved(p.status) && p.status !== "Cancelled" && (
+                        {canApprove && wasApproved(p) && p.status !== "Cancelled" && (
+                          <button
+                            onClick={() => setCancelFor(p)}
+                            title={t("closeout.po.cancel_hint")}
+                            className="text-xs px-2 py-1 rounded-lg bg-destructive/15 hover:bg-destructive/25 text-destructive inline-flex items-center gap-1"
+                          >
+                            <Ban className="size-3" />
+                            {t("closeout.po.cancel")}
+                          </button>
+                        )}
+                        {canApprove && !wasApproved(p) && p.status !== "Cancelled" && (
                           <>
                             <button
                               disabled={ownPo}
@@ -358,6 +385,18 @@ function PurchaseOrdersPage() {
           </table>
         </div>
       </div>
+
+      {cancelFor && (
+        <CancelPoModal
+          po={cancelFor}
+          onClose={() => setCancelFor(null)}
+          onDone={() => {
+            setCancelFor(null);
+            void reload();
+            refreshStore();
+          }}
+        />
+      )}
 
       {showForm && (
         <POForm
@@ -487,9 +526,14 @@ function POForm({
   const approvedNow = !!initial && isApproved(initial.status);
   const isBase = currency === fx.baseCurrency;
   const baseAmount = toBaseAmount(original, isBase ? 1 : fxRate);
-  const statusOptions = approvedNow
-    ? [initial!.status, ...EDITABLE_STATUSES]
-    : [...EDITABLE_STATUSES].filter((s) => (initial ? true : s === "Draft" || s === "Open"));
+  const statusOptions = (
+    approvedNow
+      ? [initial!.status, ...EDITABLE_STATUSES]
+      : [...EDITABLE_STATUSES].filter((s) => (initial ? true : s === "Draft" || s === "Open"))
+  ).filter(
+    // X08: a PO that was approved is cancelled with a reason (Cancel button), not here
+    (s) => s !== "Cancelled" || !initial || !wasApproved(initial) || initial.status === "Cancelled",
+  );
 
   return (
     <div
@@ -683,5 +727,76 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="text-xs uppercase tracking-wider text-muted-foreground">{label}</span>
       <div className="mt-1">{children}</div>
     </label>
+  );
+}
+
+/** X08: cancel an approved purchase order with a reason (db/pending/204 cancel_purchase_order). */
+function CancelPoModal({
+  po,
+  onClose,
+  onDone,
+}: {
+  po: PO;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { t } = useTranslation();
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = reason.trim();
+    if (clean.length < 3) {
+      toast.error(t("closeout.po.reason_required"));
+      return;
+    }
+    setBusy(true);
+    const { error } = await (supabase.rpc as any)("cancel_purchase_order", {
+      p_po: po.id,
+      p_reason: clean.slice(0, 1000),
+    });
+    setBusy(false);
+    if (error) {
+      toast.error(humanizeDbError(error));
+      return;
+    }
+    toast.success(t("closeout.po.cancelled", { number: po.po_number }));
+    onDone();
+  };
+  return (
+    <Modal title={t("closeout.po.cancel_title", { number: po.po_number })} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <p className="text-xs text-muted-foreground">{t("closeout.po.cancel_explain")}</p>
+        <label className="block text-sm">
+          <div className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">
+            {t("closeout.po.reason")}
+          </div>
+          <textarea
+            rows={3}
+            value={reason}
+            maxLength={1000}
+            onChange={(e) => setReason(e.target.value)}
+            required
+            className="w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-start outline-none ring-destructive focus:ring-2"
+          />
+        </label>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-border px-4 py-2 hover:bg-muted"
+          >
+            {t("common.close")}
+          </button>
+          <button
+            type="submit"
+            disabled={busy}
+            className="rounded-xl bg-destructive px-4 py-2 font-semibold text-destructive-foreground disabled:opacity-60"
+          >
+            {t("closeout.po.confirm_cancel")}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
