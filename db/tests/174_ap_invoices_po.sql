@@ -45,6 +45,7 @@ UPDATE invoices SET price = 600 WHERE id = :'INV';
 SELECT t.eq('partial invoice leaves 400 committed', (SELECT amount FROM v_ledger_transactions WHERE source_id = :'PO'), 400::numeric);
 -- cancelled PO is not a commitment
 RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false);  -- 204: an approved PO is cancelled by an approver with a reason; here a server job
 UPDATE purchase_orders SET status = 'Cancelled' WHERE id = :'PO';
 SELECT t.eq('cancelled PO drops out', (SELECT count(*) FROM v_ledger_transactions WHERE source_id = :'PO'), 0::bigint);
 -- a PO from another project cannot be linked
