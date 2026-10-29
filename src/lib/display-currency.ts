@@ -138,7 +138,7 @@ export function useDisplayCurrency(projectId?: string | null): DisplayCurrency {
     return out == null ? n : out;
   };
 
-  const amount = (value: number, decimals = 0) => formatAmount(toDisplay(value), decimals);
+  const amount = (value: number, decimals = 2) => formatAmount(toDisplay(value), decimals);
 
   return {
     base,

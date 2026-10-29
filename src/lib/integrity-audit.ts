@@ -126,7 +126,7 @@ export function runIntegrityAudit(input: {
     title: `Actual Paid rollup mapped across ${Object.keys(byCode).length} Top Sheet codes`,
     detail: `Total mapped = ${formatAmount(totalMapped, 2)} SAR. Codes: ${
       Object.entries(byCode)
-        .map(([c, v]) => `${c}=${formatAmount(v, 0)}`)
+        .map(([c, v]) => `${c}=${formatAmount(v, 2)}`)
         .join(", ") || "none"
     }.`,
     actual: totalMapped,

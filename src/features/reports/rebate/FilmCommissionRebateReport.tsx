@@ -496,9 +496,9 @@ function PayrollSection({ d, includeAll }: { d: FilmCommissionRebate; includeAll
               <Money v={r.housing + r.overtime + r.per_diem} />
               <div className="text-[10px] text-muted-foreground">
                 {t("rebate.col.allowances_breakdown", {
-                  housing: formatAmount(r.housing, 0),
-                  overtime: formatAmount(r.overtime, 0),
-                  per_diem: formatAmount(r.per_diem, 0),
+                  housing: formatAmount(r.housing, 2),
+                  overtime: formatAmount(r.overtime, 2),
+                  per_diem: formatAmount(r.per_diem, 2),
                 })}
               </div>
             </td>

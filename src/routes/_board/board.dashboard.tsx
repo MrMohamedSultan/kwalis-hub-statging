@@ -82,7 +82,9 @@ function BoardDashboard() {
 
       const rows = projectsData ?? [];
       const fxOf = (id: string) => {
-        const r = Number((rows.find((p) => p.id === id) as { fx_rate?: number | null } | undefined)?.fx_rate);
+        const r = Number(
+          (rows.find((p) => p.id === id) as { fx_rate?: number | null } | undefined)?.fx_rate,
+        );
         return Number.isFinite(r) && r > 0 ? r : DEFAULT_FX_RATE;
       };
 
@@ -318,5 +320,5 @@ function SpendingBar({ spent, total }: { spent: number; total: number }) {
 }
 
 function formatSAR(n: number): string {
-  return formatAmount(n, 0);
+  return formatAmount(n, 2);
 }

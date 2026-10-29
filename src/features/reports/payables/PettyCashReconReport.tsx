@@ -152,7 +152,7 @@ export function PettyCashReconReport() {
               title={t("reconcile.petty.largest")}
               value={formatAmount(d.largestCash, 2)}
               detail={t("reconcile.petty.limitTxnValue", {
-                amount: formatAmount(d.limits.perTxn, 0),
+                amount: formatAmount(d.limits.perTxn, 2),
               })}
             />
           </div>

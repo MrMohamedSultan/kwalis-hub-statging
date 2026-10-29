@@ -24,7 +24,7 @@ function render(
   activeCurrency: ActiveCurrency,
   opts: { decimals?: number; showCode?: boolean } = {},
 ): string {
-  const { decimals = 0, showCode = true } = opts;
+  const { decimals = 2, showCode = true } = opts; // X07: 2 decimals, like the exports
   const n = Number(amount);
   if (amount == null || !Number.isFinite(n)) return "—";
   const value = getDisplayAmount(n, fxRate, activeCurrency, decimals);
@@ -45,7 +45,7 @@ export function formatDisplayMoney(
 }
 
 /** Number only (no currency code) — for columns whose header carries the code. */
-export function formatDisplayAmount(amount: number | null | undefined, decimals = 0): string {
+export function formatDisplayAmount(amount: number | null | undefined, decimals = 2): string {
   return formatDisplayMoney(amount, { decimals, showCode: false });
 }
 
@@ -61,7 +61,7 @@ export function useMoney() {
   );
 
   const amount = useCallback(
-    (value: number | null | undefined, decimals = 0) =>
+    (value: number | null | undefined, decimals = 2) =>
       render(value, fxRate, activeCurrency, { decimals, showCode: false }),
     [fxRate, activeCurrency],
   );

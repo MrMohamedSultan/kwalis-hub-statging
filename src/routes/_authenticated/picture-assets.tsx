@@ -497,14 +497,14 @@ function PictureAssetsPage() {
           <div className="text-xs text-muted-foreground uppercase tracking-wider">
             {t("picture_assets.total_agreed_cost")}
           </div>
-          <div className="text-2xl font-semibold mt-1">{formatAmount(totals.agreed, 0)} SAR</div>
+          <div className="text-2xl font-semibold mt-1">{formatAmount(totals.agreed, 2)} SAR</div>
         </Panel>
         <Panel>
           <div className="text-xs text-muted-foreground uppercase tracking-wider">
             {t("picture_assets.paid_to_date")}
           </div>
           <div className="text-2xl font-semibold mt-1 text-success">
-            {formatAmount(totals.paidAmt, 0)} SAR
+            {formatAmount(totals.paidAmt, 2)} SAR
           </div>
         </Panel>
         <Panel>

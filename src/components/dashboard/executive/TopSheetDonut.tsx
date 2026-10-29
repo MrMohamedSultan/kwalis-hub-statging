@@ -50,10 +50,8 @@ export function TopSheetDonut({ data, loading, fetching }: TopSheetDonutProps) {
   const money = (v: number) => formatCurrency(v, { currency: code });
   // One fixed precision for every row, so 29.3 / 57.3 / 12.1 / 1.3 line up.
   const pct = (v: number) => `${(safeDivide(v, total) * 100).toFixed(1)}%`;
-  const compact = new Intl.NumberFormat("en-US", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(total);
+  // G16: the total in full (2 decimals), never "12.4M".
+  const totalText = formatCurrency(total, { currency: code, decimals: 2 }).replace(`${code} `, "");
 
   return (
     <ChartCard
@@ -121,8 +119,8 @@ export function TopSheetDonut({ data, loading, fetching }: TopSheetDonutProps) {
           {/* Center label — HTML over the SVG center, not an SVG text hack. */}
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
             <div className="text-[11px] font-medium text-ink-muted">{code}</div>
-            <div className="text-xl font-semibold leading-tight tracking-tight text-ink-primary">
-              {compact}
+            <div className="text-sm font-semibold leading-tight tracking-tight text-ink-primary tabular-nums">
+              {totalText}
             </div>
             <div className="mt-0.5 text-[11px] text-ink-muted">{t("dash.totalBudget")}</div>
           </div>

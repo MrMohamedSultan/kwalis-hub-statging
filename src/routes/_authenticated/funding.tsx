@@ -54,7 +54,10 @@ export const Route = createFileRoute("/_authenticated/funding")({
 const KINDS: FundingKind[] = ["Investor Tranche", "Capital", "Grant", "Loan", "Other"];
 
 function fmt(n: number) {
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.round(n || 0));
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n || 0);
 }
 function fmtSAR(n: number) {
   return `SAR ${fmt(n)}`;

@@ -1270,7 +1270,7 @@ function Tile({ label, v }: { label: string; v: number }) {
 function fmtN(v: number | null | undefined): string {
   const n = Number(v ?? 0);
   if (!Number.isFinite(n) || n === 0) return "—";
-  return formatAmount(n, 0);
+  return formatAmount(n, 2);
 }
 
 // =====================================================================

@@ -143,7 +143,7 @@ export function pivotByBeneficiary(milestones: PayableMilestone[]): PayableRow[]
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function fmt(n: number, short = false): string {
-  return formatAmount(Number(n) || 0, 0);
+  return formatAmount(Number(n) || 0, 2);
 }
 
 export function milestoneHeaders(milestones: PayableMilestone[], maxMilestones: number): string[] {

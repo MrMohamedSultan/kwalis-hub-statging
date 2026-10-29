@@ -21,7 +21,8 @@ export function numberLocale(): string {
   return lng.startsWith("ar") ? "ar-SA-u-nu-latn" : "en-US";
 }
 
-export function formatAmount(n: number, decimals = 0): string {
+// X07: money on screens has 2 decimals by default, the same as the exports.
+export function formatAmount(n: number, decimals = 2): string {
   const v = Number(n);
   if (!Number.isFinite(v)) return "";
   return v.toLocaleString(numberLocale(), {
@@ -34,7 +35,7 @@ export function formatAmount(n: number, decimals = 0): string {
  * Money with its ISO currency code appended — the platform standard.
  * Always "12,500 SAR" / "3,333 USD"; localized glyphs ($, ر.س) are never used.
  */
-export function formatCurrency(n: number, currency?: string, decimals = 0): string {
+export function formatCurrency(n: number, currency?: string, decimals = 2): string {
   const amount = formatAmount(n, decimals);
   return currency ? `${amount} ${currency}` : amount;
 }
@@ -48,10 +49,10 @@ export function formatCurrency(n: number, currency?: string, decimals = 0): stri
  * double-converts the figure and mislabels the code. These render the amount
  * exactly as given, with a hardcoded currency label.
  */
-export function formatStaticSAR(n: number, decimals = 0): string {
+export function formatStaticSAR(n: number, decimals = 2): string {
   return formatAmount(Number(n) || 0, decimals);
 }
 
-export function formatStaticUSD(n: number, decimals = 0): string {
+export function formatStaticUSD(n: number, decimals = 2): string {
   return `${formatAmount(Number(n) || 0, decimals)} USD`;
 }

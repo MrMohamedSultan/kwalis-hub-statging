@@ -3175,7 +3175,7 @@ function CommitSummaryModal({
   }
   const overCeilingSheets = Object.entries(bySheet).filter(([, s]) => s.total > sheetCeiling);
   const hasCeilingViolation = overCeilingSheets.length > 0;
-  const fmt = (n: number) => formatAmount(n, 0);
+  const fmt = (n: number) => formatAmount(n, 2);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"

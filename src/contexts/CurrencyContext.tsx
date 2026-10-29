@@ -71,8 +71,8 @@ export function formatForDisplay(
     activeCurrency === "target" ? projectFxRate.targetCurrency : projectFxRate.baseCurrency;
   const sign = value < 0 ? "-" : "";
   return `${sign}${Math.abs(value).toLocaleString("en-US", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   })} ${code}`;
 }
 

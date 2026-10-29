@@ -350,7 +350,7 @@ export function PerformanceOverview({
                   align: "end",
                   numeric: true,
                   format: (r) =>
-                    formatCurrency(safeNumber(r.budgetC), { currency: code, decimals: 0 }),
+                    formatCurrency(safeNumber(r.budgetC), { currency: code, decimals: 2 }),
                 },
                 {
                   key: "committedC",
@@ -358,7 +358,7 @@ export function PerformanceOverview({
                   align: "end",
                   numeric: true,
                   format: (r) =>
-                    formatCurrency(safeNumber(r.committedC), { currency: code, decimals: 0 }),
+                    formatCurrency(safeNumber(r.committedC), { currency: code, decimals: 2 }),
                 },
                 {
                   key: "actualC",
@@ -366,7 +366,7 @@ export function PerformanceOverview({
                   align: "end",
                   numeric: true,
                   format: (r) =>
-                    formatCurrency(safeNumber(r.actualC), { currency: code, decimals: 0 }),
+                    formatCurrency(safeNumber(r.actualC), { currency: code, decimals: 2 }),
                 },
               ],
               rows: sections,
@@ -398,7 +398,7 @@ export function PerformanceOverview({
                   <Tooltip
                     content={
                       <ChartTooltip
-                        formatValue={(v) => formatCurrency(v, { currency: code, decimals: 0 })}
+                        formatValue={(v) => formatCurrency(v, { currency: code, decimals: 2 })}
                       />
                     }
                     cursor={{ fill: colors.grid, opacity: 0.4 }}

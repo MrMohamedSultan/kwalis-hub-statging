@@ -114,7 +114,7 @@ export function formatCurrency(
     }).format(n);
     return `${currency} ${text}`;
   }
-  const d = decimals ?? 0;
+  const d = decimals ?? 2; // X07: 2 decimals, like the exports
   const text = new Intl.NumberFormat(locale, {
     minimumFractionDigits: d,
     maximumFractionDigits: d,

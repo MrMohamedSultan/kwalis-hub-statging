@@ -58,7 +58,7 @@ const add = (t: Totals, r: Totals) => {
 const remaining = (r: Totals) => r.budget - r.actual - r.committed;
 const usedPct = (r: Totals) => (r.budget > 0 ? ((r.actual + r.committed) / r.budget) * 100 : 0);
 
-const fmt = (n: number) => formatAmount(Math.round(n), 0);
+const fmt = (n: number) => formatAmount(n, 2);
 
 const UNBUDGETED = "__unbudgeted__";
 

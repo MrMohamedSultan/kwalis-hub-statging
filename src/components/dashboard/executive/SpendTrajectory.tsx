@@ -74,7 +74,6 @@ export function SpendTrajectory({
   // 2 decimals so the trajectory endpoint reads exactly like the Actual
   // Spend card (243,039.47 — halala-accurate reconciliation).
   const money = (v: number) => formatCurrency(v, { currency: code, decimals: 2 });
-  const compact = (v: number) => formatCurrency(v, { currency: code, compact: true });
 
   return (
     <ChartCard
@@ -171,7 +170,7 @@ export function SpendTrajectory({
                 stroke={colors.inkSecondary}
                 strokeWidth={1}
                 label={{
-                  value: `${t("dash.budget")} ${compact(convert(totalBudget))}`,
+                  value: `${t("dash.budget")} ${money(convert(totalBudget))}`,
                   position: "insideTopRight",
                   fill: colors.inkMuted,
                   fontSize: 11,
