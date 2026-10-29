@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =====================================================================
-# Kwalis Hub — staging deploy of the spec work (db/pending 171 → 203)
+# Kwalis Hub — staging deploy of the spec work (db/pending 171 → 204)
 #
 # Run on the self-hosted staging server ONLY, from the repo folder,
 # AFTER the owner approved the SQL files listed in deploy/README_2026-10-28.md.
@@ -29,7 +29,9 @@ DB_CONTAINER=${DB_CONTAINER:-supabase-db}
 PSQL="docker exec -i $DB_CONTAINER psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres"
 STAMP=$(date +%Y%m%d-%H%M%S)
 BACKUP_DIR=${BACKUP_DIR:-$HOME/kwalis_backups}
-FILES="171 172 174 176 180 182 184 190 195 196 197 198 199 200 201 202 203"
+# 171 → 203 are already recorded in kwalis_deploy.applied_files on the staging
+# server and are skipped; 204 (close-out) is the new file.
+FILES="171 172 174 176 180 182 184 190 195 196 197 198 199 200 201 202 203 204"
 
 echo "== 0. pre-checks (read-only)"
 echo "-- storage.objects policies (the contracts bucket rules 201 builds on):"
@@ -46,7 +48,7 @@ $PSQL -c "SELECT 'invoices' AS table_name, count(*) AS rows_not_rounded
 
 echo "== 1. backup"
 mkdir -p "$BACKUP_DIR"
-BACKUP="$BACKUP_DIR/kwalis-before-171-203-$STAMP.dump"
+BACKUP="$BACKUP_DIR/kwalis-before-171-204-$STAMP.dump"
 docker exec "$DB_CONTAINER" pg_dump -U supabase_admin -d postgres -Fc > "$BACKUP"
 ls -lh "$BACKUP"
 
@@ -110,6 +112,8 @@ $PSQL -c "SELECT p.code, public.ledger_resync_project(p.id)
 echo "== 5. checks"
 $PSQL -c "SELECT p.code, public.ledger_phases_match(p.id) AS ledger_ok FROM public.projects p ORDER BY 1;"
 $PSQL -c "SELECT * FROM public.project_org_mismatches();"
+echo "-- 204: the board-approval limit must be empty (the app has no board approval action yet; a limit blocks every request above it):"
+$PSQL -c "SELECT key, value FROM public.platform_settings WHERE key = 'payment_board_approval_above_sar';"
 echo "-- person profiles: PREVIEW only (nothing linked). Apply per org later with persons_backfill(org, true)."
 $PSQL -c "SELECT o.name, b.* FROM public.organizations o, LATERAL public.persons_backfill(o.id, false) b LIMIT 200;"
 
