@@ -1,4 +1,5 @@
 import i18n from "i18next";
+import { builtinTemplateLines, useBudgetTemplate, type TemplateLine } from "@/lib/budget-template";
 import { formatAmount, formatStaticSAR, formatStaticUSD, numberLocale } from "@/lib/format-number";
 import { useTranslation } from "react-i18next";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -641,30 +642,32 @@ const draftTotalSAR = (r: DraftRow) =>
 const draftTotalUSD = (r: DraftRow) =>
   r.currency === "USD" ? draftTotalNative(r) : draftTotalNative(r) / getSarPerUsd();
 
-function buildTemplateRows(): DraftRow[] {
+/**
+ * D20: the draft starts from the organization's default budget template
+ * (Settings → Organization), else from the built-in one.
+ */
+function buildTemplateRows(template?: TemplateLine[] | null): DraftRow[] {
   const rows: DraftRow[] = [];
-  for (const h of HEADER_ACCOUNTS) {
-    const mains = MAIN_ACCOUNTS[h.code] ?? [{ code: h.code + "-01", name: h.name }];
-    for (const m of mains) {
-      rows.push({
-        key: `${h.code}::${m.code}`,
-        headerCode: h.code,
-        headerName: h.name,
-        group: h.group,
-        mainCode: m.code,
-        description: m.name,
-        name: "",
-        amount: 1,
-        rate: 0,
-        unit: "Flat",
-        currency: defaultLineCurrency(),
-        prep: 0,
-        shooting: 0,
-        wrap: 0,
-        notes: "",
-        hidden: false,
-      });
-    }
+  const lines = template?.length ? template : builtinTemplateLines();
+  for (const l of lines) {
+    rows.push({
+      key: `${l.header_code}::${l.code}`,
+      headerCode: l.header_code,
+      headerName: l.header_name,
+      group: l.group,
+      mainCode: l.code,
+      description: l.description,
+      name: "",
+      amount: 1,
+      rate: 0,
+      unit: "Flat",
+      currency: defaultLineCurrency(),
+      prep: 0,
+      shooting: 0,
+      wrap: 0,
+      notes: "",
+      hidden: false,
+    });
   }
   return rows;
 }
@@ -672,7 +675,10 @@ function buildTemplateRows(): DraftRow[] {
 const DRAFT_STORAGE_PREFIX = "budget.draft.v1.";
 const draftStorageKey = (pid: string | null) => `${DRAFT_STORAGE_PREFIX}${pid ?? "_none"}`;
 
-function loadPersistedDraft(pid: string | null): DraftRow[] | null {
+function loadPersistedDraft(
+  pid: string | null,
+  template?: TemplateLine[] | null,
+): DraftRow[] | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(draftStorageKey(pid));
@@ -680,7 +686,7 @@ function loadPersistedDraft(pid: string | null): DraftRow[] | null {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return null;
     // Merge persisted values into the current template so schema changes stay in sync.
-    const base = buildTemplateRows();
+    const base = buildTemplateRows(template);
     const baseKeys = new Set(base.map((r) => r.key));
     const byKey = new Map<string, any>(parsed.map((r: any) => [String(r?.key ?? ""), r]));
     const merged: DraftRow[] = base.map((r) => {
@@ -699,7 +705,18 @@ function loadPersistedDraft(pid: string | null): DraftRow[] | null {
     });
     // Preserve user-added custom sub-lines (keys not in template). Insert each
     // one directly after the last row sharing its header code so grouping holds.
-    const customs = parsed.filter((r: any) => r && !baseKeys.has(String(r?.key ?? "")));
+    // D20: rows of another template (the organization switched templates)
+    // are kept only when they carry figures; empty ones are dropped.
+    const customs = parsed.filter((r: any) => {
+      const key = String(r?.key ?? "");
+      if (!r || baseKeys.has(key)) return false;
+      if (key.startsWith("custom::")) return true;
+      return (
+        (Number(r.rate) || 0) !== 0 ||
+        String(r.name ?? "").trim() !== "" ||
+        String(r.notes ?? "").trim() !== ""
+      );
+    });
     for (const c of customs) {
       const row: DraftRow = {
         key: String(c.key),
@@ -756,8 +773,12 @@ export function ExcelBudgetCreator({ onCreated }: { onCreated: () => void }) {
   const { accounts: tsAccounts } = useTopsheetAccounts();
   const [localName, setLocalName] = useState(projectName === "New Project" ? "" : projectName);
   const [localCode, setLocalCode] = useState(activeProjCode);
+  const activeOrgId = useStore(
+    (s) => s.projects.find((p) => p.id === activePid)?.organizationId ?? null,
+  );
+  const template = useBudgetTemplate(activeOrgId);
   const [rows, setRows] = useState<DraftRow[]>(
-    () => loadPersistedDraft(activePid) ?? buildTemplateRows(),
+    () => loadPersistedDraft(activePid, template.lines) ?? buildTemplateRows(template.lines),
   );
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkName, setBulkName] = useState("");
@@ -769,16 +790,17 @@ export function ExcelBudgetCreator({ onCreated }: { onCreated: () => void }) {
   // Reload draft and re-bind Project Code / Name inputs when the active project changes.
   // This ensures the fields strictly mirror the globally selected project — no bleed.
   useEffect(() => {
-    setRows(loadPersistedDraft(activePid) ?? buildTemplateRows());
+    setRows(loadPersistedDraft(activePid, template.lines) ?? buildTemplateRows(template.lines));
     setSelected(new Set());
     setLocalName(projectName === "New Project" ? "" : projectName);
     setLocalCode(activeProjCode);
-  }, [activePid, projectName, activeProjCode]);
+  }, [activePid, projectName, activeProjCode, template.lines]);
 
   // Persist draft (incl. Name column) whenever it changes.
   useEffect(() => {
+    if (template.loading) return; // D20: wait for the organization template
     persistDraft(activePid, rows);
-  }, [activePid, rows]);
+  }, [activePid, rows, template.loading]);
 
   const updateRow = (key: string, patch: Partial<DraftRow>) =>
     setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));

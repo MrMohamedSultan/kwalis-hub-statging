@@ -31,6 +31,7 @@ import { FilmCommissionSettingsPanel } from "@/components/settings/FilmCommissio
 import { ShootSchedulePanel } from "@/components/settings/ShootSchedulePanel";
 import { ProjectRegionPanel } from "@/components/decisions/ProjectRegionPanel";
 import { WhtRatesPanel } from "@/components/decisions/WhtRatesPanel";
+import { BudgetTemplatePanel } from "@/components/closeout/BudgetTemplatePanel";
 import { ContractFilesPanel } from "@/components/decisions/ContractFilesPanel";
 import { ProjectDataExportPanel } from "@/components/settings/ProjectDataExportPanel";
 import { Button } from "@/components/ui/button";
@@ -216,6 +217,13 @@ function SettingsPage() {
                 </Panel>
                 <Panel className="p-5">
                   <WhtRatesPanel
+                    organizationId={
+                      selectedOrgId ?? roles.adminOrgIds[0] ?? roles.memberOrgIds[0] ?? null
+                    }
+                  />
+                </Panel>
+                <Panel className="p-5">
+                  <BudgetTemplatePanel
                     organizationId={
                       selectedOrgId ?? roles.adminOrgIds[0] ?? roles.memberOrgIds[0] ?? null
                     }

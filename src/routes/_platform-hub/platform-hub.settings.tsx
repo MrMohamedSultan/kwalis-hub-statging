@@ -5,6 +5,15 @@ import { toast } from "sonner";
 import { PageTitle, Panel } from "@/components/AppShell";
 import { supabase } from "@/integrations/supabase/client";
 import { clearMyPasswordChangeRequirement } from "@/lib/account-status";
+import { useAuthRoles } from "@/lib/auth-roles";
+import {
+  PLATFORM_DEFAULTS,
+  PlatformSettingsSchema,
+  changedSettingRows,
+  fetchPlatformSettings,
+  savePlatformSettings,
+  type PlatformSettings,
+} from "@/lib/platform-settings";
 
 import { useTranslation } from "react-i18next";
 export const Route = createFileRoute("/_platform-hub/platform-hub/settings")({
@@ -25,34 +34,6 @@ export const Route = createFileRoute("/_platform-hub/platform-hub/settings")({
   component: PlatformSettingsPage,
 });
 
-const STORAGE_KEY = "kwalis.platform-settings";
-
-type PlatformSettings = {
-  baseCurrency: string;
-  usdRate: string;
-  eurRate: string;
-  aedRate: string;
-  whtRate: string;
-  vatRate: string;
-  fiscalYearStart: string;
-  defaultProjectLimit: string;
-  defaultLanguage: "en" | "ar";
-  requireApprovalAbove: string;
-};
-
-const DEFAULTS: PlatformSettings = {
-  baseCurrency: "SAR",
-  usdRate: "3.75",
-  eurRate: "4.05",
-  aedRate: "1.02",
-  whtRate: "5",
-  vatRate: "15",
-  fiscalYearStart: "01-01",
-  defaultProjectLimit: "5",
-  defaultLanguage: "en",
-  requireApprovalAbove: "50000",
-};
-
 type SettingsTab = "config" | "profile";
 
 function PlatformSettingsPage() {
@@ -61,8 +42,8 @@ function PlatformSettingsPage() {
   const [tab, setTab] = useState<SettingsTab>("config");
 
   const tabs: { key: SettingsTab; label: string; icon: typeof ShieldCheck }[] = [
-    { key: "config", label: "Platform Configuration", icon: ShieldCheck },
-    { key: "profile", label: "My Super Admin Profile", icon: UserCircle },
+    { key: "config", label: t("closeout.hub.tab_config"), icon: ShieldCheck },
+    { key: "profile", label: t("closeout.hub.tab_profile"), icon: UserCircle },
   ];
 
   return (
@@ -149,7 +130,7 @@ function MyProfileTab() {
       if (error) throw error;
       toast.success(t("hub_settings.profile_updated"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update profile");
+      toast.error(err instanceof Error ? err.message : t("closeout.hub.profile_failed"));
     } finally {
       setSavingProfile(false);
     }
@@ -158,7 +139,7 @@ function MyProfileTab() {
   async function savePassword(e: React.FormEvent) {
     e.preventDefault();
     if (password.length < 8 || password.length > 128) {
-      toast.error("Password must be at least 8 characters");
+      toast.error(t("closeout.hub.password_min"));
       return;
     }
     if (password !== confirmPassword) {
@@ -174,7 +155,7 @@ function MyProfileTab() {
       setConfirmPassword("");
       toast.success(t("hub_settings.password_updated"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update password");
+      toast.error(err instanceof Error ? err.message : t("closeout.hub.password_failed"));
     } finally {
       setSavingPassword(false);
     }
@@ -183,7 +164,7 @@ function MyProfileTab() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-muted-foreground">
-        <Loader2 className="me-2 size-4 animate-spin" /> Loading…
+        <Loader2 className="me-2 size-4 animate-spin" /> {t("common.loading")}
       </div>
     );
   }
@@ -201,7 +182,7 @@ function MyProfileTab() {
       <Panel>
         <h3 className="mb-4 text-sm font-semibold">{t("hub_settings.personal_details")}</h3>
         <form onSubmit={saveProfile} className="space-y-4">
-          <Field label="Email (read-only)">
+          <Field label={t("closeout.hub.email_readonly")}>
             <input
               type="email"
               value={email}
@@ -210,10 +191,10 @@ function MyProfileTab() {
               className="w-full cursor-not-allowed rounded-lg border border-border bg-muted px-3 py-2 text-sm text-muted-foreground outline-none"
             />
           </Field>
-          <Field label="Display name">
+          <Field label={t("closeout.hub.display_name")}>
             <Input value={displayName} onChange={setDisplayName} />
           </Field>
-          <Field label="Job title">
+          <Field label={t("closeout.hub.job_title")}>
             <Input value={jobTitle} onChange={setJobTitle} />
           </Field>
           <button
@@ -221,25 +202,26 @@ function MyProfileTab() {
             disabled={savingProfile}
             className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-brand-foreground hover:opacity-90 disabled:opacity-50"
           >
-            {savingProfile && <Loader2 className="size-3.5 animate-spin" />} Save profile
+            {savingProfile && <Loader2 className="size-3.5 animate-spin" />}{" "}
+            {t("closeout.hub.save_profile")}
           </button>
         </form>
       </Panel>
 
       <Panel>
-        <h3 className="mb-4 text-sm font-semibold">Security</h3>
+        <h3 className="mb-4 text-sm font-semibold">{t("closeout.hub.security")}</h3>
         <form onSubmit={savePassword} className="space-y-4">
-          <Field label="New password">
+          <Field label={t("closeout.hub.new_password")}>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
-              placeholder="Min. 8 characters"
+              placeholder={t("closeout.hub.min_8")}
               className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
             />
           </Field>
-          <Field label="Confirm new password">
+          <Field label={t("closeout.hub.confirm_password")}>
             <input
               type="password"
               value={confirmPassword}
@@ -253,12 +235,10 @@ function MyProfileTab() {
             disabled={savingPassword}
             className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-brand-foreground hover:opacity-90 disabled:opacity-50"
           >
-            {savingPassword && <Loader2 className="size-3.5 animate-spin" />} Update password
+            {savingPassword && <Loader2 className="size-3.5 animate-spin" />}{" "}
+            {t("closeout.hub.update_password")}
           </button>
-          <p className="text-xs text-muted-foreground">
-            Changing your password signs you out of other devices the next time their session
-            refreshes.
-          </p>
+          <p className="text-xs text-muted-foreground">{t("closeout.hub.password_note")}</p>
         </form>
       </Panel>
     </div>
@@ -267,33 +247,68 @@ function MyProfileTab() {
 
 function PlatformConfigTab() {
   const { t } = useTranslation();
+  const { isSuperAdmin } = useAuthRoles();
 
-  const [form, setForm] = useState<PlatformSettings>(DEFAULTS);
-  const [dirty, setDirty] = useState(false);
+  // D20: the configuration lives in the database (platform_settings), not in
+  // this browser — every super admin sees and edits the same values.
+  const [saved, setSaved] = useState<PlatformSettings>(PLATFORM_DEFAULTS);
+  const [form, setForm] = useState<PlatformSettings>(PLATFORM_DEFAULTS);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const dirty = changedSettingRows(saved, form).length > 0;
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setForm({ ...DEFAULTS, ...(JSON.parse(raw) as Partial<PlatformSettings>) });
-    } catch {
-      /* ignore malformed cache */
-    }
-  }, []);
+    let cancelled = false;
+    fetchPlatformSettings()
+      .then((v) => {
+        if (cancelled) return;
+        setSaved(v);
+        setForm(v);
+      })
+      .catch(() => toast.error(t("closeout.hub.load_failed")))
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
 
   function set<K extends keyof PlatformSettings>(key: K, value: PlatformSettings[K]) {
     setForm((f) => ({ ...f, [key]: value }));
-    setDirty(true);
   }
 
-  function save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(form));
-    setDirty(false);
-    toast.success(t("hub_settings.platform_settings_saved"));
+  async function save() {
+    const parsed = PlatformSettingsSchema.safeParse(form);
+    if (!parsed.success) {
+      const code = parsed.error.issues[0]?.message ?? "invalid";
+      toast.error(
+        t(`closeout.hub.invalid.${code}`, { defaultValue: t("closeout.hub.invalid.invalid") }),
+      );
+      return;
+    }
+    setSaving(true);
+    try {
+      const next = parsed.data as PlatformSettings;
+      await savePlatformSettings(changedSettingRows(saved, next));
+      setSaved(next);
+      setForm(next);
+      toast.success(t("hub_settings.platform_settings_saved"));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("closeout.hub.save_failed"));
+    } finally {
+      setSaving(false);
+    }
   }
 
   function reset() {
-    setForm(DEFAULTS);
-    setDirty(true);
+    setForm({ ...PLATFORM_DEFAULTS, requireApprovalAbove: saved.requireApprovalAbove });
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
+        <Loader2 className="me-2 size-4 animate-spin" /> {t("common.loading")}
+      </div>
+    );
   }
 
   return (
@@ -302,44 +317,42 @@ function PlatformConfigTab() {
         <button
           type="button"
           onClick={reset}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
+          disabled={!isSuperAdmin}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-40"
         >
           <RotateCcw className="size-3.5" />
           {t("hub_settings.reset_defaults")}
         </button>
         <button
           type="button"
-          onClick={save}
-          disabled={!dirty}
+          onClick={() => void save()}
+          disabled={!dirty || saving || !isSuperAdmin}
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-brand-foreground hover:opacity-90 disabled:opacity-40"
         >
-          <Save className="size-3.5" />
+          {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
           {t("hub_settings.save_changes")}
         </button>
       </div>
-      <p className="mb-5 text-sm text-muted-foreground">
-        System-wide configuration applied as defaults across every client company. This is platform
-        configuration, not your personal profile.
-      </p>
+      <p className="mb-5 text-sm text-muted-foreground">{t("closeout.hub.intro")}</p>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel>
           <h3 className="mb-4 text-sm font-semibold">{t("hub_settings.currency_fx_rates")}</h3>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Base currency">
+            <Field label={t("closeout.hub.base_currency")}>
               <Select
                 value={form.baseCurrency}
                 onChange={(v) => set("baseCurrency", v)}
                 options={["SAR", "USD", "EUR", "AED"]}
               />
             </Field>
-            <Field label="USD → base rate">
+            <Field label={t("closeout.hub.rate_to_base", { ccy: "USD" })}>
               <Input value={form.usdRate} onChange={(v) => set("usdRate", v)} type="number" />
             </Field>
-            <Field label="EUR → base rate">
+            <Field label={t("closeout.hub.rate_to_base", { ccy: "EUR" })}>
               <Input value={form.eurRate} onChange={(v) => set("eurRate", v)} type="number" />
             </Field>
-            <Field label="AED → base rate">
+            <Field label={t("closeout.hub.rate_to_base", { ccy: "AED" })}>
               <Input value={form.aedRate} onChange={(v) => set("aedRate", v)} type="number" />
             </Field>
           </div>
@@ -348,32 +361,30 @@ function PlatformConfigTab() {
         <Panel>
           <h3 className="mb-4 text-sm font-semibold">{t("hub_settings.tax_defaults")}</h3>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Withholding tax (%)">
+            <Field label={t("closeout.hub.wht_pct")}>
               <Input value={form.whtRate} onChange={(v) => set("whtRate", v)} type="number" />
             </Field>
-            <Field label="VAT (%)">
+            <Field label={t("closeout.hub.vat_pct")}>
               <Input value={form.vatRate} onChange={(v) => set("vatRate", v)} type="number" />
             </Field>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Applied as the default for new companies; each production can override per contract.
-          </p>
+          <p className="mt-3 text-xs text-muted-foreground">{t("closeout.hub.tax_note")}</p>
         </Panel>
 
         <Panel>
           <h3 className="mb-4 text-sm font-semibold">{t("hub_settings.company_defaults")}</h3>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Fiscal year start (MM-DD)">
+            <Field label={t("closeout.hub.fiscal_start")}>
               <Input value={form.fiscalYearStart} onChange={(v) => set("fiscalYearStart", v)} />
             </Field>
-            <Field label="Default project limit">
+            <Field label={t("closeout.hub.project_limit")}>
               <Input
                 value={form.defaultProjectLimit}
                 onChange={(v) => set("defaultProjectLimit", v)}
                 type="number"
               />
             </Field>
-            <Field label="Default language">
+            <Field label={t("closeout.hub.default_language")}>
               <Select
                 value={form.defaultLanguage}
                 onChange={(v) => set("defaultLanguage", v as "en" | "ar")}
@@ -385,7 +396,7 @@ function PlatformConfigTab() {
 
         <Panel>
           <h3 className="mb-4 text-sm font-semibold">{t("hub_settings.approval_policy")}</h3>
-          <Field label="Require board approval above (base currency)">
+          <Field label={t("closeout.hub.board_above")}>
             <Input
               value={form.requireApprovalAbove}
               onChange={(v) => set("requireApprovalAbove", v)}
@@ -393,7 +404,8 @@ function PlatformConfigTab() {
             />
           </Field>
           <p className="mt-3 text-xs text-muted-foreground">
-            {t("hub_settings.payments_above_this_threshold_require_an_additional_approval")}
+            {t("hub_settings.payments_above_this_threshold_require_an_additional_approval")}{" "}
+            {t("closeout.hub.board_off")}
           </p>
         </Panel>
       </div>
