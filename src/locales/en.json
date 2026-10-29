@@ -5556,11 +5556,14 @@
       "action": "Reverse payment",
       "hint": "The money came back: record a refund entry with a reason (the payment stays in the books)",
       "title": "Reverse a paid request",
-      "explain": "A refund entry equal to the payment is recorded today (Bank debited, Accounts Payable credited). The original payment stays on record, the document becomes payable again and the request can no longer be changed.",
+      "explain": "A refund entry equal to the payment is recorded today (Bank debited, Accounts Payable credited). The original payment stays on record, the document becomes payable again and the request can no longer be changed. An organization admin who requested, approved or paid this request cannot reverse it.",
       "reason": "Reason for the reversal",
       "confirm": "Record refund",
       "done": "Refund recorded — the payment is reversed",
-      "badge": "Reversed"
+      "badge": "Reversed",
+      "reference": "Refund reference (optional)",
+      "reference_hint": "Bank reference or credit note number",
+      "reference_too_long": "The refund reference is up to 200 characters"
     },
     "po": {
       "cancel": "Cancel PO",
@@ -5572,7 +5575,11 @@
       "confirm_cancel": "Cancel the PO",
       "cancelled": "PO {{number}} cancelled",
       "reason_label": "Reason: {{reason}}",
-      "no_delete_hint": "Approved purchase orders cannot be deleted — cancel them with a reason on the Purchase Orders page"
+      "no_delete_hint": "Approved purchase orders cannot be deleted — cancel them with a reason on the Purchase Orders page",
+      "status_reason": "Reason for moving the approved PO",
+      "status_reason_hint": "Only an approver can move an approved purchase order back; the reason is recorded.",
+      "status_reason_required": "Write the reason for moving the approved PO (at least 3 characters)",
+      "close_hint": "An approved purchase order can be closed only once it is fully invoiced or paid — otherwise cancel it with a reason."
     },
     "hub": {
       "tab_config": "Platform Configuration",
@@ -5611,7 +5618,11 @@
       "min_8": "Min. 8 characters",
       "confirm_password": "Confirm new password",
       "update_password": "Update password",
-      "password_note": "Changing your password signs you out of other devices the next time their session refreshes."
+      "password_note": "Changing your password signs you out of other devices the next time their session refreshes.",
+      "board_unavailable": "Board approval is not available in the app yet, so this limit cannot be set here.",
+      "board_active_warning": "A board approval limit of {{amount}} SAR is set: payment requests above it cannot be approved until it is turned off.",
+      "board_turn_off": "Turn board approval off",
+      "board_turned_off": "Board approval turned off"
     },
     "template": {
       "title": "Budget template",
@@ -5638,7 +5649,8 @@
       "too_many": "A template can hold up to {{max}} codes",
       "row_errors": "{{count}} rows need fixing (rows {{rows}}): group, code, header code or a duplicate code",
       "saved": "Template {{name}} saved — {{lines}} codes under {{headers}} headers",
-      "failed": "Could not save the template"
+      "failed": "Could not save the template",
+      "invalid": "The template has invalid rows (group, code, header code, text too long or a duplicate code)"
     },
     "ui": {
       "pm": {

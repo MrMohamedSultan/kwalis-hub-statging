@@ -13,6 +13,8 @@ import {
   cancelPaymentRequest,
   canReversePaidRequest,
   reversePaidPaymentRequest,
+  ReasonSchema,
+  RefundReferenceSchema,
   submitForApproval,
   executePaymentRequest,
   deletePaymentRequest,
@@ -70,7 +72,7 @@ export function PaymentWorkflowActions({
 }) {
   const { t } = useTranslation();
   const can = useCan();
-  const { isSuperAdmin, adminOrgIds } = useAuthRoles();
+  const { isSuperAdmin, adminOrgIds, userId } = useAuthRoles();
   const isCreator = useIsCreator(request);
   const isOrgAdmin = isSuperAdmin || adminOrgIds.includes(request.organization_id);
   const [busy, setBusy] = useState(false);
@@ -218,7 +220,7 @@ export function PaymentWorkflowActions({
           <Undo2 className="size-3" /> {t("closeout.reverse.badge")}
         </span>
       )}
-      {canReversePaidRequest(request, isOrgAdmin) && (
+      {canReversePaidRequest(request, isOrgAdmin, { userId, isSuperAdmin }) && (
         <button
           onClick={() => setReasonFor("reverse")}
           disabled={busy}
@@ -242,12 +244,12 @@ export function PaymentWorkflowActions({
         <ReasonModal
           mode={reasonFor}
           onClose={() => setReasonFor(null)}
-          onConfirm={async (reason) => {
+          onConfirm={async (reason, reference) => {
             if (reasonFor === "reject") {
               await rejectPaymentRequest(request.id, reason);
               toast.success(t("approvals.toast.rejected"));
             } else if (reasonFor === "reverse") {
-              await reversePaidPaymentRequest(request.id, reason);
+              await reversePaidPaymentRequest(request.id, reason, null, reference);
               toast.success(t("closeout.reverse.done"));
             } else {
               await cancelPaymentRequest(request.id, reason);
@@ -276,21 +278,28 @@ function ReasonModal({
 }: {
   mode: "reject" | "cancel" | "reverse";
   onClose: () => void;
-  onConfirm: (reason: string) => Promise<void>;
+  onConfirm: (reason: string, reference?: string | null) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [reason, setReason] = useState("");
+  const [reference, setReference] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = reason.trim();
-    if (clean.length < 3) {
+    // same bounds as the database (3–1000 characters; reference up to 200)
+    const parsed = ReasonSchema.safeParse(reason);
+    if (!parsed.success) {
       toast.error(t("approvals.reasonTooShort"));
+      return;
+    }
+    const ref = RefundReferenceSchema.safeParse(reference);
+    if (!ref.success) {
+      toast.error(t("closeout.reverse.reference_too_long"));
       return;
     }
     setBusy(true);
     try {
-      await onConfirm(clean.slice(0, 1000));
+      await onConfirm(parsed.data, mode === "reverse" ? ref.data || null : null);
       onClose();
     } catch (err: any) {
       toast.error(err?.message ?? t("approvals.toast.actionFailed"));
@@ -334,6 +343,20 @@ function ReasonModal({
             className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 outline-none focus:ring-2 ring-destructive text-start"
           />
         </label>
+        {mode === "reverse" && (
+          <label className="text-sm block">
+            <div className="text-muted-foreground mb-1 uppercase tracking-wider text-xs">
+              {t("closeout.reverse.reference")}
+            </div>
+            <input
+              value={reference}
+              maxLength={200}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder={t("closeout.reverse.reference_hint")}
+              className="w-full bg-surface-2 border border-border rounded-xl px-3 py-2 outline-none focus:ring-2 ring-destructive text-start"
+            />
+          </label>
+        )}
         <div className="flex justify-end gap-2">
           <button
             type="button"

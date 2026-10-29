@@ -20,6 +20,7 @@ import { invoicedOnPo, poIsCommitment, poOpenCommitment } from "@/lib/budget-pos
 import { humanizeDbError } from "@/lib/db-errors";
 import { parseOpenParam, refMatches, refNoOf } from "@/lib/document-refs";
 import { RefFilterInput, RefText } from "@/components/refs/RefListTools";
+import { poStatusMoveNeedsReason } from "@/lib/po-status";
 
 import { useTranslation } from "react-i18next";
 export const Route = createFileRoute("/_authenticated/purchase-orders")({
@@ -57,6 +58,8 @@ type PO = {
   first_approved_at?: string | null;
   cancelled_at?: string | null;
   cancellation_reason?: string | null;
+  /** db/pending/204: why an approver moved an approved PO back (Draft / Open / Rejected). */
+  status_change_reason?: string | null;
 };
 
 /** States the maker may set; Approved / Issued are reached through "Approve" by someone else (B10). */
@@ -424,6 +427,7 @@ function PurchaseOrdersPage() {
                 ? { fx_rate_source: v.fx_rate_source, fx_rate_date: v.fx_rate_date ?? null }
                 : {}),
               // N02 (db/pending/202): service period for Live Balance accruals
+              ...(v.status_change_reason ? { status_change_reason: v.status_change_reason } : {}),
               ...(v.service_period_from !== undefined
                 ? {
                     service_period_from: v.service_period_from,
@@ -488,6 +492,7 @@ function POForm({
     fx_rate_date?: string | null;
     service_period_from?: string | null;
     service_period_to?: string | null;
+    status_change_reason?: string | null;
   }) => void;
 }) {
   const { t } = useTranslation();
@@ -524,6 +529,8 @@ function POForm({
   const [lineId, setLineId] = useState(initial?.linked_budget_line_id ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const approvedNow = !!initial && isApproved(initial.status);
+  const [statusReason, setStatusReason] = useState("");
+  const needsReason = poStatusMoveNeedsReason(initial, status);
   const isBase = currency === fx.baseCurrency;
   const baseAmount = toBaseAmount(original, isBase ? 1 : fxRate);
   const statusOptions = (
@@ -562,7 +569,10 @@ function POForm({
             if (!isBase && !(fxRate > 0)) return toast.error(t("ap.fx_rate_required"));
             if (periodFrom && periodTo && periodTo < periodFrom)
               return toast.error(t("leftovers.po.period_order"));
+            if (needsReason && statusReason.trim().length < 3)
+              return toast.error(t("closeout.po.status_reason_required"));
             onSave({
+              ...(needsReason ? { status_change_reason: statusReason.trim().slice(0, 1000) } : {}),
               vendor_id: vendorId,
               vendor_name: vendors.find((v) => v.id === vendorId)?.name ?? "",
               description: desc,
@@ -609,6 +619,23 @@ function POForm({
               </select>
             </Field>
           </div>
+          {needsReason && (
+            <Field label={t("closeout.po.status_reason")}>
+              <textarea
+                value={statusReason}
+                onChange={(e) => setStatusReason(e.target.value)}
+                rows={2}
+                maxLength={1000}
+                className={inputCls}
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {t("closeout.po.status_reason_hint")}
+              </p>
+            </Field>
+          )}
+          {approvedNow && status === "Closed" && (
+            <p className="text-[11px] text-muted-foreground">{t("closeout.po.close_hint")}</p>
+          )}
           {!approvedNow && (
             <p className="text-[11px] text-muted-foreground">{t("ap.po_approval_hint")}</p>
           )}

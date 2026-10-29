@@ -9,6 +9,7 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import i18n from "@/lib/i18n";
 import { useAuthRoles } from "@/lib/auth-roles";
+import { z } from "zod";
 
 export type PaymentRequestStatus =
   "draft" | "waiting_approval" | "approved" | "paid" | "rejected" | "cancelled";
@@ -240,7 +241,14 @@ export function sumPaidForSource(
   sourceId: string,
 ): number {
   return rows
-    .filter((r) => r.source_type === sourceType && r.source_id === sourceId && r.status === "paid")
+    .filter(
+      (r) =>
+        r.source_type === sourceType &&
+        r.source_id === sourceId &&
+        r.status === "paid" &&
+        // X08: a reversed (refunded) request no longer counts as paid (db/pending/204)
+        !r.reversed_at,
+    )
     .reduce((sum, r) => sum + Number(r.requested_amount || 0), 0);
 }
 
@@ -255,6 +263,7 @@ export function sumCommittedForSource(
       (r) =>
         r.source_type === sourceType &&
         r.source_id === sourceId &&
+        !r.reversed_at &&
         (r.status === "paid" || r.status === "approved" || r.status === "waiting_approval"),
     )
     .reduce((sum, r) => sum + Number(r.requested_amount || 0), 0);
@@ -353,13 +362,30 @@ export async function cancelPaymentRequest(id: string, reason: string): Promise<
   if (error) throw error;
 }
 
-/** Requests whose payment can be reversed (refund) — not instalments (pure). */
+/** A written reason (reject / cancel / reverse): same bounds as the database. */
+export const ReasonSchema = z.string().trim().min(3).max(1000);
+/** Optional proof of a refund (bank reference / credit note number), db/pending/204. */
+export const RefundReferenceSchema = z.string().trim().max(200);
+
+/**
+ * Requests whose payment can be reversed (refund) — not instalments (pure).
+ * Maker-checker (db/pending/204): an org admin who requested, approved or
+ * executed the request cannot reverse it; a super admin may. Approvers of
+ * the chain levels are checked by the database only.
+ */
 export function canReversePaidRequest(
-  r: Pick<PaymentRequest, "status" | "reversed_at" | "payroll_milestone_id" | "source_type">,
+  r: Pick<PaymentRequest, "status" | "reversed_at" | "payroll_milestone_id" | "source_type"> &
+    Partial<Pick<PaymentRequest, "requested_by" | "approved_by" | "executed_by">>,
   isOrgAdmin: boolean,
+  me?: { userId?: string | null; isSuperAdmin?: boolean },
 ): boolean {
+  const tookPart =
+    !!me?.userId &&
+    !me.isSuperAdmin &&
+    [r.requested_by, r.approved_by, r.executed_by].includes(me.userId);
   return (
     isOrgAdmin &&
+    !tookPart &&
     r.status === "paid" &&
     !r.reversed_at &&
     !r.payroll_milestone_id &&
@@ -376,11 +402,15 @@ export async function reversePaidPaymentRequest(
   id: string,
   reason: string,
   refundDate?: string | null,
+  reference?: string | null,
 ): Promise<void> {
+  const cleanReason = ReasonSchema.parse(reason);
+  const cleanRef = RefundReferenceSchema.parse(reference ?? "");
   const { error } = await (supabase.rpc as any)("reverse_paid_payment_request", {
     _request: id,
-    _reason: reason,
+    _reason: cleanReason,
     _refund_date: refundDate || null,
+    _reference: cleanRef || null,
   });
   if (error) throw error;
 }

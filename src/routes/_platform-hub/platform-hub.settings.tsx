@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { clearMyPasswordChangeRequirement } from "@/lib/account-status";
 import { useAuthRoles } from "@/lib/auth-roles";
 import {
+  BOARD_APPROVAL_OFF_ROW,
   PLATFORM_DEFAULTS,
   PlatformSettingsSchema,
   changedSettingRows,
@@ -299,6 +300,20 @@ function PlatformConfigTab() {
     }
   }
 
+  async function turnOffBoardApproval() {
+    setSaving(true);
+    try {
+      await savePlatformSettings([BOARD_APPROVAL_OFF_ROW]);
+      setSaved((v) => ({ ...v, requireApprovalAbove: "" }));
+      setForm((v) => ({ ...v, requireApprovalAbove: "" }));
+      toast.success(t("closeout.hub.board_turned_off"));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("closeout.hub.save_failed"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function reset() {
     setForm({ ...PLATFORM_DEFAULTS, requireApprovalAbove: saved.requireApprovalAbove });
   }
@@ -396,17 +411,34 @@ function PlatformConfigTab() {
 
         <Panel>
           <h3 className="mb-4 text-sm font-semibold">{t("hub_settings.approval_policy")}</h3>
+          {/* #6: read-only until the app has a board approval action (platform-settings.ts) */}
           <Field label={t("closeout.hub.board_above")}>
             <Input
-              value={form.requireApprovalAbove}
-              onChange={(v) => set("requireApprovalAbove", v)}
+              value={saved.requireApprovalAbove}
+              onChange={() => undefined}
               type="number"
+              disabled
             />
           </Field>
           <p className="mt-3 text-xs text-muted-foreground">
             {t("hub_settings.payments_above_this_threshold_require_an_additional_approval")}{" "}
-            {t("closeout.hub.board_off")}
+            {t("closeout.hub.board_unavailable")}
           </p>
+          {saved.requireApprovalAbove && (
+            <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+              <p>
+                {t("closeout.hub.board_active_warning", { amount: saved.requireApprovalAbove })}
+              </p>
+              <button
+                type="button"
+                onClick={() => void turnOffBoardApproval()}
+                disabled={!isSuperAdmin || saving}
+                className="mt-2 rounded-lg border border-destructive/40 px-3 py-1.5 font-semibold hover:bg-destructive/15 disabled:opacity-40"
+              >
+                {t("closeout.hub.board_turn_off")}
+              </button>
+            </div>
+          )}
         </Panel>
       </div>
     </>
@@ -428,17 +460,20 @@ function Input({
   value,
   onChange,
   type = "text",
+  disabled = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   type?: string;
+  disabled?: boolean;
 }) {
   return (
     <input
       type={type}
       value={value}
+      disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-brand"
+      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-brand disabled:cursor-not-allowed disabled:opacity-60"
     />
   );
 }

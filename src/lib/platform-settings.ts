@@ -33,6 +33,23 @@ export const PLATFORM_SETTING_KEYS: Record<keyof PlatformSettings, string> = {
   requireApprovalAbove: "payment_board_approval_above_sar",
 };
 
+/**
+ * Board approval above a limit (db/pending/035) is enforced by the database,
+ * but the app has no board approval action yet (board_approve_payment_request
+ * is not called anywhere): a limit would leave every request above it
+ * unapprovable. Until that action exists the limit is read-only here and the
+ * only change offered is turning it off.
+ */
+export const BOARD_APPROVAL_ACTION_AVAILABLE = false;
+export const READ_ONLY_SETTINGS: ReadonlySet<keyof PlatformSettings> = new Set(
+  BOARD_APPROVAL_ACTION_AVAILABLE ? [] : (["requireApprovalAbove"] as const),
+);
+/** The row that turns board approval off (NULL limit). */
+export const BOARD_APPROVAL_OFF_ROW = {
+  key: "payment_board_approval_above_sar",
+  value: null,
+} as const;
+
 export const PLATFORM_DEFAULTS: PlatformSettings = {
   baseCurrency: "SAR",
   usdRate: "3.75",
@@ -105,6 +122,7 @@ export function changedSettingRows(
   after: PlatformSettings,
 ): { key: string; value: string | null }[] {
   return (Object.keys(PLATFORM_SETTING_KEYS) as (keyof PlatformSettings)[])
+    .filter((f) => !READ_ONLY_SETTINGS.has(f))
     .filter((f) => String(before[f]).trim() !== String(after[f]).trim())
     .map((f) => {
       const v = String(after[f]).trim();

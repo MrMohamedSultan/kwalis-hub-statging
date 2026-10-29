@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  BudgetTemplateSchema,
   builtinTemplateLines,
   parseTemplateSheet,
   templateHeaders,
@@ -46,5 +47,40 @@ describe("budget template (D20)", () => {
         ["1101", "x"],
       ]).errors,
     ).toEqual([{ row: 1, problem: "columns" }]);
+  });
+});
+
+describe("BudgetTemplateSchema (mirrors stamp_budget_template, db/pending/204)", () => {
+  const line = {
+    group: "ATL",
+    header_code: "1100",
+    header_name: "SCRIPT",
+    code: "1101",
+    description: "x",
+  };
+  it("accepts the built-in template and strips unknown keys", () => {
+    expect(
+      BudgetTemplateSchema.safeParse({ name: "Std", lines: builtinTemplateLines() }).success,
+    ).toBe(true);
+    const r = BudgetTemplateSchema.parse({ name: " Std ", lines: [{ ...line, evil: "<b>" }] });
+    expect(r.name).toBe("Std");
+    expect(Object.keys(r.lines[0]).sort()).toEqual([
+      "code",
+      "description",
+      "group",
+      "header_code",
+      "header_name",
+    ]);
+  });
+  it("refuses what the database refuses", () => {
+    for (const bad of [
+      { name: "", lines: [line] },
+      { name: "x", lines: [] },
+      { name: "x", lines: [{ ...line, group: "Nope" }] },
+      { name: "x", lines: [{ ...line, code: "has space" }] },
+      { name: "x", lines: [{ ...line, description: "d".repeat(301) }] },
+      { name: "x", lines: [line, line] },
+    ])
+      expect(BudgetTemplateSchema.safeParse(bad).success).toBe(false);
   });
 });

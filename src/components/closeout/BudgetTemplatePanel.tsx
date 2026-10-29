@@ -17,6 +17,7 @@ import {
   deleteBudgetTemplate,
   listBudgetTemplates,
   parseTemplateSheet,
+  BudgetTemplateSchema,
   saveBudgetTemplate,
   setDefaultBudgetTemplate,
   templateHeaders,
@@ -112,7 +113,11 @@ export function BudgetTemplatePanel({ organizationId }: { organizationId: string
       );
       return;
     }
-    const tplName = name.trim() || file.name.replace(/\.(xlsx|xls|csv)$/i, "");
+    const tplName = (name.trim() || file.name.replace(/\.(xlsx|xls|csv)$/i, "")).slice(0, 120);
+    if (!BudgetTemplateSchema.safeParse({ name: tplName, lines }).success) {
+      toast.error(t("closeout.template.invalid"));
+      return;
+    }
     await act(
       () => saveBudgetTemplate({ organizationId, name: tplName, lines }),
       t("closeout.template.saved", {

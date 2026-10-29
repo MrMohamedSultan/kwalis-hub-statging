@@ -3,6 +3,7 @@
 // db/pending/204) and mark one as the default from Settings → Organization;
 // without one, the built-in template (HEADER_ACCOUNTS + MAIN_ACCOUNTS) is used.
 import { useQuery } from "@tanstack/react-query";
+import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { HEADER_ACCOUNTS, MACRO_CATEGORIES, MAIN_ACCOUNTS, type MacroCategory } from "@/lib/data";
 
@@ -25,6 +26,27 @@ export type BudgetTemplateRow = {
 
 export const MAX_TEMPLATE_LINES = 5000;
 const CODE_RE = /^[A-Za-z0-9._-]{1,32}$/;
+
+/** One template line, same rules as stamp_budget_template() (db/pending/204); unknown keys dropped. */
+export const TemplateLineSchema = z
+  .object({
+    group: z.enum(MACRO_CATEGORIES),
+    header_code: z.string().regex(CODE_RE),
+    header_name: z.string().trim().max(200),
+    code: z.string().regex(CODE_RE),
+    description: z.string().trim().max(300),
+  })
+  .strip();
+
+/** A whole template as saved: a name and 1–5000 lines with unique codes. */
+export const BudgetTemplateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  lines: z
+    .array(TemplateLineSchema)
+    .min(1)
+    .max(MAX_TEMPLATE_LINES)
+    .refine((ls) => new Set(ls.map((l) => l.code)).size === ls.length, "duplicate"),
+});
 
 /** The built-in template, as template lines (stable order). */
 export function builtinTemplateLines(): TemplateLine[] {
@@ -205,10 +227,15 @@ export async function saveBudgetTemplate(input: {
   name: string;
   lines: TemplateLine[];
 }) {
-  const row = {
-    organization_id: input.organizationId,
+  // validated (and stripped to the known keys) before it is sent
+  const clean = BudgetTemplateSchema.parse({
     name: input.name.trim().slice(0, 120),
     lines: input.lines,
+  });
+  const row = {
+    organization_id: input.organizationId,
+    name: clean.name,
+    lines: clean.lines,
   };
   const q = input.id
     ? from("budget_templates").update(row).eq("id", input.id)
