@@ -352,7 +352,7 @@ export function ProjectsManagementPanel() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("closeout.ui.pm.search")}
-            className="w-full pl-9 pr-3 py-2 rounded-lg bg-sidebar-active text-white border border-border outline-none text-sm"
+            className="w-full pl-9 pr-3 py-2 rounded-lg bg-sidebar-active text-sidebar-foreground border border-border outline-none text-sm"
           />
         </div>
         <MultiSelectFilter
@@ -527,13 +527,13 @@ export function ProjectsManagementPanel() {
             <div className="mb-4 flex gap-1 border-b border-border">
               <button
                 onClick={() => setModalTab("details")}
-                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${modalTab === "details" ? "border-brand text-white" : "border-transparent text-muted-foreground hover:text-white"}`}
+                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${modalTab === "details" ? "border-brand text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
               >
                 {t("closeout.ui.pm.details")}
               </button>
               <button
                 onClick={() => setModalTab("members")}
-                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${modalTab === "members" ? "border-brand text-white" : "border-transparent text-muted-foreground hover:text-white"}`}
+                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${modalTab === "members" ? "border-brand text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
               >
                 {t("closeout.ui.pm.members")}
               </button>
@@ -562,7 +562,7 @@ export function ProjectsManagementPanel() {
                       codeCaretRef.current = Math.min(Math.max(caret - dropped, 0), next.length);
                       setForm((f) => ({ ...f, code: next }));
                     }}
-                    className="w-full bg-sidebar-active text-white border border-border rounded-lg px-3 py-2 outline-none font-mono tracking-wider uppercase"
+                    className="w-full bg-sidebar-active text-sidebar-foreground border border-border rounded-lg px-3 py-2 outline-none font-mono tracking-wider uppercase"
                     placeholder={t("closeout.ui.pm.code_ph")}
                     maxLength={12}
                     dir="ltr"
@@ -579,7 +579,7 @@ export function ProjectsManagementPanel() {
                   <input
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className="w-full bg-sidebar-active text-white border border-border rounded-lg px-3 py-2 outline-none"
+                    className="w-full bg-sidebar-active text-sidebar-foreground border border-border rounded-lg px-3 py-2 outline-none"
                     placeholder={t("closeout.ui.pm.name_ph")}
                     maxLength={120}
                   />
@@ -593,7 +593,7 @@ export function ProjectsManagementPanel() {
                   value={form.organization_id}
                   onChange={(e) => setForm({ ...form, organization_id: e.target.value })}
                   disabled={!creating}
-                  className="w-full bg-sidebar-active text-white border border-border rounded-lg px-3 py-2 outline-none disabled:opacity-60"
+                  className="w-full bg-sidebar-active text-sidebar-foreground border border-border rounded-lg px-3 py-2 outline-none disabled:opacity-60"
                 >
                   <option value="">{t("closeout.ui.select")}</option>
                   {orgs.map((o) => {
@@ -618,7 +618,7 @@ export function ProjectsManagementPanel() {
                     onChange={(e) =>
                       setForm({ ...form, project_type: e.target.value as ProjectTypeOption })
                     }
-                    className="w-full bg-sidebar-active text-white border border-border rounded-lg px-3 py-2 outline-none"
+                    className="w-full bg-sidebar-active text-sidebar-foreground border border-border rounded-lg px-3 py-2 outline-none"
                   >
                     {PROJECT_TYPES.map((t) => (
                       <option key={t} value={t}>
@@ -636,7 +636,7 @@ export function ProjectsManagementPanel() {
                     onChange={(e) =>
                       setForm({ ...form, status: e.target.value as ProjectStatusOption })
                     }
-                    className="w-full bg-sidebar-active text-white border border-border rounded-lg px-3 py-2 outline-none"
+                    className="w-full bg-sidebar-active text-sidebar-foreground border border-border rounded-lg px-3 py-2 outline-none"
                   >
                     {SELECTABLE_PROJECT_STATUSES.map((s) => (
                       <option key={s} value={s}>
@@ -724,7 +724,7 @@ function MultiSelectFilter<T extends string>({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-sidebar-active border border-border text-sm text-white hover:brightness-110"
+        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-sidebar-active border border-border text-sm text-sidebar-foreground hover:brightness-110"
       >
         {label}
         {selected.size > 0 && (
@@ -747,7 +747,7 @@ function MultiSelectFilter<T extends string>({
               return (
                 <label
                   key={v}
-                  className="flex items-center gap-2 px-2 py-1.5 text-sm text-white rounded-md hover:bg-muted cursor-pointer"
+                  className="flex items-center gap-2 px-2 py-1.5 text-sm text-sidebar-foreground rounded-md hover:bg-muted cursor-pointer"
                 >
                   <input
                     type="checkbox"
