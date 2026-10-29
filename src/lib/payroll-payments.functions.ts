@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requirePermission } from "@/lib/rbac-permissions.functions";
 import { z } from "zod";
+import { noInput } from "@/lib/server-input";
 
 const payrollRowSchema = z.object({
   kind: z.enum(["vendor", "crew", "cast"]),
@@ -30,6 +31,7 @@ const insertSchema = z.object({
 
 export const listMyOrganizations = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
+  .inputValidator(noInput)
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("organization_members")

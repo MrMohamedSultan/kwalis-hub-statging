@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { noInput } from "@/lib/server-input";
 
 /**
  * Platform administration of user accounts (D23 / D08).
@@ -153,6 +154,7 @@ export type PlatformUserRow = {
  */
 export const listPlatformUsers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
+  .inputValidator(noInput)
   .handler(async ({ context }): Promise<PlatformUserRow[]> => {
     const { supabase, userId } = context;
     const { data: isSuper, error: roleErr } = await supabase.rpc("is_super_admin", {

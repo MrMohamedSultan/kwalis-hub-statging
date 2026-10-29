@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { noInput } from "@/lib/server-input";
 
 const DEMO_EMAIL = "demo@kwalishub.com";
 
@@ -126,6 +127,7 @@ async function writeAudit(
  */
 export const provisionDemoAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
+  .inputValidator(noInput)
   .handler(async ({ context }) => {
     const { supabase, userId, claims } = context;
     const actorEmail = ((claims as any)?.email as string | null) ?? null;
@@ -210,38 +212,40 @@ export const provisionDemoAccount = createServerFn({ method: "POST" })
  * Public self-healing path for the presentation demo login only.
  * It does not accept user input and can only create/reset the fixed demo account.
  */
-export const ensureDemoSignInReady = createServerFn({ method: "POST" }).handler(async () => {
-  let password: string;
-  try {
-    password = demoPassword();
-  } catch {
-    return { ok: false, email: DEMO_EMAIL, provisioned: false };
-  }
-  // Cheap-fail: if the demo account already exists and its password verifies,
-  // do no privileged work at all. This keeps the public endpoint from being
-  // usable to trigger admin writes / audit spam by repeated calls.
-  try {
-    await verifyDemoPassword(password);
-    return { ok: true, email: DEMO_EMAIL, provisioned: false };
-  } catch {
-    // fall through to provisioning
-  }
+export const ensureDemoSignInReady = createServerFn({ method: "POST" })
+  .inputValidator(noInput)
+  .handler(async () => {
+    let password: string;
+    try {
+      password = demoPassword();
+    } catch {
+      return { ok: false, email: DEMO_EMAIL, provisioned: false };
+    }
+    // Cheap-fail: if the demo account already exists and its password verifies,
+    // do no privileged work at all. This keeps the public endpoint from being
+    // usable to trigger admin writes / audit spam by repeated calls.
+    try {
+      await verifyDemoPassword(password);
+      return { ok: true, email: DEMO_EMAIL, provisioned: false };
+    } catch {
+      // fall through to provisioning
+    }
 
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const demoUserId = await upsertDemoAuthUser(supabaseAdmin, password);
-  const { orgId, projId } = await ensureDemoAccessRows(supabaseAdmin, demoUserId);
-  await verifyDemoPassword(password);
-  await writeAudit(
-    "demo.auto_auth_ready",
-    `Demo account auto-provisioned from sign-in (${DEMO_EMAIL})`,
-    "info",
-    null,
-    DEMO_EMAIL,
-    { demo_user_id: demoUserId, project_id: projId },
-    orgId,
-  );
-  return { ok: true, email: DEMO_EMAIL, provisioned: true };
-});
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const demoUserId = await upsertDemoAuthUser(supabaseAdmin, password);
+    const { orgId, projId } = await ensureDemoAccessRows(supabaseAdmin, demoUserId);
+    await verifyDemoPassword(password);
+    await writeAudit(
+      "demo.auto_auth_ready",
+      `Demo account auto-provisioned from sign-in (${DEMO_EMAIL})`,
+      "info",
+      null,
+      DEMO_EMAIL,
+      { demo_user_id: demoUserId, project_id: projId },
+      orgId,
+    );
+    return { ok: true, email: DEMO_EMAIL, provisioned: true };
+  });
 
 /**
  * Runs RLS isolation checks against the live demo user. Signs in as the demo
@@ -253,6 +257,7 @@ export const ensureDemoSignInReady = createServerFn({ method: "POST" }).handler(
  */
 export const verifyDemoIsolation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
+  .inputValidator(noInput)
   .handler(async ({ context }) => {
     const { supabase, userId, claims } = context;
     const actorEmail = ((claims as any)?.email as string | null) ?? null;

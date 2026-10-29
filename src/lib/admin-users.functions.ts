@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { noInput } from "@/lib/server-input";
 
 /**
  * Admin user-management server functions.
@@ -775,6 +776,7 @@ export type OrgMemberRow = {
 
 export const listOrgMembers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
+  .inputValidator(noInput)
   .handler(async ({ context }): Promise<OrgMemberRow[]> => {
     const { supabase, userId } = context;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
