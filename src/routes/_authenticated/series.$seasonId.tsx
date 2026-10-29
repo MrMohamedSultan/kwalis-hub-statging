@@ -6,7 +6,6 @@ import { useStore, lineTotal, formatUSD } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
 import { ChevronLeft, Film, AlertTriangle, Download, Pencil, Check, X } from "lucide-react";
 import { toast } from "sonner";
-import { downloadBlob } from "@/lib/download";
 
 import { useTranslation } from "react-i18next";
 type Season = {
@@ -162,51 +161,46 @@ function SeasonDetail() {
     toast.success(t("series_seasonid.season_note_saved"));
   };
 
-  const csvEscape = (v: unknown) => {
-    const s = v === null || v === undefined ? "" : String(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const handleExport = () => {
-    const projectTag = active?.code
-      ? `${active.code} - ${active.name}`
-      : (active?.name ?? "project");
-    const rows: (string | number)[][] = [];
-    rows.push([`Season ${season.season_number} — ${season.title}`, projectTag]);
-    rows.push([`Exported ${new Date().toISOString().slice(0, 19).replace("T", " ")}`]);
-    rows.push([]);
-    rows.push(["Episodes", String(episodes.length)]);
-    rows.push(["Total Allocated", totalAllocated]);
-    rows.push(["Avg / Episode", episodes.length > 0 ? totalAllocated / episodes.length : 0]);
-    rows.push([
-      "% of Project Budget",
-      totalProjectBudget > 0
-        ? `${((totalAllocated / totalProjectBudget) * 100).toFixed(2)}%`
-        : "0.00%",
+  const handleExport = async () => {
+    const [{ downloadSectionedCSV }, { formatExportNumber }] = await Promise.all([
+      import("@/lib/export-csv"),
+      import("@/lib/export/number-format"),
     ]);
-    if (season.variance_note) {
-      rows.push([]);
-      rows.push(["Season Variance Note", season.variance_note]);
-    }
-    rows.push([]);
-    rows.push(["Ep #", "Title", "Shoot Date", "Allocated", "% of Season", "Variance Note"]);
-    for (const ep of episodes) {
+    const pct = (part: number, whole: number) =>
+      `${whole > 0 ? formatExportNumber((part / whole) * 100, 2) : "0.00"}%`;
+    // G04: one CSV writer (project header, 2-decimal money, export footer).
+    const summary: { Metric: string; Value: string | number }[] = [
+      { Metric: "Season", Value: `Season ${season.season_number} — ${season.title}` },
+      { Metric: "Episodes", Value: episodes.length },
+      { Metric: "Total Allocated", Value: formatExportNumber(totalAllocated, 2) },
+      {
+        Metric: "Avg / Episode",
+        Value: formatExportNumber(episodes.length > 0 ? totalAllocated / episodes.length : 0, 2),
+      },
+      { Metric: "% of Project Budget", Value: pct(totalAllocated, totalProjectBudget) },
+    ];
+    if (season.variance_note)
+      summary.push({ Metric: "Season Variance Note", Value: season.variance_note });
+    const episodeRows = episodes.map((ep) => {
       const allocated = Number(ep.budget_allocation || 0);
-      rows.push([
-        `E${ep.episode_number}`,
-        ep.title,
-        ep.shooting_date ?? "",
-        allocated,
-        totalAllocated > 0 ? `${((allocated / totalAllocated) * 100).toFixed(2)}%` : "0.00%",
-        ep.variance_note ?? "",
-      ]);
-    }
-    const csv = rows.map((r) => r.map(csvEscape).join(",")).join("\n");
-    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
-    const slug = (active?.code ?? active?.name ?? "project")
-      .toString()
-      .replace(/[^A-Za-z0-9]+/g, "-")
-      .toLowerCase();
-    downloadBlob(`${slug}-season-${season.season_number}-report.csv`, blob);
+      return {
+        "Ep #": `E${ep.episode_number}`,
+        Title: ep.title,
+        "Shoot Date": ep.shooting_date ? formatDate(ep.shooting_date) : "",
+        Allocated: allocated,
+        "% of Season": pct(allocated, totalAllocated),
+        "Variance Note": ep.variance_note ?? "",
+      };
+    });
+    downloadSectionedCSV(`season-${season.season_number}-report`, [
+      { title: "Summary", rows: summary, opts: { raw: ["Value"] } },
+      {
+        title: "Episodes",
+        rows: episodeRows,
+        headers: ["Ep #", "Title", "Shoot Date", "Allocated", "% of Season", "Variance Note"],
+        opts: { money: ["Allocated"], raw: ["% of Season"] },
+      },
+    ]);
     toast.success(t("series_seasonid.season_report_exported"));
   };
 

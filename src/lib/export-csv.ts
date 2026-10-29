@@ -72,26 +72,23 @@ export function toCSV<T extends Record<string, any>>(
   return [cols.join(","), ...rows.map((r) => cols.map((c) => esc(r[c], c)).join(","))].join("\n");
 }
 
-export function downloadCSV(
-  filename: string,
-  rows: Record<string, any>[],
-  headers?: string[],
-  opts: CsvOptions = {},
-) {
-  // UTF-8 BOM so Excel opens Arabic (and other non-ASCII) content correctly
-  // regardless of the interface language (EN/LTR or AR/RTL) at export time.
-  const BOM = "\ufeff";
+const csvCell = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+
+/** Project header block printed above every CSV export ("Project,<code — name>" …). */
+function csvPrelude(): string {
   // Prepend the latest saved Project Settings production header so every
   // export carries current metadata without needing a refresh.
-  const esc = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
   const project = projectLabel(currentProjectContext());
   const pairs: [string, string][] = [
     ...(project ? ([["Project", project]] as [string, string][]) : []),
     ...projectHeaderPairs(),
   ];
-  const headerBlock = pairs.map(([k, v]) => `${esc(k)},${esc(v)}`).join("\n");
-  const prelude = headerBlock ? `${headerBlock}\n\n` : "";
-  // Shared export footer (G02): Exported from Kwalis Hub · user · Saudi time.
+  const headerBlock = pairs.map(([k, v]) => `${csvCell(k)},${csvCell(v)}`).join("\n");
+  return headerBlock ? `${headerBlock}\n\n` : "";
+}
+
+/** Shared export footer (G02): Exported from Kwalis Hub · user · Saudi time. */
+function csvFooter(): string {
   const roles = peekAuthRoles();
   const footer = footerLine({
     companyName: "",
@@ -102,8 +99,52 @@ export function downloadCSV(
     userName: roles?.displayName || roles?.email || "",
     exportedAt: new Date(),
   });
-  const blob = new Blob([BOM + prelude + toCSV(rows, headers, opts) + `\n\n${esc(footer)}\n`], {
+  return `\n\n${csvCell(footer)}\n`;
+}
+
+function saveCsv(filename: string, body: string) {
+  // UTF-8 BOM so Excel opens Arabic (and other non-ASCII) content correctly
+  // regardless of the interface language (EN/LTR or AR/RTL) at export time.
+  const BOM = "\ufeff";
+  const blob = new Blob([BOM + csvPrelude() + body + csvFooter()], {
     type: "text/csv;charset=utf-8;",
   });
   downloadBlob(normalizeForActiveProject(filename, "csv"), blob);
+}
+
+export function downloadCSV(
+  filename: string,
+  rows: Record<string, any>[],
+  headers?: string[],
+  opts: CsvOptions = {},
+) {
+  saveCsv(filename, toCSV(rows, headers, opts));
+}
+
+export type CsvSection = {
+  title: string;
+  rows: Record<string, any>[];
+  headers?: string[];
+  opts?: CsvOptions;
+  /** Text printed when the section has no rows. */
+  emptyText?: string;
+};
+
+/** Pure: several tables in one CSV, each under a "# Title" line (unit-tested). */
+export function sectionsToCSV(sections: CsvSection[]): string {
+  return sections
+    .map((s) => {
+      const title = `# ${s.title}`;
+      if (!s.rows.length && !s.headers?.length) return `${title}\n${s.emptyText ?? ""}`.trimEnd();
+      const body = toCSV(s.rows, s.headers, s.opts).replace(/\n$/, "");
+      return s.rows.length || !s.emptyText
+        ? `${title}\n${body}`
+        : `${title}\n${body}\n${s.emptyText}`;
+    })
+    .join("\n\n");
+}
+
+/** Multi-table CSV with the same project header, money format and footer as downloadCSV. */
+export function downloadSectionedCSV(filename: string, sections: CsvSection[]) {
+  saveCsv(filename, sectionsToCSV(sections));
 }

@@ -5,6 +5,7 @@
 // database applies to the crew / cast list (db/pending/197
 // get_crew_cast_list: rebate settings admin, or edit rights on crew / cast
 // contracts). Everyone else gets names, roles, dates and status only.
+import { toCSV, type CsvOptions } from "@/lib/export-csv";
 
 export type CrewCastCsvRow = {
   fullName: string;
@@ -57,6 +58,28 @@ export function csvEscape(v: unknown): string {
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+/** Money columns of the list (written with 2 decimals and grouping, G04). */
+const MONEY_KEYS = new Set<keyof CrewCastCsvRow>(["daily", "perDiem", "gross"]);
+
+/**
+ * The selected contracts as a table for the shared CSV writer (toCSV /
+ * downloadCSV): translated headers, records keyed by header, which headers
+ * are money. Sensitive columns only with permission.
+ */
+export function crewCastCsvTable(
+  rows: CrewCastCsvRow[],
+  opts: { kind: "crew" | "cast"; includeSensitive: boolean; label: (id: string) => string },
+): { headers: string[]; records: Record<string, unknown>[]; csv: CsvOptions } {
+  const cols = COLUMNS(opts.kind).filter((c) => opts.includeSensitive || !c.sensitive);
+  const headers = cols.map((c) => opts.label(c.label));
+  const records = rows.map((r) =>
+    Object.fromEntries(cols.map((c, i) => [headers[i], r[c.key] ?? ""])),
+  );
+  const money = cols.filter((c) => MONEY_KEYS.has(c.key)).map((c) => opts.label(c.label));
+  const raw = headers.filter((h) => !money.includes(h));
+  return { headers, records, csv: { money, raw } };
+}
+
 /**
  * CSV text for the selected contracts. `label` turns a column id into the
  * header text (i18n, `polish.crewcast_csv.<id>`).
@@ -65,10 +88,8 @@ export function buildCrewCastCsv(
   rows: CrewCastCsvRow[],
   opts: { kind: "crew" | "cast"; includeSensitive: boolean; label: (id: string) => string },
 ): string {
-  const cols = COLUMNS(opts.kind).filter((c) => opts.includeSensitive || !c.sensitive);
-  const lines = [cols.map((c) => csvEscape(opts.label(c.label))).join(",")];
-  for (const r of rows) lines.push(cols.map((c) => csvEscape(r[c.key])).join(","));
-  return lines.join("\n");
+  const { headers, records, csv } = crewCastCsvTable(rows, opts);
+  return toCSV(records, headers, csv);
 }
 
 /**

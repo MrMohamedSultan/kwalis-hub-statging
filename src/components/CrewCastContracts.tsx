@@ -77,7 +77,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/date-format";
-import { buildCrewCastCsv } from "@/lib/crewcast-csv";
+import { crewCastCsvTable } from "@/lib/crewcast-csv";
 import { useCanExportPersonalData } from "@/lib/use-personal-export";
 import { RefFilterInput, useRefMap } from "@/components/refs/RefListTools";
 import { refMatches } from "@/lib/document-refs";
@@ -128,7 +128,6 @@ import {
 import { useFormDraft, draftKey, recordVersion } from "@/lib/form-drafts";
 import { findDuplicateAttachmentUrl, type AttachmentUrlRecord } from "@/lib/cloud-links";
 import { StoredFileBadge } from "@/components/StoredFileBadge";
-import { downloadBlob } from "@/lib/download";
 import { formatAmount } from "@/lib/format-number";
 import { PersonTypeNewButton } from "@/features/reports/company-overhead/PersonTypeNewButton";
 
@@ -575,11 +574,11 @@ export function PeoplePage({
     toast.success(`${ids.length} ${title.toLowerCase()} record(s) deleted`);
   };
 
-  const onBulkExport = () => {
+  const onBulkExport = async () => {
     const rows = list.filter((p) => selected.has(p.id));
     if (rows.length === 0) return;
     // Contract value = base rate only (wages), gross of WHT. Per diem/housing are itemized separately.
-    const csv = buildCrewCastCsv(
+    const { headers, records, csv } = crewCastCsvTable(
       rows.map((p) => {
         const fig = contractFigures(p);
         return {
@@ -610,9 +609,9 @@ export function PeoplePage({
         label: (id) => t(`polish.crewcast_csv.${id}`),
       },
     );
-    // BOM so Excel opens the Arabic headers as UTF-8.
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    downloadBlob(`${kind}-selected-${new Date().toISOString().slice(0, 10)}.csv`, blob);
+    // G04: shared CSV writer — project header, 2-decimal money, export footer.
+    const { downloadCSV } = await import("@/lib/export-csv");
+    downloadCSV(`${kind}-selected-${new Date().toISOString().slice(0, 10)}`, records, headers, csv);
     toast.success(t("polish.crewcast_csv.exported", { count: rows.length }), {
       description: canExportSensitive ? undefined : t("polish.crewcast_csv.limited"),
     });

@@ -35,7 +35,7 @@ describe("crew / cast list CSV", () => {
     const csv = buildCrewCastCsv([row], { kind: "cast", includeSensitive: true, label: (k) => k });
     expect(csv.split("\n")[0]).toContain("character");
     expect(csv).toContain("SA0380000000608010167519");
-    expect(csv).toContain("30000");
+    expect(csv).toContain(`"30,000.00"`);
   });
   it("header labels come from the translator", () => {
     const csv = buildCrewCastCsv([], {
@@ -59,5 +59,23 @@ describe("canExportPersonalData", () => {
     expect(canExportPersonalData({ ...none, canEditCast: true }, "Cast")).toBe(true);
     expect(canExportPersonalData({ ...none, canEditCrew: true }, "vendor")).toBe(true);
     expect(canExportPersonalData(none, "crew")).toBe(false);
+  });
+});
+
+describe("crew / cast CSV money (G04)", () => {
+  it("writes daily, per diem and contract value with 2 decimals; days and IDs as-is", () => {
+    const csv = buildCrewCastCsv([{ ...row, daily: 1500.5, perDiem: 100, gross: 30010 }], {
+      kind: "crew",
+      includeSensitive: true,
+      label: (k) => k,
+    });
+    const [head, line] = csv.split("\n");
+    const cols = head.split(",");
+    const cells = line.match(/("[^"]*"|[^,]*)(,|$)/g)!.map((c) => c.replace(/,$/, ""));
+    expect(cells[cols.indexOf("daily")]).toBe('"1,500.50"');
+    expect(cells[cols.indexOf("per_diem")]).toBe("100.00");
+    expect(cells[cols.indexOf("contract_value")]).toBe('"30,010.00"');
+    expect(cells[cols.indexOf("days")]).toBe("20");
+    expect(cells[cols.indexOf("id_number")]).toBe("1012345678");
   });
 });

@@ -166,7 +166,6 @@ import {
   type QfeRule,
 } from "@/lib/qfe-rules";
 import { recordAudit } from "@/lib/audit-log";
-import { downloadBlob } from "@/lib/download";
 import { useTranslation } from "react-i18next";
 import {
   ApprovalFilterSelect,
@@ -1313,26 +1312,25 @@ function VendorLedgerModal({ vendor, onClose }: { vendor: Vendor; onClose: () =>
     toast.success(t("accounting.excel_export_ready"));
   };
 
-  const handleExportCsv = () => {
+  const handleExportCsv = async () => {
     const { poRows, invRows, payRows, summary } = exportRows();
-    const csvEscape = (v: unknown) => {
-      const s = v === null || v === undefined ? "" : String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const section = (title: string, rows: Record<string, unknown>[]) => {
-      if (!rows.length) return `# ${title}\n(no rows)\n`;
-      const headers = Object.keys(rows[0]);
-      const body = rows.map((r) => headers.map((h) => csvEscape(r[h])).join(",")).join("\n");
-      return `# ${title}\n${headers.join(",")}\n${body}\n`;
-    };
-    const csv = [
-      section("Summary", summary as any),
-      section("Purchase Orders", poRows as any),
-      section("Invoices", invRows as any),
-      section("Payments", payRows as any),
-    ].join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
-    downloadBlob(`vendor-ledger-${vendor.name.replace(/\s+/g, "_")}.csv`, blob);
+    const [{ downloadSectionedCSV }, { formatExportNumber }] = await Promise.all([
+      import("@/lib/export-csv"),
+      import("@/lib/export/number-format"),
+    ]);
+    // G04: money with 2 decimals; counts in the summary stay whole numbers.
+    const summaryRows = summary.map((r, i) => ({
+      Metric: r.Metric,
+      Value: i < 3 ? formatExportNumber(Number(r.Value) || 0, 2) : r.Value,
+    }));
+    const money = { money: ["Amount", "Paid", "Outstanding"] };
+    const none = t("closeout.csv.no_rows");
+    downloadSectionedCSV(`vendor-ledger-${vendor.name.replace(/\s+/g, "_")}`, [
+      { title: "Summary", rows: summaryRows, opts: { raw: ["Value"] } },
+      { title: "Purchase Orders", rows: poRows, opts: money, emptyText: none },
+      { title: "Invoices", rows: invRows, opts: money, emptyText: none },
+      { title: "Payments", rows: payRows, opts: money, emptyText: none },
+    ]);
     toast.success(t("accounting.csv_export_ready"));
   };
 

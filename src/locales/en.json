@@ -5539,5 +5539,10 @@
       "note_no_bank": "Bank and ID details are not included.",
       "note_with_bank": "Bank and ID details are included — handle this file as confidential."
     }
+  },
+  "closeout": {
+    "csv": {
+      "no_rows": "(no rows)"
+    }
   }
 }
