@@ -115,7 +115,11 @@ $PSQL -c "SELECT * FROM public.project_org_mismatches();"
 echo "-- 204: the board-approval limit must be empty (the app has no board approval action yet; a limit blocks every request above it):"
 $PSQL -c "SELECT key, value FROM public.platform_settings WHERE key = 'payment_board_approval_above_sar';"
 echo "-- person profiles: PREVIEW only (nothing linked). Apply per org later with persons_backfill(org, true)."
-$PSQL -c "SELECT o.name, b.* FROM public.organizations o, LATERAL public.persons_backfill(o.id, false) b LIMIT 200;"
+$PSQL -c "SELECT pr.code AS project, b.full_name, b.id_number, b.action
+            FROM (SELECT DISTINCT organization_id FROM public.people WHERE organization_id IS NOT NULL) x
+            CROSS JOIN LATERAL public.persons_backfill(x.organization_id, false) b
+            LEFT JOIN public.projects pr ON pr.id = b.project_id
+           ORDER BY 1, 2;"
 
 echo "== 6. build + restart"
 bun install
