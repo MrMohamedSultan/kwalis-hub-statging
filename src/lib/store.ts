@@ -2434,42 +2434,18 @@ export const useStore = create<State>()(
       },
 
       ensureBudgetCode: async (budgetCode) => {
-        const line = get().budget.find((b) => b.mainCode === budgetCode);
-        if (!line) return;
-        const planned = lineTotal(line);
-        await supabase.from("master_budget" as any).upsert(
-          {
-            budget_code: line.mainCode,
-            description: line.description,
-            category: line.headerCode,
-            group: line.group,
-            macro_category: line.group,
-            planned_amount: planned,
-            currency: line.currency ?? "USD",
-          },
-          { onConflict: "budget_code" } as any,
-        );
+        // QA 29/10: this used to upsert the code into master_budget without
+        // is_header / parent_code, which the hierarchy trigger rejects
+        // ("Sub-account … must reference a header via parent_code") and which
+        // only org admins may write. No figure reads master_budget (positions
+        // and reports read budget_lines + v_ledger_transactions), so the
+        // write is dropped; only the cached catalog is refreshed.
+        if (!get().budget.some((b) => b.mainCode === budgetCode)) return;
         invalidateBudgetCaches(get().activeProjectId, "master");
       },
 
       commitTransaction: async (input) => {
-        const line = get().budget.find((b) => b.mainCode === input.budgetCode);
-        if (line) {
-          const planned = lineTotal(line);
-          await supabase.from("master_budget" as any).upsert(
-            {
-              budget_code: line.mainCode,
-              description: line.description,
-              category: line.headerCode,
-              group: line.group,
-              macro_category: line.group,
-              planned_amount: planned,
-              currency: input.currency ?? "USD",
-            },
-            { onConflict: "budget_code" } as any,
-          );
-          invalidateBudgetCaches(get().activeProjectId, "master");
-        }
+        // master_budget is no longer written here (see ensureBudgetCode).
         await supabase.from("transactions" as any).insert({
           transaction_type: input.transactionType ?? "payroll",
           budget_code: input.budgetCode,

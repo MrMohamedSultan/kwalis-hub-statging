@@ -7,6 +7,7 @@ import { useDashboardCurrency } from "@/lib/dashboard/currency";
 import { formatCurrency } from "@/lib/format";
 import type { ActivityEvent } from "@/lib/dashboard/mock-data";
 import { EmptyState } from "@/components/dashboard/EmptyState";
+import { statusLabelKey, type PaymentRequestStatus } from "@/lib/payment-requests";
 
 function initials(name: string): string {
   return name
@@ -63,7 +64,11 @@ export function RecentActivity({ events, loading, fetching }: RecentActivityProp
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm text-ink-primary">
                   <span className="font-medium">{event.actor}</span>{" "}
-                  <span className="text-ink-secondary">{event.action}</span>
+                  <span className="text-ink-secondary">
+                    {t(statusLabelKey(event.action as PaymentRequestStatus), {
+                      defaultValue: event.action,
+                    })}
+                  </span>
                 </div>
                 <div className="mt-0.5 text-xs text-ink-muted">{rel(event.ageHours)}</div>
               </div>
