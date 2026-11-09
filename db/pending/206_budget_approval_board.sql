@@ -909,8 +909,8 @@ WITH CHECK (
 --    Sender = the actor of the last move to 'Pending Approval'
 --    (budget_status_events). Approvers kept only when they can still access
 --    the project, hold an executive title on it and are not the sender. A
---    project left without an approver is not carried over (the producer
---    sends again). Returns the number of requests created; idempotent.
+--    project left without an approver who still has to decide is not
+--    carried over (the producer sends again). Returns the number of requests created; idempotent.
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.budget_approval_backfill_legacy()
 RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -933,7 +933,8 @@ BEGIN
        WHERE ba.project_id = r.project_id
          AND ba.user_id IS DISTINCT FROM v_sender
          AND public.can_access_project(ba.user_id, r.organization_id, r.project_id)
-         AND public.is_budget_executive(ba.user_id, r.project_id));
+         AND public.is_budget_executive(ba.user_id, r.project_id)
+         AND ba.decision = 'pending');   -- someone must still be able to decide it (N3)
     INSERT INTO public.budget_approval_requests(project_id, organization_id, version_id, version_name, kind, status,
            prev_budget_status, legacy, note, submitted_by)
     VALUES (r.project_id, r.organization_id, r.version_id, r.version_name, 'active', 'pending', 'Draft', true,

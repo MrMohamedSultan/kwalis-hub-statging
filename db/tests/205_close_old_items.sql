@@ -141,6 +141,19 @@ SELECT t.denied('a cancelled PO takes no invoice', format($$SELECT link_invoice_
 SELECT t.denied('a new invoice cannot be raised on a cancelled PO',
   format($$INSERT INTO invoices(id,description,budget_code,price,date,vendor_name,invoice_no,organization_id,project_id,purchase_order_id) VALUES (%L,'x','2101',1,'2026-10-07','Lens Co','INV-2053',%L,%L,%L)$$,
     :'I3', :'O1', :'P', :'PO2'));
+-- review N2: a rejected invoice sent again must fit the PO again
+INSERT INTO invoices(id,description,budget_code,price,date,vendor_name,invoice_no,organization_id,project_id,purchase_order_id) VALUES
+ ('61000000-0000-0000-0000-000000000253','Big 1','2101',4000,'2026-10-08','Other Co','INV-2054',:'O1',:'P',:'PO3');
+SELECT t.as_user(:'D');
+SELECT reject_invoice('61000000-0000-0000-0000-000000000253', 'wrong amount');
+SELECT t.as_user(:'A');
+INSERT INTO invoices(id,description,budget_code,price,date,vendor_name,invoice_no,organization_id,project_id,purchase_order_id) VALUES
+ ('61000000-0000-0000-0000-000000000254','Big 2','2101',4000,'2026-10-09','Other Co','INV-2055',:'O1',:'P',:'PO3');
+SELECT t.denied('a rejected invoice sent again over the open PO amount is refused',
+  $$UPDATE invoices SET approval_status = 'pending' WHERE id = '61000000-0000-0000-0000-000000000253'$$);
+UPDATE invoices SET price = 900 WHERE id = '61000000-0000-0000-0000-000000000253';
+UPDATE invoices SET approval_status = 'pending' WHERE id = '61000000-0000-0000-0000-000000000253';
+SELECT t.eq('… and accepted once it fits', (SELECT approval_status FROM invoices WHERE id = '61000000-0000-0000-0000-000000000253'), 'pending');
 SELECT t.as_user(:'B');
 SELECT t.denied('another tenant cannot link', format($$SELECT link_invoice_to_po(%L, %L)$$, :'I2', :'PO'));
 RESET role;

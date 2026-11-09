@@ -187,9 +187,12 @@ DECLARE
   po record;
   v_other numeric;
   v_relink boolean := TG_OP = 'UPDATE' AND NEW.purchase_order_id IS DISTINCT FROM OLD.purchase_order_id;
+  -- a rejected / cancelled invoice sent again counts on its PO again (review N2)
+  v_revive boolean := TG_OP = 'UPDATE' AND OLD.approval_status IN ('rejected', 'cancelled')
+                      AND NEW.approval_status IN ('pending', 'approved');
 BEGIN
   IF auth.uid() IS NULL THEN RETURN NEW; END IF;          -- server jobs / SQL editor
-  IF TG_OP = 'UPDATE' AND NOT v_relink
+  IF TG_OP = 'UPDATE' AND NOT v_relink AND NOT v_revive
      AND (NEW.purchase_order_id IS NULL OR COALESCE(NEW.price, 0) <= COALESCE(OLD.price, 0)) THEN
     RETURN NEW;
   END IF;
@@ -252,7 +255,7 @@ END $$;
 REVOKE ALL ON FUNCTION public.guard_invoice_po_link() FROM PUBLIC, anon, authenticated;
 DROP TRIGGER IF EXISTS zz_trg_invoice_po_link ON public.invoices;
 CREATE TRIGGER zz_trg_invoice_po_link
-  BEFORE INSERT OR UPDATE OF purchase_order_id, price ON public.invoices
+  BEFORE INSERT OR UPDATE OF purchase_order_id, price, approval_status ON public.invoices
   FOR EACH ROW EXECUTE FUNCTION public.guard_invoice_po_link();
 
 -- The app's "Link to purchase order" action. SECURITY INVOKER: the caller
@@ -309,18 +312,20 @@ GRANT EXECUTE ON FUNCTION public.contracts_not_in_base_currency(uuid) TO authent
 -- The contract maker-checker (approve ≠ creator) trusts people.created_by,
 -- which stamp_audit_fields only fills when it is empty: a user could save a
 -- contract "created by" someone else and then approve it. The database now
--- writes the creator itself (a row restored from the trash keeps its
--- original creator) and it cannot be changed afterwards.
+-- writes the creator itself (the signed-in user — also for a restore from
+-- the trash; the original creator stays in the audit history) and it
+-- cannot be changed afterwards.
 CREATE OR REPLACE FUNCTION public.guard_people_creator()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_uid uuid := auth.uid();
-  v_tr  record;
 BEGIN
   IF v_uid IS NULL THEN RETURN NEW; END IF;               -- server jobs / imports / seeds
   IF TG_OP = 'INSERT' THEN
-    SELECT * INTO v_tr FROM public.trash_original_creator('people', NEW.id);
-    NEW.created_by := CASE WHEN v_tr.found THEN v_tr.created_by ELSE v_uid END;
+    -- always the signed-in user, also for a row restored from the trash: the
+    -- restorer then cannot approve it either (a new contract re-using the id
+    -- of a trashed one must not inherit someone else's name — review N1)
+    NEW.created_by := v_uid;
   ELSIF NEW.created_by IS DISTINCT FROM OLD.created_by THEN
     RAISE EXCEPTION 'people: the creator of a contract cannot be changed' USING ERRCODE = '42501';
   END IF;
