@@ -573,6 +573,8 @@ type State = {
   addCashAdvance: (c: CashAdvance) => Promise<void>;
   reconcileCashAdvance: (id: string) => Promise<void>;
   addPerson: (p: Person) => Promise<void>;
+  /** New crew / cast contract: contract + payroll (+ instalments) in ONE database transaction (205). */
+  addContract: (p: Person, payroll: PayrollRow, ledger: PaymentLedgerEntry[]) => Promise<void>;
   updatePerson: (id: string, patch: Partial<Person>) => Promise<void>;
   removePerson: (id: string) => Promise<void>;
   addPayroll: (p: PayrollRow) => Promise<void>;
@@ -2014,6 +2016,83 @@ export const useStore = create<State>()(
           set((s) => ({ people: s.people.filter((x) => x.id !== p.id) }));
           throw error;
         }
+        await refreshPersonContracts(p.id);
+      },
+      addContract: async (p, payrollIn, ledger) => {
+        const personRow = toPersonRow(p);
+        if (!personRow.project_id)
+          throw new Error("An active project is required before saving this contract.");
+        const total = Number(payrollIn.totalAmount || 0);
+        const entries = ledger.map((e) => ({
+          ...e,
+          amount: Number(e.amount || 0),
+          status: (e.status ?? "Pending Approval") as PaymentApprovalStatus,
+        }));
+        const statusToLegacy = (st: PaymentApprovalStatus): Status =>
+          st === "Paid" ? "Paid" : st === "Rejected" ? "Upcoming" : "Due";
+        const payroll: PayrollRow =
+          entries.length > 0
+            ? {
+                ...payrollIn,
+                ledger: entries,
+                payments: entries.map((e) => statusToLegacy(e.status!)),
+                receipts: entries.map((e) => e.proofPath ?? null),
+                percents: entries.map((e) =>
+                  total > 0 ? +((e.amount / total) * 100).toFixed(4) : 0,
+                ),
+              }
+            : payrollIn;
+        const payrollRow = toPayrollRow(payroll);
+        const { error } = await supabase.rpc("save_new_contract" as any, {
+          p_person: personRow,
+          p_payroll: payrollRow,
+        } as any);
+        if (error) {
+          const missing =
+            (error as { code?: string }).code === "PGRST202" ||
+            /save_new_contract/.test(String(error.message ?? "")) &&
+              /not find|does not exist/i.test(String(error.message ?? ""));
+          if (!missing) {
+            // A save that already went through (e.g. a retried click): show it.
+            if ((error as { code?: string }).code === "23505") {
+              const { data } = await supabase.from("people").select("*").eq("id", p.id).maybeSingle();
+              if (data) {
+                const { data: pr } = await supabase
+                  .from("payroll")
+                  .select("*")
+                  .eq("ref_id", p.id);
+                set((s) => ({
+                  people: [...s.people.filter((x) => x.id !== p.id), fromPersonRow(data)],
+                  payroll: [
+                    ...s.payroll.filter((r) => r.refId !== p.id),
+                    ...((pr as any[]) ?? []).map(fromPayrollRow),
+                  ],
+                }));
+                return;
+              }
+            }
+            throw error;
+          }
+          // Server without 205 yet: the previous three-step save.
+          await get().addPerson(p);
+          await get().addPayroll(payrollIn);
+          if (entries.length > 0) await get().setPayrollLedger(p.id, entries);
+          return;
+        }
+        set((s) => ({
+          people: [
+            ...s.people.filter((x) => x.id !== p.id),
+            { ...p, projectId: personRow.project_id, organizationId: personRow.organization_id },
+          ],
+          payroll: [...s.payroll.filter((r) => r.id !== payroll.id), payroll],
+        }));
+        recordAudit({
+          category: "other",
+          action: "contract.create",
+          summary: `Contract ${p.fullName} created`,
+          entity: `people:${p.id}`,
+          details: { old_value: null, new_value: { person: p.id, payroll: payroll.id } },
+        });
         await refreshPersonContracts(p.id);
       },
       updatePerson: async (id, patch) => {

@@ -403,3 +403,46 @@ export function lineDisplayName(line: ProjectBudgetLine, lines: ProjectBudgetLin
     name && name !== desc ? name : `#${dupes.findIndex((l) => l.id === line.id) + 1}`;
   return `${base} (${qualifier})`;
 }
+
+/**
+ * QA 29/10 "same number on every screen": what is already used on a budget
+ * CODE, from the same source as the Cost Report and the Budget page
+ * (v_budget_code_position: budget, actual, commitment in the base
+ * currency), minus the ledger rows of the documents in `excludeSourceIds`
+ * (the contract being edited, so it is not counted twice).
+ */
+export async function fetchCodeUsage(
+  projectId: string,
+  budgetCode: string,
+  excludeSourceIds: string[],
+): Promise<{ budget: number; used: number } | null> {
+  const { data: pos, error } = await supabase
+    .from("v_budget_code_position" as any)
+    .select("budget_sar, actual_sar, committed_sar")
+    .eq("project_id", projectId)
+    .eq("budget_code", budgetCode)
+    .maybeSingle();
+  if (error) throw error;
+  if (!pos) return null;
+  const p = pos as unknown as { budget_sar: number; actual_sar: number; committed_sar: number };
+  let own = 0;
+  const ids = excludeSourceIds.filter(Boolean);
+  if (ids.length > 0) {
+    const { data: rows, error: e2 } = await supabase
+      .from("v_ledger_transactions" as any)
+      .select("total, entry_kind")
+      .eq("project_id", projectId)
+      .eq("budget_code", budgetCode)
+      .in("source_id", ids)
+      .in("entry_kind", ["actual", "commitment"]);
+    if (e2) throw e2;
+    own = ((rows ?? []) as unknown as { total: number }[]).reduce(
+      (s, r) => s + (Number(r.total) || 0),
+      0,
+    );
+  }
+  return {
+    budget: Number(p.budget_sar) || 0,
+    used: Math.max((Number(p.actual_sar) || 0) + (Number(p.committed_sar) || 0) - own, 0),
+  };
+}

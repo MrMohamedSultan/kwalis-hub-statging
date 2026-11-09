@@ -494,7 +494,9 @@
     "status_and_approvals": "Budget Status & Approvals",
     "expand_fullscreen": "Fullscreen",
     "exit_fullscreen": "Exit fullscreen",
-    "loadingLines": "Loading budget lines…"
+    "loadingLines": "Loading budget lines…",
+    "fit_tables": "Fit to screen",
+    "fit_tables_hint": "Shrink the budget tables to the page width instead of scrolling sideways"
   },
   "payables": {
     "title": "Payables",
@@ -1057,7 +1059,9 @@
     "validation_error_contract_attachment_must_be_a_pdf": "Validation Error: Contract attachment must be a PDF.",
     "weekly_rate": "Weekly Rate",
     "weeks_auto": "Weeks (auto)",
-    "nameexamplecom": "name@example.com"
+    "nameexamplecom": "name@example.com",
+    "used_on_code_hint": "Actual + commitments on code {{code}} (same as the Cost Report)",
+    "other_on_line_hint": "{{count}} other contracts / POs on this line"
   },
   "reports": {
     "actual_paid": "Actual Paid",
@@ -2277,7 +2281,8 @@
     "checkout_date_cannot_be_before_checkin_date": "Check-Out date cannot be before Check-In date",
     "failed_to_load_accommodation_roster": "Failed to load accommodation roster",
     "no_active_contracts_yet_sign_a_crew_or": "No active contracts yet. Sign a crew or cast contract to populate this roster.",
-    "room": "Room #"
+    "room": "Room #",
+    "dates_required_with_rate": "Enter the check-in and check-out dates — without them the stay is not counted on the budget."
   },
   "account_settings": {
     "you_must_be_signed_in_to_view_account": "You must be signed in to view account settings.",
@@ -3328,7 +3333,12 @@
     "invoice": "Invoice",
     "not_invoiced": "— Not invoiced —",
     "nights_count_one": "{{count}} night",
-    "nights_count_other": "{{count}} nights"
+    "nights_count_other": "{{count}} nights",
+    "link_po_title": "Link to purchase order",
+    "link_po_hint": "This invoice has no purchase order. Linking it moves the amount from the PO's commitment to this invoice, so it is not counted twice.",
+    "link_po_none": "No open purchase order of this vendor and budget code can take this invoice.",
+    "link_po_button": "Link",
+    "link_po_done": "Invoice linked to the purchase order"
   },
   "exports": {
     "footer_line": "Exported from {{product}} · {{user}} · {{datetime}} (Saudi time)",

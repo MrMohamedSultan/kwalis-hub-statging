@@ -100,6 +100,7 @@ import { TablePagination, usePagedRows } from "@/components/TablePagination";
 import { TableSkeleton } from "@/components/ui/table-skeleton";
 import { TableEmptyRow } from "@/components/ui/empty-state";
 import { humanizeDbError } from "@/lib/db-errors";
+import { LinkInvoiceToPo } from "@/components/LinkInvoiceToPo";
 import { CrewPayrollTab } from "@/components/CrewPayrollTab";
 import {
   VAT_TREATMENTS,
@@ -3397,6 +3398,7 @@ function EditInvoiceModal({
   return (
     <Modal title={`Edit Invoice #${invoice.invoiceNo || invoice.id.slice(0, 6)}`} onClose={onClose}>
       <form onSubmit={submit} className="grid grid-cols-2 gap-3">
+        <LinkInvoiceToPo invoice={invoice} />
         <Field label={t("ap.payment_method")}>
           <select
             value={paymentMethod}

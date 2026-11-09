@@ -2,6 +2,7 @@ import i18n from "i18next";
 import { builtinTemplateLines, useBudgetTemplate, type TemplateLine } from "@/lib/budget-template";
 import { formatAmount, formatStaticSAR, formatStaticUSD, numberLocale } from "@/lib/format-number";
 import { useTranslation } from "react-i18next";
+import { FitWidth } from "@/components/FitWidth";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useMemo, useEffect, createContext, useContext } from "react";
 
@@ -44,6 +45,7 @@ import {
   RefreshCw,
   History,
   Archive,
+  Shrink,
 } from "lucide-react";
 import { BudgetLineRow } from "@/components/budget/BudgetLineRow";
 import { useDebouncedLineUpdate } from "@/lib/use-debounced-line-update";
@@ -3467,6 +3469,22 @@ export function Stat({ label, v, accent }: { label: string; v: number; accent?: 
 
 export function ViewEditBudget() {
   const { t } = useTranslation();
+  // Client 8/11: fit the budget tables to the screen width (no sideways scrolling).
+  const [fitTables, setFitTablesState] = useState(() => {
+    try {
+      return localStorage.getItem("kwalis.budget.fitTables") !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const setFitTables = (v: boolean) => {
+    setFitTablesState(v);
+    try {
+      localStorage.setItem("kwalis.budget.fitTables", v ? "1" : "0");
+    } catch {
+      /* storage unavailable */
+    }
+  };
   const budget = useStore((s) => s.budget);
   const addBudgetLine = useStore((s) => s.addBudgetLine);
   const updateBudgetLine = useStore((s) => s.updateBudgetLine);
@@ -3930,7 +3948,17 @@ export function ViewEditBudget() {
                 </span>
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setFitTables(!fitTables)}
+                aria-pressed={fitTables}
+                title={t("budget.fit_tables_hint")}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium ${fitTables ? "border-brand bg-brand/10 text-brand" : "border-border hover:bg-muted"}`}
+              >
+                <Shrink className="size-4" />
+                {t("budget.fit_tables")}
+              </button>
               {(() => {
                 const inSection = (l: BudgetLine) => {
                   if (sectionFilter === "all") return true;
@@ -4831,7 +4859,11 @@ export function ViewEditBudget() {
                       </div>
                     </div>
                     <LazyMount estimatedHeight={44 * lines.length + 48}>
-                      <div className="w-full overflow-x-auto block border rounded-lg shadow-sm bg-white">
+                      <FitWidth
+                        enabled={fitTables}
+                        minScale={0.58}
+                        className="w-full block border rounded-lg shadow-sm bg-surface"
+                      >
                         <table
                           className="app-table"
                           style={{ minWidth: "1500px", tableLayout: "auto" }}
@@ -4844,18 +4876,18 @@ export function ViewEditBudget() {
                                 {t("budget.columns.description")}
                               </Th>
                               <Th className="min-w-[160px]">{t("budget.columns.name")}</Th>
-                              <Th className="min-w-[100px]">{t("budget.columns.prep")}</Th>
-                              <Th className="min-w-[100px]">{t("budget.columns.shoot")}</Th>
-                              <Th className="min-w-[100px]">{t("budget.columns.wrap")}</Th>
-                              <Th className="min-w-[100px]">{t("budget.columns.periods")}</Th>
-                              <Th className="min-w-[100px]">{t("budget.columns.unit")}</Th>
+                              <Th className="min-w-[76px]">{t("budget.columns.prep")}</Th>
+                              <Th className="min-w-[76px]">{t("budget.columns.shoot")}</Th>
+                              <Th className="min-w-[76px]">{t("budget.columns.wrap")}</Th>
+                              <Th className="min-w-[76px]">{t("budget.columns.periods")}</Th>
+                              <Th className="min-w-[84px]">{t("budget.columns.unit")}</Th>
                               <Th className="min-w-[110px]">{t("budget.columns.amount")}</Th>
-                              <Th className="min-w-[100px]">{t("budget.columns.currencyShort")}</Th>
+                              <Th className="min-w-[72px]">{t("budget.columns.currencyShort")}</Th>
                               <Th className="min-w-[120px]">{t("budget.columns.rate")}</Th>
                               <Th className="min-w-[140px]">{t("budget.columns.totalSARShort")}</Th>
                               <Th className="min-w-[140px]">{t("budget.columns.totalUSDShort")}</Th>
-                              <Th className="min-w-[180px]">{t("budget.columns.topSheet")}</Th>
-                              <Th className="min-w-[180px]">{t("budget.columns.notes")}</Th>
+                              <Th className="min-w-[140px]">{t("budget.columns.topSheet")}</Th>
+                              <Th className="min-w-[150px]">{t("budget.columns.notes")}</Th>
                               <Th className="min-w-[100px]">{t("budget.columns.actions")}</Th>
                             </tr>
                           </thead>
@@ -5327,7 +5359,7 @@ export function ViewEditBudget() {
                             })}
                           </tbody>
                         </table>
-                      </div>
+                      </FitWidth>
                     </LazyMount>
                   </div>
                 );

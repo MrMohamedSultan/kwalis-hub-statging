@@ -99,6 +99,7 @@ import {
   subAccountsForHeader,
   sumLineCommitments,
   type ProjectBudgetLine,
+  fetchCodeUsage,
 } from "@/lib/project-budget-lines";
 
 import {
@@ -409,6 +410,7 @@ export function PeoplePage({
     people,
     payroll,
     addPerson,
+    addContract,
     updatePerson,
     removePerson,
     addPayroll,
@@ -1101,28 +1103,29 @@ export function PeoplePage({
                       projectId: activeProjectId,
                       organizationId: activeProject?.organizationId ?? null,
                     };
-                    console.log("SUBMIT PAYLOAD:", submitPayload);
-                    await addPerson(submitPayload);
-                    await addPayroll({
-                      id: generateId(),
-                      refId: p.id,
-                      name: p.fullName,
-                      kind,
-                      totalAmount: total,
-                      payments: [],
-                      receipts: [],
-                      percents: [],
-                      budgetCode: budgetCode || null,
-                      ledger: [],
-                      paymentSchedule: extras.paymentSchedule,
-                      whtPercent: extras.whtPercent,
-                      whtAmount: extras.whtAmount,
-                      netPayable: extras.netPayable,
-                      whtTreatment: extras.whtTreatment,
-                    });
-                    if (ledgerEntries.length > 0) {
-                      await setPayrollLedger(p.id, ledgerEntries);
-                    }
+                    // QA 29/10: contract + payroll + instalments in one
+                    // transaction — a failed step leaves nothing behind.
+                    await addContract(
+                      submitPayload,
+                      {
+                        id: generateId(),
+                        refId: p.id,
+                        name: p.fullName,
+                        kind,
+                        totalAmount: total,
+                        payments: [],
+                        receipts: [],
+                        percents: [],
+                        budgetCode: budgetCode || null,
+                        ledger: [],
+                        paymentSchedule: extras.paymentSchedule,
+                        whtPercent: extras.whtPercent,
+                        whtAmount: extras.whtAmount,
+                        netPayable: extras.netPayable,
+                        whtTreatment: extras.whtTreatment,
+                      },
+                      ledgerEntries,
+                    );
 
                     // Ensure the master_budget row exists so future Paid txns can attach.
                     if (budgetCode) {
@@ -1929,10 +1932,14 @@ function ContractForm({
     ? projectBudgetLines.find((b) => b.id === selectedBudgetLineId)
     : subAccounts.find((b) => b.mainCode === mainCode);
   // Budget lines carry their own currency; compare in the base currency.
-  const planned = selectedLine
+  const linePlanned = selectedLine
     ? projectBudgetLineTotal(selectedLine) *
       (rateToBase(selectedLine.currency, baseCurrency, fxRate) ?? 1)
     : 0;
+  // QA 29/10: budget and usage of the CODE from the same source as the Cost
+  // Report (v_budget_code_position); the line figure is only a fallback.
+  const [codeUsage, setCodeUsage] = useState<{ budget: number; used: number } | null>(null);
+  const planned = codeUsage ? codeUsage.budget : linePlanned;
   const organizationId = useStore(
     (s) => s.projects.find((p) => p.id === s.activeProjectId)?.organizationId ?? null,
   );
@@ -1981,6 +1988,29 @@ function ContractForm({
       cancelled = true;
     };
   }, [activeProjectId, selectedLine?.id, initial?.id, baseCurrency, fxRate]);
+
+  const ownPayrollId = payrollRow?.id ?? null;
+  useEffect(() => {
+    const code = selectedLine?.mainCode;
+    if (!activeProjectId || !code) {
+      setCodeUsage(null);
+      return;
+    }
+    let cancelled = false;
+    fetchCodeUsage(activeProjectId, code, ownPayrollId ? [ownPayrollId] : [])
+      .then((u) => {
+        if (!cancelled) setCodeUsage(u);
+      })
+      .catch(() => {
+        if (!cancelled) setCodeUsage(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProjectId, selectedLine?.mainCode, ownPayrollId]);
+  // Already used on the code by everything else (actual + commitment), or the
+  // older per-line estimate when the code position is not available.
+  const usedByOthers = codeUsage ? codeUsage.used : otherCommitted;
 
   // ---- Budget Code mapping validation (warn before saving) ----
   const effectiveCode = selectedLine?.mainCode || mainCode || "";
@@ -2061,7 +2091,7 @@ function ContractForm({
   // line; the company-borne WHT is charged to budget line 7099.
   const lineCommitmentBase = lineShareOfContract(whtBase, whtTreatment);
   const companyWht = lineCommitmentBase === contractAmountBase ? 0 : whtAmount;
-  const remaining = planned - otherCommitted - lineCommitmentBase;
+  const remaining = planned - usedByOthers - lineCommitmentBase;
   const fxBreakdown =
     fxToBase === 1
       ? `${formatAmount(wht.gross, 2)} ${contractCcy}`
@@ -3249,10 +3279,11 @@ function ContractForm({
               <div className="text-muted-foreground text-xs uppercase tracking-wider">
                 {t("crewcastcontracts.already_committed")}
               </div>
-              <div className="font-semibold">{formatUSD(otherCommitted)}</div>
+              <div className="font-semibold">{formatUSD(usedByOthers)}</div>
               <div className="text-[10px] text-muted-foreground">
-                {otherCommittedCount} other{" "}
-                {otherCommittedCount === 1 ? "contract/PO" : "contracts/POs"} on this line
+                {codeUsage
+                  ? t("crewcastcontracts.used_on_code_hint", { code: selectedLine?.mainCode ?? "" })
+                  : t("crewcastcontracts.other_on_line_hint", { count: otherCommittedCount })}
               </div>
             </div>
             <div>

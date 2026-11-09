@@ -152,7 +152,12 @@ function AccommodationRosterPage() {
       return;
     }
     const nights = stayNights(row.check_in_date, row.check_out_date);
-    if (nights > 0 && row.nightly_rate > 0 && !row.linked_budget_line_id && !row.budget_code) {
+    // QA 29/10: a rate without the stay dates commits 0 on the budget.
+    if (row.nightly_rate > 0 && (!row.check_in_date || !row.check_out_date)) {
+      toast.error(t("accommodation_roster.dates_required_with_rate"));
+      return;
+    }
+    if (row.nightly_rate > 0 && !row.linked_budget_line_id && !row.budget_code) {
       toast.error(t("ap.budget_line_required"));
       return;
     }

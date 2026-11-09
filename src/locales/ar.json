@@ -494,7 +494,9 @@
     "status_and_approvals": "حالة الميزانية والموافقات",
     "expand_fullscreen": "ملء الشاشة",
     "exit_fullscreen": "إنهاء ملء الشاشة",
-    "loadingLines": "جارٍ تحميل بنود الميزانية…"
+    "loadingLines": "جارٍ تحميل بنود الميزانية…",
+    "fit_tables": "ملاءمة الشاشة",
+    "fit_tables_hint": "تصغير جداول الميزانية لعرض الصفحة بدل التمرير يمين ويسار"
   },
   "payables": {
     "title": "المستحقات",
@@ -1057,7 +1059,9 @@
     "validation_error_contract_attachment_must_be_a_pdf": "خطأ في التحقق: يجب أن يكون مرفق العقد بصيغة PDF.",
     "weekly_rate": "الأجر الأسبوعي",
     "weeks_auto": "أسابيع (تلقائي)",
-    "nameexamplecom": "name@example.com"
+    "nameexamplecom": "name@example.com",
+    "used_on_code_hint": "الفعلي + الالتزامات على الكود {{code}} (نفس تقرير التكلفة)",
+    "other_on_line_hint": "{{count}} عقود / أوامر شراء أخرى على هذا البند"
   },
   "reports": {
     "actual_paid": "المدفوع الفعلي",
@@ -2277,7 +2281,8 @@
     "checkout_date_cannot_be_before_checkin_date": "لا يمكن أن يكون تاريخ المغادرة قبل تاريخ الوصول",
     "failed_to_load_accommodation_roster": "تعذّر تحميل كشف الإقامة",
     "no_active_contracts_yet_sign_a_crew_or": "لا توجد عقود نشطة بعد. وقّع عقد طاقم أو ممثلين لتعبئة هذا الكشف.",
-    "room": "رقم الغرفة"
+    "room": "رقم الغرفة",
+    "dates_required_with_rate": "أدخل تاريخ الوصول والمغادرة — بدونهما لا تُحسب الإقامة على الميزانية."
   },
   "account_settings": {
     "you_must_be_signed_in_to_view_account": "يجب تسجيل الدخول لعرض إعدادات الحساب.",
@@ -3332,7 +3337,12 @@
     "nights_count_two": "ليلتان",
     "nights_count_few": "{{count}} ليالٍ",
     "nights_count_many": "{{count}} ليلة",
-    "nights_count_other": "{{count}} ليلة"
+    "nights_count_other": "{{count}} ليلة",
+    "link_po_title": "ربط بأمر شراء",
+    "link_po_hint": "هذه الفاتورة غير مربوطة بأمر شراء. الربط ينقل المبلغ من التزام أمر الشراء إلى الفاتورة فلا يُحسب مرتين.",
+    "link_po_none": "لا يوجد أمر شراء مفتوح لنفس المورد وكود الميزانية يتسع لهذه الفاتورة.",
+    "link_po_button": "ربط",
+    "link_po_done": "تم ربط الفاتورة بأمر الشراء"
   },
   "exports": {
     "footer_line": "صُدِّر من {{product}} · {{user}} · {{datetime}} (بتوقيت السعودية)",
