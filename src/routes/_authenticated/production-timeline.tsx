@@ -47,6 +47,8 @@ import {
   Printer,
   FileSpreadsheet,
   FolderClock,
+  Download,
+  Upload,
 } from "lucide-react";
 
 import { AppShell, PageTitle, Panel } from "@/components/AppShell";
@@ -69,6 +71,9 @@ import { TimelineAuditLog } from "@/components/TimelineAuditLog";
 import { toast } from "sonner";
 
 import { TimelineDraftsPanel } from "@/components/timeline/TimelineDraftsPanel";
+import { TimelineImportDialog } from "@/components/timeline/TimelineImportDialog";
+import { KIND_OF_CODE, applyImportPlan } from "@/lib/timeline-import";
+import { usePermissions } from "@/lib/permissions/usePermissions";
 import { runGanttExcelExport, runGanttPdfExport } from "@/features/timeline/export/runGanttExport";
 import { useExportAction } from "@/hooks/use-export-action";
 
@@ -358,23 +363,8 @@ const PHASE_OF_CODE: Record<string, EventPhase> = {
   Scr: "Development",
 };
 
-// Kind mapping so events created from the dropdown pick a sensible bar color.
-const KIND_OF_CODE: Record<string, BarKind> = {
-  PRE: "prep",
-  PP: "shoot",
-  EC: "editors",
-  DC: "directors",
-  SE: "sound",
-  CG: "color",
-  MIX: "sound",
-  MF: "sound",
-  MP: "sound",
-  MR: "sound",
-  CGT: "color",
-  CRV: "color",
-  CF: "color",
-};
-
+// Kind mapping so events created from the dropdown pick a sensible bar color
+// (shared with the Excel import: src/lib/timeline-import.ts).
 function inferKind(code: string): BarKind {
   return KIND_OF_CODE[code] ?? "prep";
 }
@@ -428,6 +418,7 @@ export function ProductionTimelinePage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [draftsOpen, setDraftsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const { run: runExport, isPending: exportPending } = useExportAction();
 
   const { settings: phaseSettings, update: updatePhaseSetting } =
@@ -617,6 +608,53 @@ export function ProductionTimelinePage() {
 
   const canEdit = (activeVersion?.status ?? "Draft") === "Draft";
 
+  // ── Excel template + import ──────────────────────────────────────────────
+  // Import follows the page's own edit rule (only the open Draft is editable)
+  // and, for users with an assigned RBAC role, the timeline module's edit flag.
+  // Users without a role keep the legacy behaviour, like every other edit here;
+  // RLS on timeline_bars / timeline_milestones still decides server-side.
+  const permissions = usePermissions();
+  const moduleAllowsEdit =
+    permissions.isReady && (!permissions.role || permissions.can("timeline", "edit"));
+  const canImport = canEdit && moduleAllowsEdit && ready;
+  const importRows = useMemo(
+    () => rows.map((r) => ({ id: r.id, label: r.label, ar: r.ar })),
+    [rows],
+  );
+  const importDictionary = useMemo(
+    () => dictionary.map((c) => ({ code: c.code, name: c.name, category: c.category })),
+    [dictionary],
+  );
+  const handleDownloadTemplate = () =>
+    runExport("template", async () => {
+      try {
+        const [{ loadExcelJs }, { buildTimelineTemplateWorkbook }, { saveBrandedWorkbook }] =
+          await Promise.all([
+            import("@/lib/lazy-export-libs"),
+            import("@/lib/timeline-template"),
+            import("@/lib/export/xlsx-report"),
+          ]);
+        const ExcelJS = await loadExcelJs();
+        const wb = buildTimelineTemplateWorkbook(ExcelJS, {
+          projectName: activeProjectName,
+          rows: importRows,
+          dictionary: importDictionary,
+        });
+        await saveBrandedWorkbook(wb, "Production Timeline Template");
+      } catch (err) {
+        toast.error(t("timeline_import.template_failed"), {
+          description: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
+  const openImport = () => {
+    if (!canImport) {
+      toast.error(t("production_timeline.you_dont_have_permission_to_edit_the_timeline"));
+      return;
+    }
+    setImportOpen(true);
+  };
+
   // ── Drag a card from the bank onto a track/date ──────────────────────────
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const [dragCard, setDragCard] = useState<DrawerCard | null>(null);
@@ -774,6 +812,33 @@ export function ProductionTimelinePage() {
               <FileSpreadsheet className="size-3.5" />
             )}{" "}
             Excel
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleDownloadTemplate()}
+            disabled={exportPending("template")}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
+            title={t("timeline_import.download_template_hint")}
+          >
+            {exportPending("template") ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Download className="size-3.5" />
+            )}{" "}
+            {t("timeline_import.download_template")}
+          </button>
+          <button
+            type="button"
+            onClick={openImport}
+            disabled={!canImport}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
+            title={
+              canImport
+                ? t("timeline_import.import_hint")
+                : t("production_timeline.you_dont_have_permission_to_edit_the_timeline")
+            }
+          >
+            <Upload className="size-3.5" /> {t("timeline_import.import_button")}
           </button>
           <button
             type="button"
@@ -1076,6 +1141,26 @@ export function ProductionTimelinePage() {
           onClose={() => setDrawerOpen(false)}
           onSelectCard={(card) => handleSelectCard(card)}
           counts={instanceCounts}
+        />
+      )}
+
+      {importOpen && canImport && (
+        <TimelineImportDialog
+          rows={importRows}
+          dictionary={importDictionary}
+          currentCount={bars.length + milestones.length}
+          versionLabel={activeVersion.label}
+          onClose={() => setImportOpen(false)}
+          onApply={(plan, importMode) => {
+            commit((draft) => applyImportPlan(draft, plan, importMode), activeVersionId);
+            setImportOpen(false);
+            toast.success(
+              t("timeline_import.imported_toast", {
+                count: plan.bars.length + plan.milestones.length,
+                version: activeVersion.label,
+              }),
+            );
+          }}
         />
       )}
 
