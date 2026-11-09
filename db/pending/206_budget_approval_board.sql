@@ -67,11 +67,9 @@
 --      resolved in the browser, org admins writing the column) is refused.
 --      Super admin and the backend (no auth.uid(): service role, demo seed,
 --      migrations) are not affected.
---    * publish_budget_version: direct publish only while the budget is
---      'Draft' and no request is pending (projects that never used approvals
---      keep working). Once a budget was submitted / approved / rejected, a
---      draft becomes active only through an approved request. No super-admin
---      exception (none existed — it never checked the lock).
+--    * publish_budget_version: direct publish only for a project that never
+--      went to the board (can_publish_budget_directly — see 8 / H1); then a
+--      draft becomes active only through an approved request.
 --    * create_budget_draft(project, name, blank): new optional "blank" draft
 --      (not copied from anything). Executives cannot create drafts.
 -- 5. Notifications on submit (approvers) and decision (submitter), category
@@ -82,8 +80,35 @@
 -- 6. Legacy: budget_approvers stays (read by nothing new, policies untouched).
 --    A project that is 'Pending Approval' with legacy approvers, at least one
 --    of them still pending and none rejected, gets one pending request on its
---    active version with those decisions copied (legacy = true, submitter
---    unknown), so the new screen can finish it.
+--    active version (budget_approval_backfill_legacy, see 8 / L3).
+--
+-- 8. Security review (2026-11) — fixes folded into this file before it was
+--    ever applied:
+--    H1  publish_budget_version: a non-active version becomes active directly
+--        only while can_publish_budget_directly(project): budget 'Draft', no
+--        approval request of ANY status, no member with an executive title.
+--        No super-admin exception (none needed: the approval flow or the
+--        super-admin status reset covers every case).
+--    M2  projects.fx_rate / currency frozen while the budget is 'Pending
+--        Approval' / 'Locked/Approved' or a request is pending (super admin
+--        and backend excepted) — the SAR value of an approved budget cannot
+--        move afterwards.
+--    M3  decide_budget_approval re-checks the executive title at decision
+--        time and refuses anyone who wrote the version
+--        (budget_version_editors: creator, audit_history of its lines,
+--        uploaded_by); such users are left out of the default approvers and
+--        refused as named approvers.
+--    L2  budget_lines writes take a share lock on their version row (submit
+--        holds FOR UPDATE): the request total always matches the frozen
+--        version; a write behind a submission is refused.
+--    L3  legacy backfill in budget_approval_backfill_legacy(): sender from
+--        the last status move to 'Pending Approval', approvers filtered
+--        (access + executive title, not the sender).
+--    L4  board members never insert / update budget_versions.
+--    L5  request tables: REVOKE ALL from anon / authenticated, SELECT only.
+--    L6  is_budget_executive / can_submit_budget not executable by clients.
+--    L7  budget_status_events inserts by clients: actor_id = auth.uid() and
+--        never a database-written action.
 --
 -- Not changed: budget_upload_batches keep the project-level
 -- is_budget_editable(); links from contracts / POs / invoices to budget
@@ -96,6 +121,10 @@
 -- apply only after owner approval (SECURITY.md).
 --
 -- Rollback (in this order):
+--   re-create the bse_insert_admin policy from 20260718183128;
+--   DROP TRIGGER IF EXISTS zz_trg_budget_line_version_lock ON public.budget_lines;
+--   DROP FUNCTION IF EXISTS public.budget_line_version_lock(), public.budget_approval_backfill_legacy(),
+--     public.budget_version_editors(uuid), public.can_publish_budget_directly(uuid);
 --   DROP TRIGGER IF EXISTS trg_guard_project_budget_status ON public.projects;
 --   DROP TRIGGER IF EXISTS trg_guard_budget_version ON public.budget_versions;
 --   DROP TRIGGER IF EXISTS trg_guard_budget_version_delete ON public.budget_versions;
@@ -148,6 +177,8 @@ CREATE INDEX IF NOT EXISTS budget_approval_requests_version_idx
 COMMENT ON TABLE public.budget_approval_requests IS
   'A budget version sent for board approval. Written only by submit_budget_for_approval / decide_budget_approval / cancel_budget_approval. db/pending/206.';
 
+-- L5: default privileges give anon / authenticated ALL (TRUNCATE ignores RLS)
+REVOKE ALL ON public.budget_approval_requests FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.budget_approval_requests TO authenticated;
 GRANT ALL ON public.budget_approval_requests TO service_role;
 ALTER TABLE public.budget_approval_requests ENABLE ROW LEVEL SECURITY;
@@ -173,6 +204,7 @@ CREATE INDEX IF NOT EXISTS budget_approval_decisions_approver_idx
 COMMENT ON TABLE public.budget_approval_decisions IS
   'One approver of a budget_approval_requests row and their decision. Written only by the 206 functions.';
 
+REVOKE ALL ON public.budget_approval_decisions FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.budget_approval_decisions TO authenticated;
 GRANT ALL ON public.budget_approval_decisions TO service_role;
 ALTER TABLE public.budget_approval_decisions ENABLE ROW LEVEL SECURITY;
@@ -220,6 +252,40 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS
               OR EXISTS (SELECT 1 FROM public.project_members pm
                           WHERE pm.project_id = p.id AND pm.user_id = _uid
                             AND pm.role IN ('owner', 'admin', 'producer')))))
+$$;
+
+-- M3: everyone who wrote this version — its creator, whoever inserted /
+-- changed / deleted one of its lines (audit_history, every budget_lines write
+-- is logged there) and whoever imported lines into it. They are makers: they
+-- never approve it.
+CREATE OR REPLACE FUNCTION public.budget_version_editors(_version uuid)
+RETURNS uuid[] LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  WITH v AS (SELECT id, project_id, created_by FROM public.budget_versions WHERE id = _version)
+  SELECT COALESCE(array_agg(DISTINCT u) FILTER (WHERE u IS NOT NULL), '{}'::uuid[]) FROM (
+    SELECT v.created_by AS u FROM v
+    UNION ALL
+    SELECT ah.actor_id FROM public.audit_history ah, v
+     WHERE ah.table_name = 'budget_lines' AND ah.project_id = v.project_id
+       AND (ah.new_row->>'version_id' = v.id::text OR ah.old_row->>'version_id' = v.id::text)
+    UNION ALL
+    SELECT bl.uploaded_by FROM public.budget_lines bl, v WHERE bl.version_id = v.id
+  ) x
+$$;
+
+-- H1: may a non-active version of this project be made active WITHOUT an
+-- approved request? Only while the project never went to the board: budget
+-- 'Draft', no approval request of any status, and no member holding an
+-- executive title. Otherwise the board decides.
+CREATE OR REPLACE FUNCTION public.can_publish_budget_directly(_project uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.projects p
+     WHERE p.id = _project
+       AND public.can_access_project(auth.uid(), p.organization_id, p.id)
+       AND COALESCE(p.budget_status::text, 'Draft') = 'Draft'
+       AND NOT EXISTS (SELECT 1 FROM public.budget_approval_requests r WHERE r.project_id = p.id)
+       AND NOT EXISTS (SELECT 1 FROM public.project_members pm
+                        WHERE pm.project_id = p.id AND pm.executive_title IS NOT NULL))
 $$;
 
 -- ---------------------------------------------------------------------
@@ -270,6 +336,34 @@ CREATE POLICY budget_lines_delete ON public.budget_lines
   USING (public.can_access_project(auth.uid(), organization_id, project_id)
          AND public.can_edit_budget_line(project_id, organization_id, version_id));
 
+-- L2: a line write takes a share lock on its version row; submit takes FOR
+-- UPDATE on it. So a write in flight makes the submission wait for it (the
+-- request total then includes it), and a write that waits behind a
+-- submission sees the pending request once it gets the lock and is refused.
+CREATE OR REPLACE FUNCTION public.budget_line_version_lock()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v uuid;
+BEGIN
+  FOREACH v IN ARRAY ARRAY[
+      CASE WHEN TG_OP <> 'INSERT' THEN OLD.version_id END,
+      CASE WHEN TG_OP <> 'DELETE' THEN NEW.version_id END] LOOP
+    CONTINUE WHEN v IS NULL;
+    PERFORM 1 FROM public.budget_versions WHERE id = v FOR SHARE;
+    IF auth.uid() IS NOT NULL
+       AND EXISTS (SELECT 1 FROM public.budget_approval_requests r WHERE r.version_id = v AND r.status = 'pending')
+       AND EXISTS (SELECT 1 FROM public.budget_versions bv WHERE bv.id = v) THEN
+      RAISE EXCEPTION 'this budget version is waiting for board approval and cannot be changed'
+        USING ERRCODE = '42501';
+    END IF;
+  END LOOP;
+  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+-- "zz": after budget_lines_stamp_version has set the version of a new line
+DROP TRIGGER IF EXISTS zz_trg_budget_line_version_lock ON public.budget_lines;
+CREATE TRIGGER zz_trg_budget_line_version_lock BEFORE INSERT OR UPDATE OR DELETE ON public.budget_lines
+  FOR EACH ROW EXECUTE FUNCTION public.budget_line_version_lock();
+
 -- ---------------------------------------------------------------------
 -- 4. Guards: version status and project budget status move only through
 --    the functions (kwalis.budget_approval = on, transaction-local)
@@ -281,6 +375,11 @@ DECLARE
   v_rpc boolean := COALESCE(current_setting('kwalis.budget_approval', true), '') = 'on';
 BEGIN
   IF v_uid IS NULL OR v_rpc OR public.is_super_admin(v_uid) THEN RETURN NEW; END IF;
+  -- L4: board / executive members never write budget versions
+  IF public.is_budget_executive(v_uid, NEW.project_id)
+     OR (TG_OP = 'UPDATE' AND public.is_budget_executive(v_uid, OLD.project_id)) THEN
+    RAISE EXCEPTION 'board members cannot create or change budget versions' USING ERRCODE = '42501';
+  END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW.status = 'draft' THEN RETURN NEW; END IF;
     IF NEW.status = 'active' AND NOT EXISTS (
@@ -329,6 +428,16 @@ CREATE OR REPLACE FUNCTION public.guard_project_budget_status()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_uid uuid := auth.uid();
 BEGIN
+  -- M2: the SAR value of the budget hangs on projects.fx_rate (and the
+  -- project currency): frozen while the budget is under review or approved.
+  IF (NEW.fx_rate IS DISTINCT FROM OLD.fx_rate OR NEW.currency IS DISTINCT FROM OLD.currency)
+     AND v_uid IS NOT NULL AND NOT public.is_super_admin(v_uid)
+     AND (OLD.budget_status IN ('Pending Approval', 'Locked/Approved')
+          OR EXISTS (SELECT 1 FROM public.budget_approval_requests r
+                      WHERE r.project_id = OLD.id AND r.status = 'pending')) THEN
+    RAISE EXCEPTION 'the exchange rate / currency of the project cannot change while its budget is under approval or approved (status: %)',
+      OLD.budget_status USING ERRCODE = '42501';
+  END IF;
   IF (NEW.budget_status IS DISTINCT FROM OLD.budget_status
       OR NEW.budget_locked_at IS DISTINCT FROM OLD.budget_locked_at
       OR NEW.budget_locked_by IS DISTINCT FROM OLD.budget_locked_by)
@@ -343,7 +452,7 @@ END;
 $$;
 DROP TRIGGER IF EXISTS trg_guard_project_budget_status ON public.projects;
 CREATE TRIGGER trg_guard_project_budget_status
-  BEFORE UPDATE OF budget_status, budget_locked_at, budget_locked_by ON public.projects
+  BEFORE UPDATE OF budget_status, budget_locked_at, budget_locked_by, fx_rate, currency ON public.projects
   FOR EACH ROW EXECUTE FUNCTION public.guard_project_budget_status();
 
 -- log_budget_status_change (copy of 20260715114032) — "206": the legacy
@@ -461,12 +570,13 @@ BEGIN
   IF p_approvers IS NULL OR cardinality(p_approvers) = 0 THEN
     SELECT array_agg(pm.user_id ORDER BY pm.created_at) INTO v_ids
       FROM public.project_members pm
-     WHERE pm.project_id = p_project AND pm.executive_title = 'Board Member' AND pm.user_id <> v_uid;
+     WHERE pm.project_id = p_project AND pm.executive_title = 'Board Member' AND pm.user_id <> v_uid
+       AND pm.user_id <> ALL (public.budget_version_editors(p_version));                 -- M3
   ELSE
     SELECT array_agg(DISTINCT x) INTO v_ids FROM unnest(p_approvers) x WHERE x IS NOT NULL;
   END IF;
   IF v_ids IS NULL OR cardinality(v_ids) = 0 THEN
-    RAISE EXCEPTION 'no board member on this project: give a project member the Board Member title first'
+    RAISE EXCEPTION 'no board member on this project who did not write this budget: give a project member the Board Member title first'
       USING ERRCODE = '22023';
   END IF;
   IF cardinality(v_ids) > 10 THEN
@@ -474,6 +584,10 @@ BEGIN
   END IF;
   IF v_uid = ANY (v_ids) THEN
     RAISE EXCEPTION 'you cannot approve a budget you send (maker-checker)' USING ERRCODE = '42501';
+  END IF;
+  IF v_ids && public.budget_version_editors(p_version) THEN                               -- M3
+    RAISE EXCEPTION 'an approver wrote lines of this budget version and cannot approve it (maker-checker)'
+      USING ERRCODE = '42501';
   END IF;
   SELECT count(*) INTO v_bad FROM unnest(v_ids) x
    WHERE NOT EXISTS (SELECT 1 FROM public.project_members pm
@@ -548,6 +662,13 @@ BEGIN
   END IF;
   IF v_row.decision <> 'pending' THEN
     RAISE EXCEPTION 'you already decided on this request' USING ERRCODE = '22023';
+  END IF;
+  IF NOT public.is_budget_executive(v_uid, v_req.project_id) THEN                          -- M3a
+    RAISE EXCEPTION 'you no longer hold an executive title on this project' USING ERRCODE = '42501';
+  END IF;
+  IF v_req.version_id IS NOT NULL AND v_uid = ANY (public.budget_version_editors(v_req.version_id)) THEN  -- M3b
+    RAISE EXCEPTION 'you wrote lines of this budget version; another person must approve it (maker-checker)'
+      USING ERRCODE = '42501';
   END IF;
   IF v_dec NOT IN ('approved', 'rejected') THEN
     RAISE EXCEPTION 'decision must be approved or rejected' USING ERRCODE = '22023';
@@ -681,8 +802,7 @@ BEGIN
     RAISE EXCEPTION 'Only project or company admins can publish a budget version';
   END IF;
   SELECT budget_status::text INTO _bstatus FROM public.projects WHERE id = _project FOR UPDATE;   -- 206
-  IF _vstatus <> 'active' AND (COALESCE(_bstatus, 'Draft') <> 'Draft'
-     OR EXISTS (SELECT 1 FROM public.budget_approval_requests r WHERE r.project_id = _project AND r.status = 'pending')) THEN
+  IF _vstatus <> 'active' AND NOT public.can_publish_budget_directly(_project) THEN            -- 206 H1
     RAISE EXCEPTION 'this budget goes through board approval (status: %): send the draft for approval instead of publishing it',
       _bstatus USING ERRCODE = '42501';
   END IF;
@@ -743,8 +863,15 @@ REVOKE ALL ON FUNCTION public.create_budget_draft(uuid, text, boolean) FROM PUBL
 REVOKE ALL ON FUNCTION public.guard_budget_version() FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.guard_budget_version_delete() FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.guard_project_budget_status() FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.is_budget_executive(uuid, uuid) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.can_submit_budget(uuid, uuid) TO authenticated, service_role;
+-- L6: internal helpers (they take any user id) — not callable by clients
+REVOKE ALL ON FUNCTION public.is_budget_executive(uuid, uuid) FROM authenticated;
+REVOKE ALL ON FUNCTION public.can_submit_budget(uuid, uuid) FROM authenticated;
+REVOKE ALL ON FUNCTION public.budget_version_editors(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.budget_line_version_lock() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.can_publish_budget_directly(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.is_budget_executive(uuid, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.can_submit_budget(uuid, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.can_publish_budget_directly(uuid) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.submit_budget_for_approval(uuid, uuid, uuid[], text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.decide_budget_approval(uuid, text, text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.cancel_budget_approval(uuid, text) TO authenticated, service_role;
@@ -753,10 +880,41 @@ GRANT EXECUTE ON FUNCTION public.publish_budget_version(uuid) TO authenticated, 
 GRANT EXECUTE ON FUNCTION public.create_budget_draft(uuid, text, boolean) TO authenticated, service_role;
 
 -- ---------------------------------------------------------------------
--- 6. Legacy pending approvals (budget_approvers) → one pending request
+-- 6. budget_status_events: no forged rows (L7)
+--    Clients may only log rows as themselves, and never the actions written
+--    by the database (status changes, approver / approval events). Those come
+--    from the SECURITY DEFINER functions and triggers (table owner, RLS not
+--    applied) or with kwalis.budget_approval = on.
 -- ---------------------------------------------------------------------
-DO $$
-DECLARE r record; v_req uuid;
+DROP POLICY IF EXISTS bse_insert_admin ON public.budget_status_events;
+CREATE POLICY bse_insert_admin ON public.budget_status_events
+FOR INSERT
+WITH CHECK (
+  actor_id = auth.uid()
+  AND (action NOT IN ('status_change', 'approver_added', 'approver_removed', 'approver_approved',
+                      'approver_rejected', 'approval_submitted', 'approval_cancelled')
+       OR COALESCE(current_setting('kwalis.budget_approval', true), '') = 'on')
+  AND (
+    public.is_super_admin(auth.uid())
+    OR (
+      organization_id IS NOT NULL
+      AND public.is_org_admin(auth.uid(), organization_id)
+      AND public.can_access_project(auth.uid(), organization_id, project_id)
+    )
+  )
+);
+
+-- ---------------------------------------------------------------------
+-- 7. Legacy pending approvals (budget_approvers) → one pending request (L3)
+--    Sender = the actor of the last move to 'Pending Approval'
+--    (budget_status_events). Approvers kept only when they can still access
+--    the project, hold an executive title on it and are not the sender. A
+--    project left without an approver is not carried over (the producer
+--    sends again). Returns the number of requests created; idempotent.
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.budget_approval_backfill_legacy()
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE r record; v_req uuid; v_sender uuid; v_n int := 0;
 BEGIN
   FOR r IN
     SELECT p.id AS project_id, p.organization_id, bv.id AS version_id, bv.version_name
@@ -767,13 +925,31 @@ BEGIN
        AND NOT EXISTS (SELECT 1 FROM public.budget_approvers ba WHERE ba.project_id = p.id AND ba.decision = 'rejected')
        AND NOT EXISTS (SELECT 1 FROM public.budget_approval_requests q WHERE q.project_id = p.id AND q.status = 'pending')
   LOOP
+    SELECT e.actor_id INTO v_sender FROM public.budget_status_events e
+     WHERE e.project_id = r.project_id AND e.action = 'status_change' AND e.to_status = 'Pending Approval'
+     ORDER BY e.created_at DESC LIMIT 1;
+    CONTINUE WHEN NOT EXISTS (
+      SELECT 1 FROM public.budget_approvers ba
+       WHERE ba.project_id = r.project_id
+         AND ba.user_id IS DISTINCT FROM v_sender
+         AND public.can_access_project(ba.user_id, r.organization_id, r.project_id)
+         AND public.is_budget_executive(ba.user_id, r.project_id));
     INSERT INTO public.budget_approval_requests(project_id, organization_id, version_id, version_name, kind, status,
-           prev_budget_status, legacy, note)
+           prev_budget_status, legacy, note, submitted_by)
     VALUES (r.project_id, r.organization_id, r.version_id, r.version_name, 'active', 'pending', 'Draft', true,
-            'Carried over from the earlier approval list')
+            'Carried over from the earlier approval list', v_sender)
     RETURNING id INTO v_req;
     INSERT INTO public.budget_approval_decisions(request_id, project_id, organization_id, approver_id, decision, reason, decided_at)
     SELECT v_req, ba.project_id, r.organization_id, ba.user_id, ba.decision, left(ba.note, 1000), ba.decided_at
-      FROM public.budget_approvers ba WHERE ba.project_id = r.project_id;
+      FROM public.budget_approvers ba
+     WHERE ba.project_id = r.project_id
+       AND ba.user_id IS DISTINCT FROM v_sender
+       AND public.can_access_project(ba.user_id, r.organization_id, r.project_id)
+       AND public.is_budget_executive(ba.user_id, r.project_id);
+    v_n := v_n + 1;
   END LOOP;
-END $$;
+  RETURN v_n;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.budget_approval_backfill_legacy() FROM PUBLIC, anon, authenticated;
+SELECT public.budget_approval_backfill_legacy();

@@ -6223,6 +6223,7 @@
     "notify_approved_title": "تم اعتماد الميزانية: {{project}}",
     "notify_approved_body": "تم اعتماد الميزانية {{version}} وأصبحت الميزانية الحالية المقفلة.",
     "notify_rejected_title": "رُفضت الميزانية: {{project}}",
-    "notify_rejected_body": "رُفضت الميزانية {{version}}. السبب: {{reason}}"
+    "notify_rejected_body": "رُفضت الميزانية {{version}}. السبب: {{reason}}",
+    "banner_under_review": "هذه النسخة بانتظار اعتماد مجلس الإدارة وهي للقراءة فقط. اسحب الطلب لتعديلها."
   }
 }

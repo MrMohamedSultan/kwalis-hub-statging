@@ -642,7 +642,14 @@ function SendForApprovalForm({
     if (!effectiveVersion || selected.size === 0) return;
     setBusy(true);
     try {
-      await submitBudgetForApproval(projectId, effectiveVersion, Array.from(selected), note);
+      // Untouched selection → let the database pick the default approvers
+      // (every Board Member who did not write this version — maker-checker).
+      await submitBudgetForApproval(
+        projectId,
+        effectiveVersion,
+        chosen === null ? null : Array.from(selected),
+        note,
+      );
       toast.success(t("budgetApproval.toast_sent"));
       setNote("");
       setChosen(null);

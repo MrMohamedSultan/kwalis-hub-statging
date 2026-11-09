@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   canDecide,
-  canPublishDirectly,
   canSubmitBudget,
   decisionProgress,
   rejectReasonError,
@@ -47,12 +46,6 @@ describe("versions that can be sent", () => {
   });
   it("nothing while a request is pending", () => {
     expect(submittableVersions(versions, "Draft", true)).toEqual([]);
-  });
-  it("direct publish only for budgets that never went to the board", () => {
-    expect(canPublishDirectly("Draft", false)).toBe(true);
-    expect(canPublishDirectly("Draft", true)).toBe(false);
-    expect(canPublishDirectly("Locked/Approved", false)).toBe(false);
-    expect(canPublishDirectly("Revision Requested", false)).toBe(false);
   });
 });
 
