@@ -39,11 +39,6 @@ export function submittableVersions<T extends VersionLite>(
   );
 }
 
-/** Direct "Make Active" only for budgets that never went through approval. */
-export function canPublishDirectly(budgetStatus: BudgetStatusValue, hasPending: boolean): boolean {
-  return budgetStatus === "Draft" && !hasPending;
-}
-
 export function decisionProgress(decisions: { decision: ApprovalDecisionValue }[]): {
   total: number;
   approved: number;

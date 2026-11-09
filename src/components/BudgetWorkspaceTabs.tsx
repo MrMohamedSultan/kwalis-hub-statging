@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { CheckCircle2, GitBranch, Loader2, Lock, Plus, Trash2 } from "lucide-react";
@@ -13,7 +13,8 @@ import { useStore } from "@/lib/store";
 import { invalidateBudgetCaches } from "@/lib/budget-cache-bus";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { recordAudit } from "@/lib/audit-log";
-import { canPublishDirectly, type BudgetStatusValue } from "@/lib/budget-approval";
+import type { BudgetStatusValue } from "@/lib/budget-approval";
+import { supabase } from "@/integrations/supabase/client";
 
 /**
  * Budget workspace separation.
@@ -40,6 +41,23 @@ export function BudgetWorkspaceTabs({
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [confirmPublish, setConfirmPublish] = useState<string | null>(null);
 
+  // The database decides (can_publish_budget_directly): only a project that
+  // never went to the board — budget Draft, no approval request ever, no
+  // member with an executive title.
+  const [directPublish, setDirectPublish] = useState(false);
+  useEffect(() => {
+    let cancel = false;
+    if (!projectId) return;
+    void (supabase as any)
+      .rpc("can_publish_budget_directly", { _project: projectId })
+      .then(({ data, error }: { data: unknown; error: unknown }) => {
+        if (!cancel) setDirectPublish(!error && data === true);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [projectId, budgetStatus, versions.length]);
+
   if (!projectId) return null;
 
   const active = versions.find((v) => v.status === "active") ?? null;
@@ -60,7 +78,6 @@ export function BudgetWorkspaceTabs({
 
   // 206: once the budget went to the board, a draft becomes active only
   // through an approved request ("Status & approvals" → Send for approval).
-  const directPublish = canPublishDirectly(budgetStatus, false);
 
   const onCreateDraft = async (blank = false) => {
     setBusy("draft");

@@ -347,6 +347,13 @@ export function useBudgetApprovalRequests(projectId: string | null, limit = 10) 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+  // Every approval action dispatches this event: all screens stay in step.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onChange = () => void refresh();
+    window.addEventListener("kwalis:budget-status-change", onChange);
+    return () => window.removeEventListener("kwalis:budget-status-change", onChange);
+  }, [refresh]);
   return { requests, loading, refresh };
 }
 

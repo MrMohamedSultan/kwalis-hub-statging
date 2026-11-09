@@ -181,3 +181,169 @@ UPDATE projects SET budget_status = 'Draft' WHERE id = :'P2';
 SELECT t.eq('super admin can still set the status', (SELECT budget_status::text FROM projects WHERE id = :'P2'), 'Draft');
 RESET ROLE;
 SELECT set_config('request.jwt.claim.sub', '', false);
+
+-- =====================================================================
+-- Security review fixes (H1, M2, M3, L2–L7)
+-- =====================================================================
+\set P3 '20000000-0000-0000-0000-000000000208'
+\set P5 '20000000-0000-0000-0000-000000000209'
+\set V31 '40000000-0000-0000-0000-000000000231'
+\set V32 '40000000-0000-0000-0000-000000000232'
+\set V51 '40000000-0000-0000-0000-000000000251'
+INSERT INTO projects(id,owner_id,name,code,organization_id,currency,fx_rate,status) VALUES
+ (:'P3', :'D', 'Board fixes', 'BRD3', :'O1', 'USD', 3.75, 'Pre-Production'),
+ (:'P5', :'D', 'Legacy approval', 'BRD5', :'O1', 'USD', 3.75, 'Pre-Production');
+INSERT INTO project_members(project_id,user_id,role,executive_title) VALUES
+ (:'P3', :'A', 'producer', NULL), (:'P3', :'C', 'member', NULL),
+ (:'P3', :'F', 'member', 'Board Member'), (:'P3', :'G', 'member', 'Board Member'),
+ (:'P5', :'A', 'producer', NULL), (:'P5', :'C', 'member', NULL), (:'P5', :'G', 'member', 'Board Member')
+ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role, executive_title = EXCLUDED.executive_title;
+UPDATE project_members SET role = 'admin' WHERE project_id IN (:'P3', :'P5') AND user_id = :'D';
+INSERT INTO budget_versions(id,project_id,organization_id,version_no,version_name,status) VALUES
+ (:'V31', :'P3', :'O1', 1, 'v1.0', 'active'), (:'V32', :'P3', :'O1', 2, 'v2.0', 'draft'),
+ (:'V51', :'P5', :'O1', 1, 'v1.0', 'active');
+INSERT INTO budget_lines(project_id,organization_id,version_id,header_code,main_code,topsheet_code,description,amount,rate,x,unit,currency) VALUES
+ (:'P3', :'O1', :'V31', '2100', '2101', '2100', 'Camera', 1, 100, 1, 'Package', 'USD'),
+ (:'P3', :'O1', :'V32', '2100', '2101', '2100', 'Camera', 1, 200, 1, 'Package', 'USD'),
+ (:'P5', :'O1', :'V51', '2100', '2101', '2100', 'Camera', 1, 300, 1, 'Package', 'SAR');
+
+-- ---------------------------------------------------------------- H1
+SELECT t.as_user(:'D');
+SELECT t.eq('H1 good: a project without board members and requests publishes directly', can_publish_budget_directly(:'P2'), true);
+SELECT t.eq('H1: a project with a board member never publishes directly', can_publish_budget_directly(:'P3'), false);
+SELECT t.denied('H1: direct publish refused while the project has a board member', format($$SELECT publish_budget_version(%L)$$, :'V32'));
+SELECT t.as_user(:'A');
+SELECT submit_budget_for_approval(:'P3', :'V32', ARRAY[:'F']::uuid[]) AS r5 \gset
+SELECT t.as_user(:'F');
+SELECT decide_budget_approval(:'r5', 'rejected', 'Not now');
+SELECT t.eq('H1: rejected draft request leaves the project in Draft', (SELECT budget_status::text FROM projects WHERE id = :'P3'), 'Draft');
+SELECT t.as_user(:'E');
+UPDATE project_members SET executive_title = NULL WHERE project_id = :'P3' AND user_id IN (:'F', :'G');
+SELECT t.as_user(:'D');
+SELECT t.denied('H1: a rejected draft cannot be published directly (the project had a request)', format($$SELECT publish_budget_version(%L)$$, :'V32'));
+SELECT t.eq('H1: still a draft', (SELECT status FROM budget_versions WHERE id = :'V32'), 'draft');
+SELECT t.as_user(:'E');
+UPDATE project_members SET executive_title = 'Board Member' WHERE project_id = :'P3' AND user_id IN (:'F', :'G');
+
+-- ---------------------------------------------------------------- M2
+SELECT t.as_user(:'D');
+SELECT t.denied('M2: fx rate of a locked budget cannot change', format($$UPDATE projects SET fx_rate = 10 WHERE id = %L$$, :'P'));
+SELECT t.denied('M2: currency of a locked budget cannot change', format($$UPDATE projects SET currency = 'EUR' WHERE id = %L$$, :'P'));
+SELECT t.eq('M2: locked total unchanged', (SELECT fx_rate FROM projects WHERE id = :'P'), 3.75::numeric);
+UPDATE projects SET fx_rate = 3.80 WHERE id = :'P2';
+SELECT t.eq('M2 good: fx of a project in Draft without a pending request still changes', (SELECT fx_rate FROM projects WHERE id = :'P2'), 3.80::numeric);
+SELECT t.as_user(:'A');
+SELECT submit_budget_for_approval(:'P3', :'V32', ARRAY[:'F', :'G']::uuid[]) AS r6 \gset
+SELECT t.as_user(:'D');
+SELECT t.denied('M2: fx frozen while a draft request is pending', format($$UPDATE projects SET fx_rate = 5 WHERE id = %L$$, :'P3'));
+SELECT t.as_user(:'E');
+UPDATE projects SET fx_rate = 3.75 WHERE id = :'P';
+SELECT t.eq('M2 good: super admin may still correct it', (SELECT fx_rate FROM projects WHERE id = :'P'), 3.75::numeric);
+
+-- ---------------------------------------------------------------- L2
+SELECT t.as_user(:'E');
+SELECT t.denied('L2: a line of a version under review cannot change, even for the platform owner', format($$UPDATE budget_lines SET rate = 1 WHERE version_id = %L$$, :'V32'));
+SELECT t.denied('L2: no line added to a version under review', format($$INSERT INTO budget_lines(project_id,organization_id,version_id,header_code,main_code,description,amount,rate,currency) VALUES (%L,%L,%L,'2100','2102','x',1,1,'SAR')$$, :'P3', :'O1', :'V32'));
+SELECT t.eq('L2 good: request total is the frozen version total', (SELECT total_sar FROM budget_approval_requests WHERE id = :'r6'), 750.00::numeric);
+SELECT t.eq('L2: the line lock trigger is installed', (SELECT count(*) FROM pg_trigger WHERE tgname = 'zz_trg_budget_line_version_lock'), 1::bigint);
+
+-- ---------------------------------------------------------------- M3
+-- (a) an approver whose title was removed cannot decide
+SELECT t.as_user(:'E');
+UPDATE project_members SET executive_title = NULL WHERE project_id = :'P3' AND user_id = :'G';
+SELECT t.as_user(:'G');
+SELECT t.denied('M3a: an approver without an executive title any more cannot decide', format($$SELECT decide_budget_approval(%L, 'approved')$$, :'r6'));
+SELECT t.as_user(:'F');
+SELECT t.eq('M3a good: an approver still holding the title decides', decide_budget_approval(:'r6', 'approved'), 'pending');
+-- (b) an approver who wrote lines of the version cannot decide
+SELECT t.as_user(:'E');
+UPDATE project_members SET executive_title = 'Board Member' WHERE project_id = :'P3' AND user_id = :'G';
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false);
+INSERT INTO audit_history(table_name, record_id, organization_id, project_id, actor_id, operation, new_row)
+SELECT 'budget_lines', bl.id, :'O1', :'P3', :'G', 'UPDATE', jsonb_build_object('version_id', :'V32')
+  FROM budget_lines bl WHERE bl.version_id = :'V32' LIMIT 1;
+SELECT t.as_user(:'G');
+SELECT t.denied('M3b: an approver who edited a line of the version cannot approve it', format($$SELECT decide_budget_approval(%L, 'approved')$$, :'r6'));
+SELECT t.as_user(:'A');
+SELECT cancel_budget_approval(:'r6', 'restart');
+-- C writes a line of the draft, then becomes a board member
+SELECT t.as_user(:'C');
+UPDATE budget_lines SET notes = 'C was here' WHERE version_id = :'V32';
+SELECT t.as_user(:'E');
+UPDATE project_members SET executive_title = 'Board Member' WHERE project_id = :'P3' AND user_id = :'C';
+SELECT t.as_user(:'A');
+SELECT t.denied('M3b: an editor of the version cannot be named approver', format($$SELECT submit_budget_for_approval(%L, %L, ARRAY[%L]::uuid[])$$, :'P3', :'V32', :'C'));
+SELECT submit_budget_for_approval(:'P3', :'V32') AS r7 \gset
+SELECT t.eq('M3b good: default approvers leave out every editor of the version (C, G)',
+  (SELECT string_agg(approver_id::text, ',') FROM budget_approval_decisions WHERE request_id = :'r7'), :'F');
+SELECT t.as_user(:'C');
+SELECT t.denied('M3b: the editor is not an approver of the request', format($$SELECT decide_budget_approval(%L, 'approved')$$, :'r7'));
+SELECT t.as_user(:'F');
+SELECT t.eq('M3b good: an approver who never wrote the version approves', decide_budget_approval(:'r7', 'approved'), 'approved');
+SELECT t.eq('M3b good: draft promoted', (SELECT status FROM budget_versions WHERE id = :'V32'), 'active');
+
+-- ---------------------------------------------------------------- L4
+SELECT t.as_user(:'F');
+SELECT t.denied('L4: a board member cannot rename a version', format($$UPDATE budget_versions SET version_name = 'hacked' WHERE id = %L$$, :'V1'));
+SELECT t.denied('L4: a board member cannot insert a version', format($$INSERT INTO budget_versions(project_id,organization_id,version_no,version_name,status) VALUES (%L,%L,99,'F draft','draft')$$, :'P', :'O1'));
+SELECT t.as_user(:'A');
+UPDATE budget_versions SET version_name = 'v3 renamed' WHERE id = :'v3';
+SELECT t.eq('L4 good: the producer renames a draft', (SELECT version_name FROM budget_versions WHERE id = :'v3'), 'v3 renamed');
+
+-- ---------------------------------------------------------------- L5
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false);
+SELECT t.eq('L5: authenticated cannot write or truncate the request tables',
+  has_table_privilege('authenticated', 'public.budget_approval_requests', 'INSERT,UPDATE,DELETE,TRUNCATE')
+  OR has_table_privilege('authenticated', 'public.budget_approval_decisions', 'INSERT,UPDATE,DELETE,TRUNCATE'), false);
+SELECT t.eq('L5: anon has nothing on them',
+  has_table_privilege('anon', 'public.budget_approval_requests', 'SELECT,TRUNCATE')
+  OR has_table_privilege('anon', 'public.budget_approval_decisions', 'SELECT,TRUNCATE'), false);
+SELECT t.eq('L5 good: authenticated reads them (RLS)',
+  has_table_privilege('authenticated', 'public.budget_approval_requests', 'SELECT')
+  AND has_table_privilege('authenticated', 'public.budget_approval_decisions', 'SELECT'), true);
+SELECT t.as_user(:'A');
+SELECT t.denied('L5: truncate refused', 'TRUNCATE public.budget_approval_decisions');
+
+-- ---------------------------------------------------------------- L6
+SELECT t.as_user(:'B');
+SELECT t.denied('L6: is_budget_executive is not callable by clients', format($$SELECT is_budget_executive(%L, %L)$$, :'F', :'P'));
+SELECT t.denied('L6: can_submit_budget is not callable by clients', format($$SELECT can_submit_budget(%L, %L)$$, :'A', :'P'));
+SELECT t.eq('L6 good: can_publish_budget_directly answers only for an accessible project', can_publish_budget_directly(:'P2'), false);
+SELECT t.as_user(:'A');
+SELECT t.eq('L6 good: internal use still works (draft edit through the policy)', (SELECT count(*) FROM budget_lines WHERE version_id = :'v3'), 1::bigint);
+
+-- ---------------------------------------------------------------- L7
+SELECT t.as_user(:'D');
+SELECT t.denied('L7: an org admin cannot log an event in another user''s name', format($$INSERT INTO budget_status_events(project_id, organization_id, actor_id, action) VALUES (%L, %L, %L, 'note')$$, :'P', :'O1', :'A'));
+SELECT t.denied('L7: an org admin cannot forge an approval event', format($$INSERT INTO budget_status_events(project_id, organization_id, actor_id, action, to_status) VALUES (%L, %L, %L, 'approver_approved', 'approved')$$, :'P', :'O1', :'D'));
+SELECT t.denied('L7: an org admin cannot forge a status change', format($$INSERT INTO budget_status_events(project_id, organization_id, actor_id, action, to_status) VALUES (%L, %L, %L, 'status_change', 'Locked/Approved')$$, :'P', :'O1', :'D'));
+INSERT INTO budget_status_events(project_id, organization_id, actor_id, action, note) VALUES (:'P', :'O1', :'D', 'note', 'checked');
+SELECT t.eq('L7 good: an org admin logs an own note', (SELECT count(*) FROM budget_status_events WHERE project_id = :'P' AND action = 'note' AND actor_id = :'D'), 1::bigint);
+SELECT t.eq('L7 good: the functions still log their events', (SELECT count(*) FROM budget_status_events WHERE project_id = :'P3' AND action = 'approval_submitted') >= 3, true);
+
+-- ---------------------------------------------------------------- L3 legacy backfill
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false);
+INSERT INTO budget_approvers(project_id, organization_id, user_id) VALUES
+ (:'P5', :'O1', :'A'), (:'P5', :'O1', :'G'), (:'P5', :'O1', :'C'), (:'P5', :'O1', :'B');
+UPDATE projects SET budget_status = 'Pending Approval' WHERE id = :'P5';
+-- the old flow logged who moved it (the sender)
+INSERT INTO budget_status_events(project_id, organization_id, actor_id, action, from_status, to_status, created_at)
+VALUES (:'P5', :'O1', :'A', 'status_change', 'Draft', 'Pending Approval', now() + interval '1 second');
+SELECT t.eq('L3: backfill carries the legacy approval over once', budget_approval_backfill_legacy(), 1);
+SELECT t.eq('L3: backfill is idempotent', budget_approval_backfill_legacy(), 0);
+SELECT t.eq('L3: the sender comes from the last move to Pending Approval',
+  (SELECT submitted_by FROM budget_approval_requests WHERE project_id = :'P5' AND status = 'pending'), :'A'::uuid);
+SELECT t.eq('L3: only approvers with access and an executive title are kept (not the sender, a plain member or another tenant)',
+  (SELECT string_agg(d.approver_id::text, ',') FROM budget_approval_decisions d
+     JOIN budget_approval_requests r ON r.id = d.request_id WHERE r.project_id = :'P5'), :'G');
+SELECT id AS r8 FROM budget_approval_requests WHERE project_id = :'P5' AND status = 'pending' \gset
+SELECT t.as_user(:'A');
+SELECT t.denied('L3: the old sender cannot approve the carried-over request', format($$SELECT decide_budget_approval(%L, 'approved')$$, :'r8'));
+SELECT t.as_user(:'G');
+SELECT t.eq('L3 good: the kept board member approves it', decide_budget_approval(:'r8', 'approved'), 'approved');
+SELECT t.eq('L3 good: legacy budget locked', (SELECT budget_status::text FROM projects WHERE id = :'P5'), 'Locked/Approved');
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false);

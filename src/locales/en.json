@@ -6195,6 +6195,7 @@
     "notify_approved_title": "Budget approved: {{project}}",
     "notify_approved_body": "Budget {{version}} was approved and is now the locked active budget.",
     "notify_rejected_title": "Budget rejected: {{project}}",
-    "notify_rejected_body": "Budget {{version}} was rejected. Reason: {{reason}}"
+    "notify_rejected_body": "Budget {{version}} was rejected. Reason: {{reason}}",
+    "banner_under_review": "This version is waiting for board approval and is read-only. Withdraw the request to change it."
   }
 }
