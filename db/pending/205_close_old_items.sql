@@ -17,11 +17,17 @@
 --    An APPROVED invoice that has no PO may now be linked once (the PO is
 --    no longer part of the approved-invoice lock); a PO already set on an
 --    approved / cancelled invoice still cannot be changed or removed.
+--    Linking an approved invoice needs an invoice approver of the
+--    organization. Two links at the same time are taken one after the
+--    other (PO row locked FOR UPDATE).
 --    Checks: same project (existing 174 trigger), the PO is a live
 --    commitment (not draft / cancelled / rejected / closed) — also for new
 --    invoices; when an EXISTING invoice is linked: same vendor when both
 --    have one, same budget code when both have one, and the invoice amount
 --    fits the PO's open amount.
+-- 5. The creator of a contract is written by the database (maker-checker:
+--    a user could set created_by to someone else and approve his own
+--    contract — found in the security review of this file).
 -- 4. Read-only list of contracts saved before the currency fix whose
 --    figures are still in the contract currency (QA 29/10: 2,000 USD
 --    counted as 2,000 SAR): contracts_not_in_base_currency(project).
@@ -34,9 +40,11 @@
 --   public.invoice_lock_view(jsonb) (re-created without purchase_order_id);
 --   public.guard_invoice_po_link() + trigger zz_trg_invoice_po_link;
 --   public.link_invoice_to_po(uuid, uuid);
---   public.contracts_not_in_base_currency(uuid).
+--   public.contracts_not_in_base_currency(uuid);
+--   public.guard_people_creator() + trigger a_trg_people_creator.
 --
 -- Rollback:
+--   DROP TRIGGER a_trg_people_creator ON public.people; DROP FUNCTION public.guard_people_creator();
 --   DROP FUNCTION public.contracts_not_in_base_currency(uuid);
 --   DROP FUNCTION public.link_invoice_to_po(uuid, uuid);
 --   DROP TRIGGER zz_trg_invoice_po_link ON public.invoices; DROP FUNCTION public.guard_invoice_po_link();
@@ -178,46 +186,58 @@ RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   po record;
   v_other numeric;
+  v_relink boolean := TG_OP = 'UPDATE' AND NEW.purchase_order_id IS DISTINCT FROM OLD.purchase_order_id;
 BEGIN
-  IF TG_OP = 'UPDATE' AND NEW.purchase_order_id IS NOT DISTINCT FROM OLD.purchase_order_id THEN
+  IF auth.uid() IS NULL THEN RETURN NEW; END IF;          -- server jobs / SQL editor
+  IF TG_OP = 'UPDATE' AND NOT v_relink
+     AND (NEW.purchase_order_id IS NULL OR COALESCE(NEW.price, 0) <= COALESCE(OLD.price, 0)) THEN
     RETURN NEW;
   END IF;
-  IF TG_OP = 'UPDATE' AND auth.uid() IS NOT NULL
-     AND OLD.approval_status IN ('approved', 'cancelled')
-     AND (OLD.approval_status = 'cancelled' OR OLD.purchase_order_id IS NOT NULL
-          OR NEW.purchase_order_id IS NULL) THEN
-    RAISE EXCEPTION 'invoices: the purchase order of an approved or cancelled invoice cannot be changed — only an approved invoice without a purchase order can be linked to one'
-      USING ERRCODE = '42501';
+  IF v_relink AND OLD.approval_status IN ('approved', 'cancelled') THEN
+    IF OLD.approval_status = 'cancelled' OR OLD.purchase_order_id IS NOT NULL OR NEW.purchase_order_id IS NULL THEN
+      RAISE EXCEPTION 'invoices: the purchase order of an approved or cancelled invoice cannot be changed — only an approved invoice without a purchase order can be linked to one'
+        USING ERRCODE = '42501';
+    END IF;
+    -- linking an approved invoice moves money from commitment: an approver decides
+    IF NOT public.can_approve_invoice(OLD.project_id, COALESCE(OLD.price, 0) + COALESCE(OLD.vat_amount, 0)) THEN
+      RAISE EXCEPTION 'invoices: only an approver of this organization can link an approved invoice to a purchase order'
+        USING ERRCODE = '42501';
+    END IF;
   END IF;
-  IF NEW.purchase_order_id IS NULL OR auth.uid() IS NULL THEN
-    RETURN NEW;
-  END IF;
+  IF NEW.purchase_order_id IS NULL THEN RETURN NEW; END IF;
+  -- FOR UPDATE: two links to the same PO at the same time are taken one after the other
   SELECT p.id, p.status, p.vendor_id, p.vendor_name, p.budget_code, p.amount, p.project_id
-    INTO po FROM public.purchase_orders p WHERE p.id = NEW.purchase_order_id FOR SHARE;
+    INTO po FROM public.purchase_orders p WHERE p.id = NEW.purchase_order_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'invoices: the linked purchase order does not exist' USING ERRCODE = '23503';
   END IF;
-  IF NOT public.po_is_commitment(po.status) THEN
+  IF (TG_OP = 'INSERT' OR v_relink) AND NOT public.po_is_commitment(po.status) THEN
     RAISE EXCEPTION 'invoices: purchase order is % — only an approved / open purchase order can take invoices', po.status
       USING ERRCODE = '23514';
   END IF;
   -- A new invoice keeps the rules of the invoice form (174). Linking an
-  -- existing invoice afterwards must also match vendor, code and open amount.
+  -- existing invoice afterwards — or raising the amount of a linked one —
+  -- must also match vendor, code and the PO's open amount.
   IF TG_OP = 'INSERT' THEN
     RETURN NEW;
   END IF;
-  IF (po.vendor_id IS NOT NULL AND NEW.vendor_id IS NOT NULL AND po.vendor_id <> NEW.vendor_id)
-     OR (po.vendor_id IS NULL OR NEW.vendor_id IS NULL)
-        AND NULLIF(btrim(po.vendor_name), '') IS NOT NULL AND NULLIF(btrim(NEW.vendor_name), '') IS NOT NULL
-        AND lower(btrim(po.vendor_name)) <> lower(btrim(NEW.vendor_name)) THEN
+  IF v_relink AND (
+       (po.vendor_id IS NOT NULL AND NEW.vendor_id IS NOT NULL AND po.vendor_id <> NEW.vendor_id)
+       OR ((po.vendor_id IS NULL OR NEW.vendor_id IS NULL)
+           AND NULLIF(btrim(po.vendor_name), '') IS NOT NULL AND NULLIF(btrim(NEW.vendor_name), '') IS NOT NULL
+           AND lower(btrim(po.vendor_name)) <> lower(btrim(NEW.vendor_name)))) THEN
     RAISE EXCEPTION 'invoices: the purchase order is for another vendor' USING ERRCODE = '23514';
   END IF;
-  IF NULLIF(btrim(po.budget_code), '') IS NOT NULL AND NULLIF(btrim(NEW.budget_code), '') IS NOT NULL
+  IF v_relink AND NULLIF(btrim(po.budget_code), '') IS NOT NULL AND NULLIF(btrim(NEW.budget_code), '') IS NOT NULL
      AND btrim(po.budget_code) <> btrim(NEW.budget_code) THEN
     RAISE EXCEPTION 'invoices: the purchase order is on budget code %, the invoice on %', po.budget_code, NEW.budget_code
       USING ERRCODE = '23514';
   END IF;
-  -- the invoice must fit what is still open on the PO (other live invoices)
+  -- the invoice must fit what is still open on a live PO (other live invoices);
+  -- a PO that is no longer a commitment (cancelled / closed) has nothing to relieve
+  IF NOT public.po_is_commitment(po.status) THEN
+    RETURN NEW;
+  END IF;
   SELECT COALESCE(sum(COALESCE(i.price, 0)), 0) INTO v_other
     FROM public.invoices i
    WHERE i.purchase_order_id = po.id AND i.id <> NEW.id
@@ -232,7 +252,7 @@ END $$;
 REVOKE ALL ON FUNCTION public.guard_invoice_po_link() FROM PUBLIC, anon, authenticated;
 DROP TRIGGER IF EXISTS zz_trg_invoice_po_link ON public.invoices;
 CREATE TRIGGER zz_trg_invoice_po_link
-  BEFORE INSERT OR UPDATE OF purchase_order_id ON public.invoices
+  BEFORE INSERT OR UPDATE OF purchase_order_id, price ON public.invoices
   FOR EACH ROW EXECUTE FUNCTION public.guard_invoice_po_link();
 
 -- The app's "Link to purchase order" action. SECURITY INVOKER: the caller
@@ -282,3 +302,33 @@ LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
 $$;
 REVOKE ALL ON FUNCTION public.contracts_not_in_base_currency(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.contracts_not_in_base_currency(uuid) TO authenticated, service_role;
+
+-- ---------------------------------------------------------------------
+-- 5. Contract creator cannot be chosen by the client (review of 205)
+-- ---------------------------------------------------------------------
+-- The contract maker-checker (approve ≠ creator) trusts people.created_by,
+-- which stamp_audit_fields only fills when it is empty: a user could save a
+-- contract "created by" someone else and then approve it. The database now
+-- writes the creator itself (a row restored from the trash keeps its
+-- original creator) and it cannot be changed afterwards.
+CREATE OR REPLACE FUNCTION public.guard_people_creator()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_tr  record;
+BEGIN
+  IF v_uid IS NULL THEN RETURN NEW; END IF;               -- server jobs / imports / seeds
+  IF TG_OP = 'INSERT' THEN
+    SELECT * INTO v_tr FROM public.trash_original_creator('people', NEW.id);
+    NEW.created_by := CASE WHEN v_tr.found THEN v_tr.created_by ELSE v_uid END;
+  ELSIF NEW.created_by IS DISTINCT FROM OLD.created_by THEN
+    RAISE EXCEPTION 'people: the creator of a contract cannot be changed' USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION public.guard_people_creator() FROM PUBLIC, anon, authenticated;
+-- named to run before the other BEFORE triggers (they fire in name order)
+DROP TRIGGER IF EXISTS a_trg_people_creator ON public.people;
+CREATE TRIGGER a_trg_people_creator
+  BEFORE INSERT OR UPDATE ON public.people
+  FOR EACH ROW EXECUTE FUNCTION public.guard_people_creator();

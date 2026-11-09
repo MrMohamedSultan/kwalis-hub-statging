@@ -81,6 +81,19 @@ RESET role;
 SELECT set_config('request.jwt.claim.sub', '', false);
 SELECT t.eq('intruder wrote nothing', (SELECT count(*) FROM people WHERE id = :'K3'), 0::bigint);
 
+-- the creator is written by the database (review of 205)
+SELECT t.as_user(:'C');
+SELECT save_new_contract(
+  jsonb_build_object('id', :'K3', 'kind', 'crew', 'full_name', 'Self Approver', 'project_id', :'P',
+                     'organization_id', :'O1', 'created_by', :'A', 'contract_status', 'Signed - Awaiting Review'),
+  jsonb_build_object('ref_id', :'K3', 'name', 'Self Approver', 'kind', 'crew', 'total_amount', 50000,
+                     'project_id', :'P', 'organization_id', :'O1'));
+SELECT t.eq('created_by sent by the client is replaced by the real creator', (SELECT created_by FROM people WHERE id = :'K3'), :'C'::uuid);
+SELECT t.denied('the creator cannot be changed afterwards', format($$UPDATE people SET created_by = %L WHERE id = %L$$, :'A', :'K3'));
+SELECT t.denied('so the creator still cannot approve his own contract', format($$UPDATE people SET contract_status = 'Active' WHERE id = %L$$, :'K3'));
+RESET role;
+SELECT set_config('request.jwt.claim.sub', '', false);
+
 -- ================================================================ 3. invoice → PO link
 SELECT t.as_user(:'A');
 INSERT INTO purchase_orders(id,organization_id,project_id,vendor_name,amount,budget_code,status,po_number,date) VALUES
@@ -98,10 +111,13 @@ SELECT approve_invoice(:'I1');
 SELECT t.as_user(:'A');
 SELECT t.eq('before linking: PO 1,000 still a commitment while the invoice is actual',
   (SELECT sum(total) FROM v_ledger_transactions WHERE source_id = :'PO' AND entry_kind = 'commitment'), 1000::numeric);
+SELECT t.denied('linking an APPROVED invoice needs an invoice approver (A is not)', format($$SELECT link_invoice_to_po(%L, %L)$$, :'I1', :'PO'));
+SELECT t.as_user(:'D');
 SELECT t.denied('PO of another vendor refused', format($$SELECT link_invoice_to_po(%L, %L)$$, :'I1', :'PO3'));
 SELECT t.denied('invoice bigger than the open PO amount refused', format($$SELECT link_invoice_to_po(%L, %L)$$, :'I1', :'PO2'));
-SELECT t.denied('PO on another budget code refused', format($$SELECT link_invoice_to_po(%L, %L)$$, :'I2', :'PO'));
 SELECT link_invoice_to_po(:'I1', :'PO');
+SELECT t.as_user(:'A');
+SELECT t.denied('PO on another budget code refused', format($$SELECT link_invoice_to_po(%L, %L)$$, :'I2', :'PO'));
 SELECT t.eq('approved invoice linked to its PO', (SELECT purchase_order_id FROM invoices WHERE id = :'I1'), :'PO'::uuid);
 SELECT t.eq('after linking: the PO commitment is relieved (no double count)',
   (SELECT COALESCE(sum(total), 0) FROM v_ledger_transactions WHERE source_id = :'PO' AND entry_kind = 'commitment'), 0::numeric);
@@ -112,6 +128,10 @@ SELECT t.denied('amounts of an approved invoice are still locked', format($$UPDA
 -- a pending invoice can be linked / moved freely within the rules
 UPDATE invoices SET budget_code = '2101' WHERE id = :'I2';
 SELECT link_invoice_to_po(:'I2', :'PO2');
+SELECT t.denied('raising a linked pending invoice above the open PO amount refused',
+  format($$UPDATE invoices SET price = 999999 WHERE id = %L$$, :'I2'));
+UPDATE invoices SET price = 150 WHERE id = :'I2';
+SELECT t.eq('a linked pending invoice can still be raised within the PO', (SELECT price FROM invoices WHERE id = :'I2'), 150::numeric);
 UPDATE invoices SET purchase_order_id = NULL WHERE id = :'I2';
 SELECT t.eq('a pending invoice can be unlinked', (SELECT purchase_order_id IS NULL FROM invoices WHERE id = :'I2'), true);
 SELECT t.as_user(:'D');
