@@ -5980,5 +5980,16 @@
       "project": "Project",
       "collapse": "Collapse"
     }
+  },
+  "reportGroups": {
+    "cost": "Budget & Cost",
+    "payables": "Payables & Payments",
+    "cash": "Cash & Bank",
+    "accounting": "Accounting",
+    "commission": "Commission & Platforms",
+    "no_permission": "You don't have permission to open this report.",
+    "open_my_reports": "Open my reports",
+    "search": "Search reports…",
+    "no_match": "No report matches"
   }
 }
