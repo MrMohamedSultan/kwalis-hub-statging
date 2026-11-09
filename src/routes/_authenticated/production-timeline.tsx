@@ -78,6 +78,7 @@ import { runGanttExcelExport, runGanttPdfExport } from "@/features/timeline/expo
 import { useExportAction } from "@/hooks/use-export-action";
 
 import { useTranslation } from "react-i18next";
+import { useExecutiveTitle } from "@/lib/budget-governance";
 
 export const Route = createFileRoute("/_authenticated/production-timeline")({
   component: () => (
@@ -606,7 +607,10 @@ export function ProductionTimelinePage() {
       }
     });
 
-  const canEdit = (activeVersion?.status ?? "Draft") === "Draft";
+  // Board / executive members (206) only read the schedule.
+  const { title: executiveTitle } = useExecutiveTitle();
+  const readOnlyViewer = !!executiveTitle;
+  const canEdit = !readOnlyViewer && (activeVersion?.status ?? "Draft") === "Draft";
 
   // ── Excel template + import ──────────────────────────────────────────────
   // Import follows the page's own edit rule (only the open Draft is editable)
@@ -882,13 +886,15 @@ export function ProductionTimelinePage() {
             </button>
             {versionMenu && (
               <div className="absolute z-30 mt-1 w-80 rounded-xl border border-border bg-popover shadow-xl p-2">
-                <button
-                  onClick={duplicateAsDraft}
-                  className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-muted text-start"
-                >
-                  <Plus className="size-3.5" />
-                  {t("production_timeline.duplicate_current_schedule_create_draft")}
-                </button>
+                {!readOnlyViewer && (
+                  <button
+                    onClick={duplicateAsDraft}
+                    className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-muted text-start"
+                  >
+                    <Plus className="size-3.5" />
+                    {t("production_timeline.duplicate_current_schedule_create_draft")}
+                  </button>
+                )}
                 <div className="mt-2 flex items-center gap-2 rounded-lg border border-border px-2 py-1.5">
                   <Search className="size-3.5 text-muted-foreground" />
                   <input
@@ -932,6 +938,13 @@ export function ProductionTimelinePage() {
           </span>
 
           <div className="ms-auto flex flex-wrap items-center gap-2">
+            {readOnlyViewer && (
+              <span className="rounded-full border border-border px-2 py-1 text-[11px] text-muted-foreground">
+                {t("board.read_only")}
+              </span>
+            )}
+            {!readOnlyViewer && (
+            <>
             <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <input
                 type="checkbox"
@@ -984,6 +997,8 @@ export function ProductionTimelinePage() {
                 <Redo2 className="size-3.5" />
               </button>
             </div>
+            </>
+            )}
             {loading && (
               <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <Loader2 className="size-3.5 animate-spin" /> Syncing…

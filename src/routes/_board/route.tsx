@@ -1,45 +1,26 @@
 // ═══════════════════════════════════════════════════════════════════
 // src/routes/_board/route.tsx
 // ═══════════════════════════════════════════════════════════════════
-// Board Member layout route — the top-level gate for the entire
-// /board/* namespace. Mirrors the _admin isolation pattern.
+// The former Board Member portal (/board/*). Since db/pending/206 board
+// members work in the main app with a narrowed shell (src/lib/board-access.ts:
+// Dashboard, Budget, Production Timeline, Cash flow, Notifications) and
+// approve the budget on the Budget page. Old links keep working: every
+// /board path forwards to its page in the main app.
 // ═══════════════════════════════════════════════════════════════════
 
 import { createFileRoute, redirect, Outlet } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { AppShell } from "@/components/AppShell";
-import { getAuthRolesSnapshot } from "@/lib/auth-roles";
-import { ADMIN_LANDING, isBoardMember } from "@/lib/landing-redirect";
+import { legacyBoardPortalTarget } from "@/lib/board-access";
 
 export const Route = createFileRoute("/_board")({
   ssr: false,
-  beforeLoad: async () => {
-    // ── Step 1: Authentication ──
-    // Local session read (UX gate; RLS enforces server-side).
+  beforeLoad: async ({ location }) => {
     const { data, error } = await supabase.auth.getSession();
-    const user = data.session?.user ?? null;
-    if (error || !user) {
+    if (error || !data.session?.user) {
       throw redirect({ to: "/auth" });
     }
-
-    // ── Step 2: Role verification ──
-    // Platform roles live in `user_roles`; the executive/board title lives on
-    // `profiles.executive_title` (never a `profiles.role` column).
-    const roles = await getAuthRolesSnapshot();
-    if (!isBoardMember(roles)) {
-      if (roles.isSuperAdmin) throw redirect({ to: ADMIN_LANDING as "/" });
-      throw redirect({ to: "/dashboard" });
-    }
-
-    return { user, roles, role: "board_member" as const };
+    const target = legacyBoardPortalTarget(location.pathname);
+    throw redirect({ to: target.to as "/", search: (target.search ?? {}) as never });
   },
-  component: BoardLayout,
+  component: () => <Outlet />,
 });
-
-function BoardLayout() {
-  return (
-    <AppShell forceMode="board">
-      <Outlet />
-    </AppShell>
-  );
-}

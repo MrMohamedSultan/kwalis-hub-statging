@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useStore } from "@/lib/store";
 import { useAuthRoles, type AuthRolesSnapshot } from "@/lib/auth-roles";
 import { SIDEBAR_SECTIONS, SERIES_NAV_ITEM } from "@/config/navigation";
+import { isPathAllowedForExecutive } from "@/lib/board-access";
 
 export type ProjectRole = "owner" | "admin" | "accountant" | "producer" | "coordinator" | "member";
 
@@ -142,9 +143,29 @@ export interface ProjectRoleSnapshot {
   projectId: string | null;
   /** null = unrestricted (no membership row, admin, or signed out). */
   role: ProjectRole | null;
+  /**
+   * Executive title on the active project (Board Member, CEO, …), else the
+   * profile-level title. Set → board-member shell (src/lib/board-access.ts).
+   * Never set for platform super admins.
+   */
+  executiveTitle?: string | null;
 }
 
-const EMPTY: ProjectRoleSnapshot = { loaded: false, userId: null, projectId: null, role: null };
+const EMPTY: ProjectRoleSnapshot = {
+  loaded: false,
+  userId: null,
+  projectId: null,
+  role: null,
+  executiveTitle: null,
+};
+
+function isPrivileged(roles: AuthRolesSnapshot, organizationId: string | null): boolean {
+  return (
+    roles.isSuperAdmin ||
+    roles.isAdmin ||
+    (organizationId !== null && roles.adminOrgIds.includes(organizationId))
+  );
+}
 
 let cache: ProjectRoleSnapshot = EMPTY;
 const listeners = new Set<() => void>();
@@ -177,36 +198,39 @@ export async function getProjectRoleSnapshot(
   organizationId: string | null,
 ): Promise<ProjectRoleSnapshot> {
   const userId = roles.userId;
-  if (!userId || !activeProjectId) {
-    return { loaded: true, userId, projectId: activeProjectId, role: null };
-  }
-  if (
-    roles.isSuperAdmin ||
-    roles.isAdmin ||
-    (organizationId !== null && roles.adminOrgIds.includes(organizationId))
-  ) {
-    const snap: ProjectRoleSnapshot = {
+  const profileTitle = roles.isSuperAdmin ? null : (roles.executiveTitle ?? null);
+  if (!userId || !activeProjectId || roles.isSuperAdmin) {
+    return {
       loaded: true,
       userId,
       projectId: activeProjectId,
       role: null,
+      executiveTitle: userId ? profileTitle : null,
     };
-    cache = snap;
-    return snap;
   }
   if (cache.userId === userId && cache.projectId === activeProjectId && cache.loaded) {
     return cache;
   }
   const { data, error } = await supabase
     .from("project_members")
-    .select("role")
+    .select("role, executive_title" as "role")
     .eq("project_id", activeProjectId)
     .eq("user_id", userId)
     .maybeSingle();
-  // Fail open on read errors (RLS already scopes rows); the route guard
-  // still blocks restricted prefixes for known-restricted roles only.
-  const role = (!error && data?.role ? data.role : null) as ProjectRole | null;
-  const snap: ProjectRoleSnapshot = { loaded: true, userId, projectId: activeProjectId, role };
+  const row = (!error ? data : null) as { role?: string; executive_title?: string | null } | null;
+  // Admins stay unrestricted by project role, but an executive title on the
+  // project still puts them in the board-member shell (same as the sidebar).
+  // Fail open on read errors (RLS already scopes rows).
+  const role = isPrivileged(roles, organizationId)
+    ? null
+    : ((row?.role ?? null) as ProjectRole | null);
+  const snap: ProjectRoleSnapshot = {
+    loaded: true,
+    userId,
+    projectId: activeProjectId,
+    role,
+    executiveTitle: row?.executive_title ?? profileTitle,
+  };
   cache = snap;
   return snap;
 }
@@ -238,7 +262,15 @@ export function useProjectRole(): ProjectRoleSnapshot & { ready: boolean } {
     }
     void getProjectRoleSnapshot(projectId, roles, organizationId).then(setCache);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roles.loaded, roles.userId, roles.isSuperAdmin, roles.isAdmin, projectId, organizationId]);
+  }, [
+    roles.loaded,
+    roles.userId,
+    roles.isSuperAdmin,
+    roles.isAdmin,
+    roles.executiveTitle,
+    projectId,
+    organizationId,
+  ]);
 
   const current =
     cache.userId === roles.userId && cache.projectId === projectId
@@ -258,16 +290,16 @@ export function peekProjectRole(
   organizationId: string | null,
 ): ProjectRoleSnapshot | null {
   const userId = roles.userId;
-  if (!userId || !activeProjectId) {
-    return { loaded: true, userId, projectId: activeProjectId, role: null };
+  if (!userId || !activeProjectId || roles.isSuperAdmin) {
+    return {
+      loaded: true,
+      userId,
+      projectId: activeProjectId,
+      role: null,
+      executiveTitle: userId && !roles.isSuperAdmin ? (roles.executiveTitle ?? null) : null,
+    };
   }
-  if (
-    roles.isSuperAdmin ||
-    roles.isAdmin ||
-    (organizationId !== null && roles.adminOrgIds.includes(organizationId))
-  ) {
-    return { loaded: true, userId, projectId: activeProjectId, role: null };
-  }
+  void organizationId;
   if (cache.loaded && cache.userId === userId && cache.projectId === activeProjectId) {
     return cache;
   }
@@ -276,6 +308,7 @@ export function peekProjectRole(
 
 /** Convenience: is `pathname` allowed given the snapshot? */
 export function isPathAllowedForSnapshot(snap: ProjectRoleSnapshot, pathname: string): boolean {
+  if (snap.executiveTitle && !isPathAllowedForExecutive(pathname)) return false;
   if (!snap.role) return true;
   return isPathAllowedForProjectRole(pathname, snap.role);
 }

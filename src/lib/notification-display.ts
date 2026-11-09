@@ -40,6 +40,29 @@ export function notificationText(
       }),
     };
   }
+  // Board approval of the budget (db/pending/206)
+  if (
+    n.category === "budget" &&
+    typeof m.event === "string" &&
+    m.event.startsWith("budget_approval_")
+  ) {
+    const key = {
+      budget_approval_requested: "requested",
+      budget_approval_approved: "approved",
+      budget_approval_rejected: "rejected",
+    }[m.event as string];
+    if (key) {
+      const vars = {
+        project: String(m.project_name ?? ""),
+        version: String(m.version_name ?? ""),
+        reason: String(m.reason ?? ""),
+      };
+      return {
+        title: t(`budgetApproval.notify_${key}_title`, vars),
+        body: t(`budgetApproval.notify_${key}_body`, vars),
+      };
+    }
+  }
   if (n.category === "payment_approval") {
     const status = String(m.status ?? "");
     if ((PAYMENT_STATUSES as readonly string[]).includes(status)) {
