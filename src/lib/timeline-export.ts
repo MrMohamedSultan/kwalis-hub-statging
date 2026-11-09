@@ -88,16 +88,11 @@ export function buildTimelineRows(
 
 const HEADERS = ["Macro Phase", "Task Name", "Start Date", "End Date", "Duration (days)", "Lane"];
 
-/**
- * Structured single-sheet workbook: a title block, then the schedule grouped
- * by macro phase with a blank separator row between groups.
- */
-export async function exportTimelineXlsx(
+/** Rows of the draft "Timeline" sheet (title block, header row 5, grouped by phase). */
+export function buildTimelineSheetAoa(
   rows: TimelineExportRow[],
   meta: TimelineExportMeta,
-): Promise<void> {
-  const XLSX = await loadXlsx();
-
+): (string | number)[][] {
   const aoa: (string | number)[][] = [
     [`${meta.projectName} — Production Timeline`],
     [
@@ -117,6 +112,19 @@ export async function exportTimelineXlsx(
     aoa.push([r.phase, r.task, r.start, r.end, r.durationDays, r.lane]);
   }
   if (rows.length === 0) aoa.push(["—", "No scheduled events", "", "", 0, ""]);
+  return aoa;
+}
+
+/**
+ * Structured single-sheet workbook: a title block, then the schedule grouped
+ * by macro phase with a blank separator row between groups.
+ */
+export async function exportTimelineXlsx(
+  rows: TimelineExportRow[],
+  meta: TimelineExportMeta,
+): Promise<void> {
+  const XLSX = await loadXlsx();
+  const aoa = buildTimelineSheetAoa(rows, meta);
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws["!cols"] = [{ wch: 18 }, { wch: 46 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 30 }];
