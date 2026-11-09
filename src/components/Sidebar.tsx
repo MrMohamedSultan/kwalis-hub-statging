@@ -72,6 +72,7 @@ import {
   useExecutiveWorkMode,
 } from "@/lib/executive-work-mode";
 import { BetaBadge } from "@/components/BetaBadge";
+import { BOARD_NAV_ITEMS } from "@/lib/board-access";
 import { SIDEBAR_SECTIONS, FOOTER_ITEMS, SERIES_NAV_ITEM, type NavItem } from "@/config/navigation";
 
 const ICONS: Record<string, any> = {
@@ -209,13 +210,15 @@ function SidebarComponent({
     [isTenantShell, matrixActive, perms, projectRole.ready, projectRole.role],
   );
 
+  // Board / executive members: only these pages (the route guard enforces
+  // the same list — src/lib/board-access.ts).
   const executiveItems: Item[] = useMemo(
-    () => [
-      { to: "/dashboard", label: t("nav.dashboard"), icon: LayoutDashboard },
-      { to: "/budget", label: t("nav.budget"), icon: PieChart },
-      { to: "/reports", label: t("nav.reports"), icon: FileText },
-      { to: "/notifications", label: t("nav.notifications"), icon: Bell },
-    ],
+    () =>
+      BOARD_NAV_ITEMS.map((n) => ({
+        to: n.to,
+        label: t(n.labelKey),
+        icon: ICONS[n.icon] ?? FileText,
+      })),
     [t],
   );
 

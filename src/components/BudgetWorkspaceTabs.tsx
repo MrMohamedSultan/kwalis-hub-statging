@@ -13,6 +13,7 @@ import { useStore } from "@/lib/store";
 import { invalidateBudgetCaches } from "@/lib/budget-cache-bus";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { recordAudit } from "@/lib/audit-log";
+import { canPublishDirectly, type BudgetStatusValue } from "@/lib/budget-approval";
 
 /**
  * Budget workspace separation.
@@ -25,7 +26,13 @@ import { recordAudit } from "@/lib/audit-log";
  * Exactly one version is ever loaded into the grid — the store fetches
  * `budget_lines` filtered by that single `version_id` at the database level.
  */
-export function BudgetWorkspaceTabs({ canManage }: { canManage: boolean }) {
+export function BudgetWorkspaceTabs({
+  canManage,
+  budgetStatus = "Draft",
+}: {
+  canManage: boolean;
+  budgetStatus?: BudgetStatusValue;
+}) {
   const { t } = useTranslation();
   const { projectId, versions, selected, selectedId, loading, reload } = useBudgetVersions();
   const reloadScopedData = useStore((s) => s.reloadScopedData);
@@ -51,10 +58,14 @@ export function BudgetWorkspaceTabs({ canManage }: { canManage: boolean }) {
     setSelectedVersion(projectId, id);
   };
 
-  const onCreateDraft = async () => {
+  // 206: once the budget went to the board, a draft becomes active only
+  // through an approved request ("Status & approvals" → Send for approval).
+  const directPublish = canPublishDirectly(budgetStatus, false);
+
+  const onCreateDraft = async (blank = false) => {
     setBusy("draft");
     try {
-      const id = await createBudgetDraft(projectId);
+      const id = await createBudgetDraft(projectId, undefined, blank);
       setSelectedVersion(projectId, id);
       await reload();
       await refreshGrid();
@@ -62,7 +73,9 @@ export function BudgetWorkspaceTabs({ canManage }: { canManage: boolean }) {
         category: "other",
         action: "budget.draft_created",
         severity: "info",
-        summary: "Budget draft created from the active version",
+        summary: blank
+          ? "Blank budget draft created"
+          : "Budget draft created from the active version",
         entity: "Budget",
         project_id: projectId,
         details: { versionId: id },
@@ -169,15 +182,27 @@ export function BudgetWorkspaceTabs({ canManage }: { canManage: boolean }) {
               {t("budget.drafts", "Drafts")}
             </span>
             {canManage && (
-              <button
-                type="button"
-                onClick={() => void onCreateDraft()}
-                disabled={!!busy}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition"
-              >
-                <Plus className="size-3.5" />
-                {t("budget.create_draft", "Create draft")}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void onCreateDraft()}
+                  disabled={!!busy}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition"
+                >
+                  <Plus className="size-3.5" />
+                  {t("budget.create_draft", "Create draft")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void onCreateDraft(true)}
+                  disabled={!!busy}
+                  title={t("budgetApproval.blank_draft_hint")}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition"
+                >
+                  <Plus className="size-3.5" />
+                  {t("budgetApproval.create_blank_draft")}
+                </button>
+              </div>
             )}
           </div>
 
@@ -215,15 +240,22 @@ export function BudgetWorkspaceTabs({ canManage }: { canManage: boolean }) {
                 )}
                 {canManage && (
                   <div className="ms-auto flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setConfirmPublish(d.id)}
-                      disabled={!!busy}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition"
-                    >
-                      <CheckCircle2 className="size-3.5" />
-                      {t("budget.make_active", "Make Active (Publish)")}
-                    </button>
+                    {!directPublish && (
+                      <span className="text-xs text-muted-foreground">
+                        {t("budgetApproval.publish_via_approval")}
+                      </span>
+                    )}
+                    {directPublish && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmPublish(d.id)}
+                        disabled={!!busy}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition"
+                      >
+                        <CheckCircle2 className="size-3.5" />
+                        {t("budget.make_active", "Make Active (Publish)")}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setConfirmDelete(d.id)}

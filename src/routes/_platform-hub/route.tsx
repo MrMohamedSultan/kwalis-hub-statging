@@ -10,7 +10,7 @@ import { createFileRoute, redirect, Outlet } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { getAuthRolesSnapshot } from "@/lib/auth-roles";
-import { BOARD_LANDING, ORG_LANDING, isBoardMember } from "@/lib/landing-redirect";
+import { ORG_LANDING } from "@/lib/landing-redirect";
 
 export const Route = createFileRoute("/_platform-hub")({
   ssr: false,
@@ -25,7 +25,6 @@ export const Route = createFileRoute("/_platform-hub")({
     // Platform roles live in `user_roles` (never on `profiles.role`).
     const roles = await getAuthRolesSnapshot();
     if (!roles.isSuperAdmin) {
-      if (isBoardMember(roles)) throw redirect({ to: BOARD_LANDING as "/" });
       throw redirect({ to: ORG_LANDING as "/" });
     }
 

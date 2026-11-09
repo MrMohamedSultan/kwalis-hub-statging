@@ -39,6 +39,7 @@ import {
 import { downloadCSV } from "@/lib/export-csv";
 import { exportPdfReport } from "@/lib/export-pdf";
 import { useTranslation } from "react-i18next";
+import { useExecutiveTitle } from "@/lib/budget-governance";
 
 import i18n from "@/lib/i18n";
 export const Route = createFileRoute("/_authenticated/funding")({
@@ -115,6 +116,9 @@ function FundingPage() {
   const isRtl = (i18n.language || "en").startsWith("ar");
   const dir = isRtl ? "rtl" : "ltr";
   const pid = useStore((s) => s.activeProjectId);
+  // Board / executive members (206) see the cash flow only, read-only.
+  const { title: executiveTitle } = useExecutiveTitle();
+  const cashFlowOnly = !!executiveTitle;
 
   if (!pid) {
     return (
@@ -141,7 +145,9 @@ function FundingPage() {
           { id: "cashflow", label: tr("funding.tabCashflow"), icon: TrendingUp },
           { id: "inflows", label: tr("funding.tabInflows"), icon: Landmark },
           { id: "vat", label: tr("reconcile.treasury.tab"), icon: ReceiptText },
-        ].map((t) => (
+        ]
+          .filter((t) => !cashFlowOnly || t.id === "cashflow")
+          .map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id as any)}
@@ -157,8 +163,8 @@ function FundingPage() {
       </div>
 
       {tab === "cashflow" && <CashFlowDashboard />}
-      {tab === "inflows" && <FundingInflowsTab />}
-      {tab === "vat" && <VatPaymentsTab />}
+      {!cashFlowOnly && tab === "inflows" && <FundingInflowsTab />}
+      {!cashFlowOnly && tab === "vat" && <VatPaymentsTab />}
     </div>
   );
 }

@@ -6,6 +6,7 @@
 export const ORG_ENTRY_PATHS = new Set(["/", "/dashboard", "/main-hub"]);
 
 export const ADMIN_LANDING = "/platform-hub/dashboard";
+/** Legacy /board portal entry — it now forwards into the main app (206). */
 export const BOARD_LANDING = "/board/dashboard";
 /** Org users land on the Project Selection Gateway, not a data surface. */
 export const ORG_LANDING = "/main-hub";
@@ -15,6 +16,9 @@ export type LandingRoles = { isSuperAdmin: boolean; executiveTitle?: string | nu
 /**
  * Board members are identified by `profiles.executive_title = 'Board Member'`
  * (roles never live on `profiles.role`). Platform ownership always wins.
+ * Since 206 board members use the main app (board-member shell of
+ * src/lib/board-access.ts, by the executive title on the ACTIVE project);
+ * they land on the project gateway like everyone else.
  */
 export function isBoardMember(roles: LandingRoles): boolean {
   return !roles.isSuperAdmin && roles.executiveTitle === "Board Member";
@@ -23,7 +27,6 @@ export function isBoardMember(roles: LandingRoles): boolean {
 /** Post-login destination for a role snapshot. */
 export function landingPathForRoles(roles: LandingRoles): string {
   if (roles.isSuperAdmin) return ADMIN_LANDING;
-  if (isBoardMember(roles)) return BOARD_LANDING;
   return ORG_LANDING;
 }
 
@@ -35,7 +38,5 @@ export function landingPathForRoles(roles: LandingRoles): string {
 export function entryRedirectFor(pathname: string, roles: LandingRoles): string | null {
   if (!ORG_ENTRY_PATHS.has(pathname)) return null;
   if (roles.isSuperAdmin) return ADMIN_LANDING;
-  // Board members never enter the full tenant workspace.
-  if (isBoardMember(roles)) return BOARD_LANDING;
   return null;
 }

@@ -235,7 +235,8 @@ function BudgetGovernanceSection(props: {
   const search = Route.useSearch();
   const ref = useRef<HTMLDivElement>(null);
   // Closed by default: the grid gets the vertical space, governance is one click away.
-  const [open, setOpen] = useState(false);
+  // Board / executive members open the page to review and approve: open for them.
+  const [open, setOpen] = useState(props.isExecutive);
   useEffect(() => {
     if (search.focus === "governance" && ref.current) {
       setOpen(true);
@@ -446,7 +447,12 @@ export function BudgetPage() {
           <>
             <PageTitle title={t("budget.budget")} action={<IntegrityAuditButton />} />
 
-            {activeProjectId && <BudgetWorkspaceTabs canManage={canEditBudget && !isExecutive} />}
+            {activeProjectId && (
+              <BudgetWorkspaceTabs
+                canManage={canEditBudget && !isExecutive}
+                budgetStatus={status ?? "Draft"}
+              />
+            )}
 
             {activeProjectId && (
               <BudgetGovernanceSection
@@ -460,10 +466,10 @@ export function BudgetPage() {
             {readOnly && (
               <div className="rounded-lg border border-warning/40 bg-warning/10 text-warning px-2.5 py-1 mb-2 text-xs font-medium">
                 {isExecutive
-                  ? `Executive View (${executiveTitle}) — Budget is strictly read-only. You may only Approve or Reject above.`
+                  ? t("budgetApproval.banner_executive", { title: executiveTitle })
                   : status === "Pending Approval"
-                    ? "Budget is PENDING APPROVAL. All lines are read-only across every tab until approvers decide."
-                    : "Budget is LOCKED / APPROVED. No lines can be edited. Use “Request Revision” to unlock."}
+                    ? t("budgetApproval.banner_pending")
+                    : t("budgetApproval.banner_locked")}
               </div>
             )}
 

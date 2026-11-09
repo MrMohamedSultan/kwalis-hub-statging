@@ -52,10 +52,16 @@ export async function fetchBudgetVersions(projectId: string): Promise<BudgetVers
   return ((data ?? []) as any[]).map(fromRow);
 }
 
-export async function createBudgetDraft(projectId: string, name?: string): Promise<string> {
+/** New draft: a copy of the active version, or blank (not linked to anything — 206). */
+export async function createBudgetDraft(
+  projectId: string,
+  name?: string,
+  blank = false,
+): Promise<string> {
   const { data, error } = await (supabase as any).rpc("create_budget_draft", {
     _project: projectId,
     _name: name ?? null,
+    _blank: blank,
   });
   if (error) throw error;
   invalidateVersionResolution(projectId);

@@ -8,7 +8,8 @@ import {
   useAuthRoles,
   type AuthRolesSnapshot,
 } from "@/lib/auth-roles";
-import { BOARD_LANDING, entryRedirectFor, isBoardMember } from "@/lib/landing-redirect";
+import { entryRedirectFor } from "@/lib/landing-redirect";
+import { executiveRedirectFor } from "@/lib/board-access";
 import { PROJECT_GATEWAY_PATH, isProjectScopedRoute } from "@/lib/project-gateway";
 import {
   getProjectRoleSnapshot,
@@ -59,14 +60,26 @@ function evaluateGates(
   perms: PermissionState | null,
   resolveProjectRole: () => ProjectRoleSnapshot | null,
 ): void {
-  // Roles live in `user_roles`; platform owners never enter org chrome, and
-  // board members belong to the isolated /board portal.
-  if (isBoardMember(roles)) {
-    throw redirect({ to: BOARD_LANDING as "/" });
-  }
+  // Roles live in `user_roles`; platform owners never enter org chrome.
   const target = entryRedirectFor(pathname, roles);
   if (target) {
     throw redirect({ to: target as "/" });
+  }
+
+  // Board / executive members (executive title on the active project, else
+  // on the profile) work in the normal shell but may open only the pages of
+  // src/lib/board-access.ts — every other route is bounced, not just hidden.
+  // An explicit executive work mode (admins / operational RBAC roles only)
+  // lifts it, exactly as the sidebar does.
+  {
+    const snap = resolveProjectRole();
+    const workMode =
+      !!perms && isExecutiveWorkMode(roles.userId) && canEnterExecutiveWorkMode(roles, perms);
+    const boardTarget = workMode ? null : executiveRedirectFor(pathname, snap?.executiveTitle);
+    if (boardTarget && boardTarget !== pathname) {
+      toast.error(i18n.t("rbac.accessDenied"));
+      throw redirect({ to: boardTarget as "/" });
+    }
   }
 
   // ── Phase 5 · Layer 1: Layout & Routing Isolation ─────────────────
@@ -74,8 +87,7 @@ function evaluateGates(
   // assignment (role === null) keep the legacy gateway behavior below.
   if (perms && !perms.isSuperAdmin && perms.role) {
     if (perms.role.layout_type === "executive") {
-      const workMode =
-        isExecutiveWorkMode(roles.userId) && canEnterExecutiveWorkMode(roles, perms);
+      const workMode = isExecutiveWorkMode(roles.userId) && canEnterExecutiveWorkMode(roles, perms);
       // Executives live in the read-only /executive workspace.
       if (!workMode && !isExecutivePath(pathname)) {
         throw redirect({ to: EXECUTIVE_HOME as "/" });
@@ -149,7 +161,9 @@ export const Route = createFileRoute("/_authenticated")({
       const cachedPerms = context.queryClient.getQueryData(myPermissionsQueryOptions().queryKey);
       const { activeProjectId, organizationId } = activeProjectScope();
       const cachedProjectRole = peekProjectRole(activeProjectId, cachedRoles, organizationId);
-      if (cachedPerms && (cachedProjectRole || !isProjectScopedRoute(location.pathname))) {
+      // The project snapshot (role + executive title) is needed on every
+      // tenant path now: the board-member allowlist covers them all.
+      if (cachedPerms && cachedProjectRole) {
         evaluateGates(
           location.pathname,
           cachedRoles,
@@ -183,13 +197,12 @@ export const Route = createFileRoute("/_authenticated")({
         ? buildPermissionState(permsPayload)
         : null;
 
-      let projectRole: ProjectRoleSnapshot | null = null;
-      if (isProjectScopedRoute(location.pathname)) {
-        const { activeProjectId, organizationId } = activeProjectScope();
-        if (activeProjectId) {
-          projectRole = await getProjectRoleSnapshot(activeProjectId, roles, organizationId);
-        }
-      }
+      const { activeProjectId, organizationId } = activeProjectScope();
+      const projectRole: ProjectRoleSnapshot | null = await getProjectRoleSnapshot(
+        activeProjectId,
+        roles,
+        organizationId,
+      ).catch(() => null);
 
       evaluateGates(location.pathname, roles, perms, () => projectRole);
       return { userId: user.id };

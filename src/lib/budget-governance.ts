@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useStore } from "@/lib/store";
 import { useAuthRoles } from "@/lib/auth-roles";
+import type { ApprovalDecisionValue, ApprovalRequestStatus } from "@/lib/budget-approval";
 
 export type BudgetStatus = "Draft" | "Pending Approval" | "Locked/Approved" | "Revision Requested";
 export type ExecutiveTitle = "CEO" | "CFO" | "Executive Producer" | "Board Member";
@@ -239,4 +240,185 @@ export function resolveStatusFromApprovers(
   if (approvers.some((a) => a.decision === "rejected")) return "Revision Requested";
   if (approvers.every((a) => a.decision === "approved")) return "Locked/Approved";
   return "Pending Approval";
+}
+
+// -------------------- Board approval requests (db/pending/206) --------------------
+
+export type ApprovalDecision = {
+  id: string;
+  approverId: string;
+  displayName: string | null;
+  decision: ApprovalDecisionValue;
+  reason: string | null;
+  decidedAt: string | null;
+};
+
+export type ApprovalRequest = {
+  id: string;
+  versionId: string | null;
+  versionName: string | null;
+  kind: "draft" | "active";
+  status: ApprovalRequestStatus;
+  totalSar: number | null;
+  lineCount: number | null;
+  note: string | null;
+  submittedBy: string | null;
+  submittedByName: string | null;
+  submittedAt: string;
+  decidedAt: string | null;
+  decisionReason: string | null;
+  legacy: boolean;
+  decisions: ApprovalDecision[];
+};
+
+/** Latest approval requests of a project (newest first) with their decisions. */
+export function useBudgetApprovalRequests(projectId: string | null, limit = 10) {
+  const [requests, setRequests] = useState<ApprovalRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refresh = useCallback(async () => {
+    if (!projectId) {
+      setRequests([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data: reqs } = await supabase
+        .from("budget_approval_requests" as any)
+        .select(
+          "id,version_id,version_name,kind,status,total_sar,line_count,note,submitted_by,submitted_at,decided_at,decision_reason,legacy",
+        )
+        .eq("project_id", projectId)
+        .order("submitted_at", { ascending: false })
+        .limit(limit);
+      const rows = (reqs ?? []) as any[];
+      const ids = rows.map((r) => r.id as string);
+      const { data: decs } = ids.length
+        ? await supabase
+            .from("budget_approval_decisions" as any)
+            .select("id,request_id,approver_id,decision,reason,decided_at")
+            .in("request_id", ids)
+        : { data: [] as any[] };
+      const decRows = (decs ?? []) as any[];
+      const people = Array.from(
+        new Set([
+          ...decRows.map((d) => d.approver_id as string),
+          ...rows.map((r) => r.submitted_by as string).filter(Boolean),
+        ]),
+      );
+      const { data: profs } = people.length
+        ? await supabase.from("profiles").select("id,display_name").in("id", people)
+        : { data: [] as { id: string; display_name: string | null }[] };
+      const names = new Map(
+        (profs ?? []).map((p: any) => [p.id as string, p.display_name as string | null]),
+      );
+      setRequests(
+        rows.map((r) => ({
+          id: r.id,
+          versionId: r.version_id,
+          versionName: r.version_name,
+          kind: r.kind,
+          status: r.status,
+          totalSar: r.total_sar === null ? null : Number(r.total_sar),
+          lineCount: r.line_count,
+          note: r.note,
+          submittedBy: r.submitted_by,
+          submittedByName: r.submitted_by ? (names.get(r.submitted_by) ?? null) : null,
+          submittedAt: r.submitted_at,
+          decidedAt: r.decided_at,
+          decisionReason: r.decision_reason,
+          legacy: !!r.legacy,
+          decisions: decRows
+            .filter((d) => d.request_id === r.id)
+            .map((d) => ({
+              id: d.id,
+              approverId: d.approver_id,
+              displayName: names.get(d.approver_id) ?? null,
+              decision: d.decision,
+              reason: d.reason,
+              decidedAt: d.decided_at,
+            })),
+        })),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId, limit]);
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+  return { requests, loading, refresh };
+}
+
+function notifyBudgetChange(projectId: string) {
+  if (typeof window !== "undefined")
+    window.dispatchEvent(new CustomEvent("kwalis:budget-status-change", { detail: { projectId } }));
+}
+
+export async function submitBudgetForApproval(
+  projectId: string,
+  versionId: string,
+  approverIds: string[] | null,
+  note: string | null,
+): Promise<string> {
+  const { data, error } = await (supabase as any).rpc("submit_budget_for_approval", {
+    p_project: projectId,
+    p_version: versionId,
+    p_approvers: approverIds && approverIds.length ? approverIds : null,
+    p_note: note?.trim() ? note.trim().slice(0, 1000) : null,
+  });
+  if (error) throw error;
+  notifyBudgetChange(projectId);
+  return String(data);
+}
+
+export async function decideBudgetApproval(
+  projectId: string,
+  requestId: string,
+  decision: "approved" | "rejected",
+  reason: string | null,
+): Promise<string> {
+  const { data, error } = await (supabase as any).rpc("decide_budget_approval", {
+    p_request: requestId,
+    p_decision: decision,
+    p_reason: reason?.trim() ? reason.trim().slice(0, 1000) : null,
+  });
+  if (error) throw error;
+  notifyBudgetChange(projectId);
+  return String(data);
+}
+
+export async function cancelBudgetApproval(
+  projectId: string,
+  requestId: string,
+  reason: string | null,
+): Promise<void> {
+  const { error } = await (supabase as any).rpc("cancel_budget_approval", {
+    p_request: requestId,
+    p_reason: reason?.trim() ? reason.trim().slice(0, 1000) : null,
+  });
+  if (error) throw error;
+  notifyBudgetChange(projectId);
+}
+
+export type VersionSummaryRow = {
+  section: string;
+  topsheetCode: string;
+  topsheetName: string | null;
+  lineCount: number;
+  totalSar: number;
+};
+
+export async function fetchVersionSummary(versionId: string): Promise<VersionSummaryRow[]> {
+  const { data, error } = await (supabase as any).rpc("budget_version_summary", {
+    p_version: versionId,
+  });
+  if (error) throw error;
+  return ((data ?? []) as any[]).map((r) => ({
+    section: String(r.section ?? ""),
+    topsheetCode: String(r.topsheet_code ?? ""),
+    topsheetName: r.topsheet_name ?? null,
+    lineCount: Number(r.line_count ?? 0),
+    totalSar: Number(r.total_sar ?? 0),
+  }));
 }

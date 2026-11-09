@@ -16,6 +16,7 @@ vi.mock("@/lib/auth-roles", () => ({
 }));
 
 import {
+  isPathAllowedForSnapshot,
   isPathAllowedForProjectRole,
   isSectionAllowedForProjectRole,
   PROJECT_ROLE_SECTIONS,
@@ -114,5 +115,24 @@ describe("role registry", () => {
     for (const r of ["owner", "admin", "producer", "coordinator", "member"]) {
       expect(PROJECT_ROLES).toContain(r);
     }
+  });
+});
+
+describe("isPathAllowedForSnapshot — executive title (206)", () => {
+  const snap = (executiveTitle: string | null, role: any = null) => ({
+    loaded: true,
+    userId: "u",
+    projectId: "p",
+    role,
+    executiveTitle,
+  });
+  it("a board member is limited to the board pages, whatever the project role", () => {
+    expect(isPathAllowedForSnapshot(snap("Board Member"), "/budget")).toBe(true);
+    expect(isPathAllowedForSnapshot(snap("Board Member"), "/invoices")).toBe(false);
+    expect(isPathAllowedForSnapshot(snap("Board Member", "admin"), "/reports")).toBe(false);
+  });
+  it("no title keeps the project-role rules", () => {
+    expect(isPathAllowedForSnapshot(snap(null), "/invoices")).toBe(true);
+    expect(isPathAllowedForSnapshot(snap(null, "coordinator"), "/invoices")).toBe(false);
   });
 });
