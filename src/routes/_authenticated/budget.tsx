@@ -60,8 +60,20 @@ import { fetchMasterCodes, normalizeBudgetCode } from "@/lib/budget-mapping-chec
 import { parseBudgetExcel, parseProjectDetails, exportBudgetExcel } from "@/lib/excelAdapter";
 import { adapterLineToStoreLine, storeLineToAdapterLine } from "@/lib/excelAdapterBridge";
 import {
+  exportTelfazBudget,
+  isTelfazPreview,
+  parseBudgetPreviewAuto,
+  parseTelfazBudgetPreview,
+} from "@/lib/budget-telfaz-format";
+import {
+  countExistingMatches,
+  importTargetChoices,
+  prepareImportTarget,
+  type ImportTarget,
+} from "@/lib/budget-import-target";
+import { ImportTargetPicker, TelfazImportCheck } from "@/components/budget/TelfazImportCheck";
+import {
   parseKwalisTemplate,
-  parseKwalisTemplatePreview,
   downloadKwalisTemplate,
   downloadKwalisMasterTemplate,
   TemplateMismatchError,
@@ -1546,6 +1558,20 @@ export function UploadBudget() {
   };
   // Pre-commit summary modal.
   const [showCommitSummary, setShowCommitSummary] = useState(false);
+  // Where the commit lands when the selected version already has lines
+  // (re-importing the same budget must not append a second copy silently).
+  const versionsApi = useBudgetVersions();
+  const existingLineCount = useStore((s) => s.budget.length);
+  const targetChoice = importTargetChoices(
+    versionsApi.selected?.status,
+    existingLineCount,
+    versionsApi.versions.length > 0 && !!versionsApi.selected,
+  );
+  const [importTarget, setImportTarget] = useState<ImportTarget | null>(null);
+  const effectiveTarget: ImportTarget =
+    importTarget && targetChoice.options.includes(importTarget)
+      ? importTarget
+      : targetChoice.defaultTarget;
   // Strict mapping mode: disables auto-mapping entirely; user must map every
   // column manually. Non-numeric cells in numeric columns are coerced to 0.
   // Session-only (not persisted) — user opts in per session.
@@ -1559,6 +1585,24 @@ export function UploadBudget() {
   const onMultiSheetFile = async (f: File) => {
     setBusy(true);
     try {
+      // The budget workbook layout (Top Sheet + 4 sheets) always goes through
+      // the validated preview, never straight into the budget.
+      const telfaz = await parseTelfazBudgetPreview(f).catch(() => null);
+      if (telfaz) {
+        setSummary(null);
+        setRawFile(f);
+        setImportTarget(null);
+        setPreview({
+          data: telfaz,
+          fileName: f.name,
+          via: "budget workbook layout (Top Sheet + 4 sheets)",
+        });
+        setEnabledSheets(Object.fromEntries(telfaz.result.sheetsScanned.map((s) => [s, true])));
+        toast.success(t("budget.telfaz.detected"), {
+          description: t("budget.telfaz.detected_hint", { count: telfaz.result.budget.length }),
+        });
+        return;
+      }
       const parsed = await parseBudgetExcel(f);
       if (!parsed.length) {
         toast.error(t("budget.no_budget_rows_found_expected_sheets_1atl_2"));
@@ -1721,18 +1765,31 @@ export function UploadBudget() {
     try {
       if (mode === "template") {
         try {
-          const data = await parseKwalisTemplatePreview(f, {
+          // The client's own budget layout (Top Sheet + 4 sheets) is tried first.
+          const data = await parseBudgetPreviewAuto(f, {
             headerOffset: effectiveStart,
             columnMap: effectiveMap,
             strict: strictMode,
           });
+          const telfaz = isTelfazPreview(data);
+          setImportTarget(null);
           setPreview({
             data,
             fileName: f.name,
-            via: data.officialKwalisTemplate ? "official Kwalis template" : "Kwalis template",
+            via: telfaz
+              ? "budget workbook layout (Top Sheet + 4 sheets)"
+              : data.officialKwalisTemplate
+                ? "official Kwalis template"
+                : "Kwalis template",
           });
           setEnabledSheets(Object.fromEntries(data.result.sheetsScanned.map((s) => [s, true])));
-          if (data.officialKwalisTemplate) {
+          if (telfaz) {
+            toast.success(t("budget.telfaz.detected"), {
+              description: t("budget.telfaz.detected_hint", {
+                count: data.result.budget.length,
+              }),
+            });
+          } else if (data.officialKwalisTemplate) {
             setStartRow(OFFICIAL_TEMPLATE_START_ROW);
             setColumnMap({});
             toast.success(t("budget.official_kwalis_template_detected"), {
@@ -1743,7 +1800,7 @@ export function UploadBudget() {
           // Auto-detect start row: if the user hasn't manually set one and
           // no saved prefs exist, adopt the most common header row that the
           // parser located across the workbook's sheets.
-          if (!saved && !data.officialKwalisTemplate) {
+          if (!saved && !data.officialKwalisTemplate && !telfaz) {
             const detected = Object.values(data.headerRows ?? {}).map((h) => h.rowNumber);
             if (detected.length > 0) {
               const counts: Record<number, number> = {};
@@ -1828,7 +1885,7 @@ export function UploadBudget() {
     if (!rawFile || mode !== "template") return;
     setBusy(true);
     try {
-      const data = await parseKwalisTemplatePreview(rawFile, {
+      const data = await parseBudgetPreviewAuto(rawFile, {
         headerOffset: offset,
         overrides,
         columnMap: map,
@@ -2108,7 +2165,25 @@ export function UploadBudget() {
     setBusy(true);
     try {
       const commitResult = { ...preview.data.result, budget: filteredBudget };
-      await applyResult(commitResult, preview.via, preview.fileName);
+      const pid = useStore.getState().activeProjectId;
+      let replacedSnapshot: unknown[] | undefined;
+      if (pid && effectiveTarget !== "add") {
+        const prepared = await prepareImportTarget({
+          target: effectiveTarget,
+          projectId: pid,
+          selectedVersionId: versionsApi.selectedId,
+          selectedStatus: versionsApi.selected?.status,
+          currentLines: useStore.getState().budget,
+          draftName: `Import ${preview.fileName}`,
+        });
+        replacedSnapshot = prepared.replaced.length ? prepared.replaced : undefined;
+      }
+      await applyResult(commitResult, preview.via, preview.fileName, replacedSnapshot);
+      if (effectiveTarget !== "add") {
+        void versionsApi.reload();
+        toast.message(t(`budget.import_target.done_${effectiveTarget}`));
+      }
+      setImportTarget(null);
       setPreview(null);
       setAiSuggestions({});
       setBulkFixHistory([]);
@@ -2350,6 +2425,19 @@ export function UploadBudget() {
         </div>
       </div>
 
+      {preview && isTelfazPreview(preview.data) && (
+        <TelfazImportCheck validation={preview.data.telfaz} />
+      )}
+      {preview && (
+        <ImportTargetPicker
+          options={targetChoice.options}
+          value={effectiveTarget}
+          onChange={setImportTarget}
+          existingLines={existingLineCount}
+          existingMatches={countExistingMatches(filteredBudget, useStore.getState().budget)}
+          versionName={versionsApi.selected?.versionName ?? ""}
+        />
+      )}
       {preview && (
         <DryRunPreview
           preview={preview.data}
@@ -4163,6 +4251,31 @@ export function ViewEditBudget() {
                   );
                 };
 
+                // The budget workbook layout (Top Sheet + ATL / Production / Post /
+                // Other sheets, SAR + Dollar columns) — the same layout the client
+                // uploads, and it re-imports through Upload to the same lines.
+                const onExportWorkbookLayout = async () => {
+                  const rows = rowsForExport();
+                  if (!rows.length) {
+                    toast.error(t("budget.nothing_to_export_for_this_filter"));
+                    return;
+                  }
+                  const st = useStore.getState();
+                  const proj = st.projects.find((p) => p.id === st.activeProjectId);
+                  await exportTelfazBudget(
+                    rows.map(({ line }) => line),
+                    {
+                      projectTitle: proj?.name ?? "Budget",
+                      budgetVersion: proj?.budgetStatus ?? "",
+                      budgetDate: dateStr,
+                      fx: Number(proj?.fxRate) > 0 ? Number(proj?.fxRate) : 3.75,
+                      headerName: (code: string) =>
+                        HEADER_ACCOUNTS.find((h) => h.code === code)?.name ?? "",
+                    },
+                  );
+                  toast.success(t("budget.telfaz.export_done", { count: rows.length }));
+                };
+
                 // Branded PDF (G02): the shared Kwalis header / footer and file name.
                 const onExportPDF = async () => {
                   const rows = rowsForExport();
@@ -4238,6 +4351,15 @@ export function ViewEditBudget() {
                       title={`Export ${filterLabel} as a formatted multi-sheet workbook`}
                     >
                       <Download className="size-4" aria-hidden="true" /> Export Multi-Sheet{suffix}
+                    </button>
+                    <button
+                      onClick={() => void onExportWorkbookLayout()}
+                      className={btn}
+                      title={t("budget.telfaz.export_hint")}
+                    >
+                      <Download className="size-4" aria-hidden="true" />{" "}
+                      {t("budget.telfaz.export_button")}
+                      {suffix}
                     </button>
                     <button
                       onClick={onExportPDF}
