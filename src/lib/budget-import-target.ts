@@ -71,15 +71,22 @@ export async function prepareImportTarget(params: {
     return { versionId: params.selectedVersionId, replaced: params.currentLines };
   }
 
-  // new_draft: create_budget_draft copies the active lines — remove that copy
-  // (it only exists in the brand-new draft) so the draft holds the file alone.
-  const draftId = await createBudgetDraft(projectId, params.draftName.slice(0, 80));
-  const { error } = await supabase
-    .from("budget_lines")
-    .delete()
-    .eq("project_id", projectId)
-    .eq("version_id", draftId);
-  if (error) throw error;
+  // new_draft: a BLANK draft (206) so it holds the file alone; on a server
+  // without 206 the draft is a copy of the active lines, which is removed.
+  let draftId: string;
+  try {
+    draftId = await createBudgetDraft(projectId, params.draftName.slice(0, 80), true);
+  } catch (e) {
+    const msg = String((e as { message?: string })?.message ?? "");
+    if (!/_blank|function .*create_budget_draft|PGRST202/i.test(msg)) throw e;
+    draftId = await createBudgetDraft(projectId, params.draftName.slice(0, 80));
+    const { error } = await supabase
+      .from("budget_lines")
+      .delete()
+      .eq("project_id", projectId)
+      .eq("version_id", draftId);
+    if (error) throw error;
+  }
   invalidateVersionResolution(projectId);
   setSelectedVersion(projectId, draftId);
   return { versionId: draftId, replaced: [] };
