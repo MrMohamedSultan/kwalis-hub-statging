@@ -545,6 +545,10 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- The "special permission": grantable per role in Role Management.
+-- Its menu group, in case a database never got it from the role-matrix seed.
+INSERT INTO public.modules (key, label, icon, route_path, parent_key, sort_order, layer)
+VALUES ('directories-admin', 'Directories & Admin', NULL, NULL, NULL, 60, 'operational')
+ON CONFLICT (key) DO NOTHING;
 INSERT INTO public.modules (key, label, icon, route_path, parent_key, sort_order, layer, is_active)
 VALUES ('project-lock', 'Project Lock Override', 'Lock', NULL, 'directories-admin', 90, 'operational', true)
 ON CONFLICT (key) DO NOTHING;

@@ -56,6 +56,10 @@
 -- ---------------------------------------------------------------------
 -- 1. Report group modules
 -- ---------------------------------------------------------------------
+-- their menu group, in case a database never got it from the role-matrix seed
+INSERT INTO public.modules (key, label, icon, route_path, parent_key, sort_order, layer)
+VALUES ('budget-reporting', 'Budget & Reporting', NULL, NULL, NULL, 10, 'operational')
+ON CONFLICT (key) DO NOTHING;
 INSERT INTO public.modules (key, label, icon, route_path, parent_key, sort_order, layer, is_active) VALUES
   ('reports-budget-cost', 'Reports · Budget & Cost',            'PieChart',  NULL, 'budget-reporting', 31, 'operational', true),
   ('reports-payables',    'Reports · Payables & Payments',      'PieChart',  NULL, 'budget-reporting', 32, 'operational', true),

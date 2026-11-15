@@ -82,7 +82,7 @@
 --     'default_project_limit', 'default_language', 'vat_standard_rate_pct');
 --   re-create stamp_platform_settings() from 035;
 --   re-create enforce_invoice_approval() / enforce_petty_receipt_approval() from 201;
---   re-create apply_request_payment() from 196;
+--   re-create apply_request_payment() from 196 (body in apply_request_payment_body());
 --   DROP FUNCTION IF EXISTS public.reverse_paid_payment_request(uuid, text, date, text);
 --   DROP TRIGGER IF EXISTS trg_payment_request_reversal_guard ON public.payment_requests;
 --   DROP FUNCTION IF EXISTS public.guard_reversed_payment_request();
@@ -555,12 +555,14 @@ CREATE TRIGGER trg_payments_reversal_guard BEFORE INSERT OR UPDATE OR DELETE ON 
 -- Copy of 196, changes marked "204": runs with kwalis.request_payment = on
 -- (the only writer of payments.payment_request_id), a reversed request only
 -- passes a new proof path on to its payment, a refund row is never adopted.
-CREATE OR REPLACE FUNCTION public.apply_request_payment(r public.payment_requests)
+-- The body runs in apply_request_payment_body(); the wrapper below turns the
+-- setting on for the call only (set_config, not a function SET clause: a
+-- managed database lets only its owner attach a custom setting to a function).
+CREATE OR REPLACE FUNCTION public.apply_request_payment_body(r public.payment_requests)
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-SET kwalis.request_payment = 'on'                                          -- 204
 AS $$
 DECLARE
   v_types  text[];
@@ -629,6 +631,24 @@ BEGIN
      left('Payment request: ' || COALESCE(NULLIF(r.source_label, ''), r.source_type), 500),
      COALESCE(r.executed_by, auth.uid()), r.id)
   RETURNING id INTO v_id;
+  RETURN v_id;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.apply_request_payment_body(public.payment_requests) FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.apply_request_payment(r public.payment_requests)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_prev text := current_setting('kwalis.request_payment', true);
+  v_id   uuid;
+BEGIN
+  PERFORM set_config('kwalis.request_payment', 'on', true);                 -- 204
+  v_id := public.apply_request_payment_body(r);
+  PERFORM set_config('kwalis.request_payment', COALESCE(v_prev, ''), true);
   RETURN v_id;
 END;
 $$;
