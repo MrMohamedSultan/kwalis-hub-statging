@@ -515,7 +515,7 @@ function VersionReview({ projectId, versionId }: { projectId: string; versionId:
       .order("main_code")
       .limit(2000)
       .then(({ data }) => {
-        if (!cancel) setLines(((data ?? []) as unknown as ReviewLine[]) ?? []);
+        if (!cancel) setLines(((data ?? []) as unknown as ReviewLine[]));
       });
     return () => {
       cancel = true;
